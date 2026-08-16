@@ -1,0 +1,146 @@
+# **L4D2 Amethyst Rework**
+
+This repository is a complete L4D2 server configuration built on top of
+[L4D2 Competitive Rework](https://github.com/SirPlease/L4D2-Competitive-Rework).
+It retains the upstream competitive matchmodes and adds the maintained
+Amethyst/AstMod PVE family.
+
+Current custom matchmodes:
+
+* **AstMod** - the maintained AstMod baseline.
+* **AstFlex** - the current lower-pressure AstMod variant; gameplay reduction
+  will be refined after AstRedux.
+* **AstRedux** - planned native-Coop rules rework; not yet available in
+  `!match`.
+
+See [ASTMOD_INTEGRATION.md](ASTMOD_INTEGRATION.md) for the integration boundary,
+runtime decisions, and validation status.
+
+---
+
+## **Upstream foundation: L4D2 Competitive Rework**
+
+> [!IMPORTANT]
+> It is recommended to host servers on Linux, but Windows is supported.  
+> When running Linux ensure that your setup is running a minimum of **`GLIBC 2.35`** (Ubuntu 22.04 or higher) or you will run into issues loading certain extensions.  
+> This repository only supports Sourcemod **1.12** and up (which comes with the repository for ease of use)
+
+---
+
+> [!NOTE]
+> ConVar **`mv_maxplayers`** was added which replaces **`sv_maxplayers`** in **`cfg/server.cfg`**, this is used to prevent it from being overwritten every map change.  
+> On config unload, the value will be reset to the value used in the **`cfg/server.cfg`**.
+
+> [!NOTE]
+> Every confogl matchmode will now execute 2 additional files; **`cfg/sharedplugins.cfg`** and **`cfg/generalfixes.cfg`**.  
+> **`generalfixes.cfg`** contains all the crucial fixes that will be loaded in every matchmode.  
+> **`sharedplugins.cfg`** is for you, the server owner. You can load any custom plugin that you want to be loaded in every matchmode here.
+
+> [!CAUTION]
+> Plugin load locking and unlocking is no longer handled by the configs themselves, refrain from doing it manually or you can run into issues.
+
+## **About:**
+
+This project started off with a focus on reworking the very outdated platform for competitive L4D2.  
+In its current state it allows anyone to host their own up to date competitive L4D2 servers.
+
+> **Included Matchmodes:**
+
+* **Zonemod 2.9.1b**
+* **Zonemod Hunters**
+* **Zonemod Retro**
+* **NeoMod 0.4a**
+* **NextMod 1.0.5**
+* **Promod Elite 1.1**
+* **Acemod Revamped 1.2**
+* **Equilibrium 3.0c**
+* **Apex 1.1.2**
+
+---
+
+## **Download & Installation:**
+
+> [!IMPORTANT]
+> Pick the archive that matches your **Server OS**:
+> * **Linux:** `L4D2-Competitive-Rework-<version>-linux.tar.gz`
+> * **Windows:** `L4D2-Competitive-Rework-<version>-windows.zip`
+
+1. Download the latest archive from the [**Releases**](../../releases/latest) page.
+2. Extract it directly into your server's **`left4dead2/`** directory.
+3. For first-time server setup on dedicated servers, the [Dedicated Server Install Guide](Dedicated%20Server%20Install%20Guide/README.md) might be of use to you!
+
+> [!NOTE]
+> Releases only include what the servers need, **no** SourcePawn sources or compiler.  
+> To modify or recompile plugins, clone the repository instead.
+
+---
+
+## **Credits:**
+
+> **Foundation/Advanced Work:**
+
+* A1m`
+* AlliedModders LLC.
+* "Confogl Team"
+* Dr!fter
+* Forgetest
+* Jahze
+* Lux
+* Prodigysim
+* Silvers
+* XutaxKamay
+* Visor
+
+> **Additional Plugins/Extensions:**
+
+* Accelerator74
+* Arti
+* AtomicStryker
+* Backwards
+* BHaType
+* Blade
+* Buster
+* Canadarox
+* CircleSquared
+* Darkid
+* DarkNoghri
+* Dcx
+* Devilesk
+* Die Teetasse
+* Disawar1
+* Don
+* Dragokas
+* Dr. Gregory House
+* Epilimic
+* Estoopi
+* Griffin
+* Harry Potter
+* Jacob
+* Luckylock
+* Madcap
+* Mr. Zero
+* Nielsen
+* Powerlord
+* Rena
+* Sheo
+* Sir
+* Spoon
+* Stabby
+* Step
+* Tabun
+* Target
+* TheTrick
+* V10
+* Vintik
+* VoiDeD
+* xoxo
+* $atanic $pirit
+
+> **Competitive Mapping Rework:**
+
+* Aiden
+* Derpduck
+* Mart
+
+> [!NOTE]
+> If your work is being used and I forgot to credit you, don't hesitate to contact me on Discord (user: `sirplease`)
