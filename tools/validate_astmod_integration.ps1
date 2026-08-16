@@ -92,6 +92,15 @@ $requiredPaths = @(
     "cfg/cfgogl/astmod/plugins_3.cfg",
     "cfg/cfgogl/astmod/mapinfo.txt",
     "cfg/cfgogl/astmod/shared_cvars.cfg",
+    "cfg/cfgogl/astredux/astredux.cfg",
+    "cfg/cfgogl/astredux/confogl.cfg",
+    "cfg/cfgogl/astredux/confogl_off.cfg",
+    "cfg/cfgogl/astredux/confogl_plugins.cfg",
+    "cfg/cfgogl/astredux/mapinfo.txt",
+    "cfg/cfgogl/astredux/plugins_1.cfg",
+    "cfg/cfgogl/astredux/plugins_2.cfg",
+    "cfg/cfgogl/astredux/plugins_3.cfg",
+    "cfg/cfgogl/astredux/shared_cvars.cfg",
     "cfg/cfgogl/astflex/astflex.cfg",
     "cfg/cfgogl/astflex/confogl.cfg",
     "cfg/cfgogl/astflex/confogl_off.cfg",
@@ -109,6 +118,7 @@ $requiredPaths = @(
     "cfg/sourcemod/difficulty_adjustment_system/impossible_lite.cfg",
     "cfg/stripper/astmod",
     "scripts/vscripts/astmod.nut",
+    "scripts/vscripts/astredux.nut",
     "tools/build_astmod_vpk.ps1"
 )
 
@@ -120,6 +130,9 @@ $pluginLoadConfigRelatives = @(
     "cfg/cfgogl/astmod/plugins_1.cfg",
     "cfg/cfgogl/astmod/plugins_2.cfg",
     "cfg/cfgogl/astmod/plugins_3.cfg",
+    "cfg/cfgogl/astredux/plugins_1.cfg",
+    "cfg/cfgogl/astredux/plugins_2.cfg",
+    "cfg/cfgogl/astredux/plugins_3.cfg",
     "cfg/cfgogl/astflex/plugins_1.cfg",
     "cfg/cfgogl/astflex/plugins_2.cfg",
     "cfg/cfgogl/astflex/plugins_3.cfg"
@@ -137,6 +150,7 @@ foreach ($match in Select-String -LiteralPath $pluginLoadConfigs -Pattern $loadP
 
 foreach ($pluginConfig in @(
     "cfg/cfgogl/astmod/plugins_2.cfg",
+    "cfg/cfgogl/astredux/plugins_2.cfg",
     "cfg/cfgogl/astflex/plugins_2.cfg"
 )) {
     Assert-NotContains `
@@ -183,6 +197,7 @@ function Get-SharedWeaponSettings {
 $zonemodWeaponSettings = Get-SharedWeaponSettings "cfg/cfgogl/zonemod/shared_settings.cfg"
 foreach ($modeConfig in @(
     "cfg/cfgogl/astmod/astmod.cfg",
+    "cfg/cfgogl/astredux/astredux.cfg",
     "cfg/cfgogl/astflex/astflex.cfg"
 )) {
     $modeWeaponSettings = Get-SharedWeaponSettings $modeConfig
@@ -196,7 +211,7 @@ foreach ($modeConfig in @(
 }
 
 $forbiddenPattern = '^\s*(sm plugins (load_unlock|unload_all|load_lock|refresh)|exec generalfixes\.cfg)'
-$modeConfigPaths = @("astmod", "astflex") | ForEach-Object { Join-Path $Root "cfg/cfgogl/$_" }
+$modeConfigPaths = @("astmod", "astredux", "astflex") | ForEach-Object { Join-Path $Root "cfg/cfgogl/$_" }
 $forbidden = Get-ChildItem -LiteralPath $modeConfigPaths -Filter "*.cfg" |
     Select-String -Pattern $forbiddenPattern
 foreach ($match in $forbidden) {
@@ -212,6 +227,10 @@ Assert-Contains `
     '^\s*"astflex"\s*$' `
     "AstFlex is not registered in matchmodes.txt"
 Assert-Contains `
+    "addons/sourcemod/configs/matchmodes.txt" `
+    '^\s*"astredux"\s*$' `
+    "AstRedux is not registered in matchmodes.txt"
+Assert-Contains `
     "cfg/cfgogl/astmod/confogl_off.cfg" `
     '^\s*pred_unload_plugins\s*$' `
     "AstMod does not use predictable unloading"
@@ -223,6 +242,27 @@ Assert-Contains `
     "cfg/cfgogl/astmod/plugins_3.cfg" `
     '^\s*sm plugins load match_vote\.smx\s*$' `
     "AstMod does not reload the Competitive Rework match vote"
+
+Assert-Contains `
+    "cfg/cfgogl/astredux/confogl_off.cfg" `
+    '^\s*pred_unload_plugins\s*$' `
+    "AstRedux does not use predictable unloading"
+Assert-Contains `
+    "cfg/cfgogl/astredux/plugins_3.cfg" `
+    '^\s*sm plugins load confoglcompmod\.smx\s*$' `
+    "AstRedux does not reload Competitive Rework Confogl"
+Assert-Contains `
+    "cfg/cfgogl/astredux/plugins_3.cfg" `
+    '^\s*sm plugins load match_vote\.smx\s*$' `
+    "AstRedux does not reload the Competitive Rework match vote"
+Assert-Contains `
+    "cfg/cfgogl/astredux/shared_cvars.cfg" `
+    '^\s*confogl_addcvar mp_gamemode "astredux"\s*$' `
+    "AstRedux does not select its dedicated mutation"
+Assert-Contains `
+    "cfg/cfgogl/astredux/shared_cvars.cfg" `
+    '^\s*confogl_addcvar stripper_cfg_path cfg/stripper/astmod\s*$' `
+    "AstRedux scaffold does not explicitly reuse the Baseline Stripper tree"
 
 Assert-Contains `
     "cfg/cfgogl/astflex/confogl_off.cfg" `
@@ -249,6 +289,10 @@ Assert-Contains `
     '^\s*sm_cvar ai_hardsi_enable 1\s*$' `
     "AstMod does not restore Hard SI AI to on"
 Assert-Contains `
+    "cfg/cfgogl/astredux/astredux.cfg" `
+    '^\s*sm_cvar sm_vscript_filename astredux\.nut\s*$' `
+    "AstRedux does not select its independent VScript"
+Assert-Contains `
     "addons/sourcemod/scripting/ACS.sp" `
     '!IsMapValid\(strCampaignFirstMap\)' `
     "ACS does not filter unavailable campaign maps"
@@ -269,9 +313,17 @@ Assert-Contains `
     'if \("update_diff" in g_ModeScript\)' `
     "The AstMod VScript does not guard its mode-switch reload callback"
 Assert-Contains `
+    "scripts/vscripts/astredux.nut" `
+    'if \("update_diff" in g_ModeScript\)' `
+    "The AstRedux VScript does not guard its mode-switch reload callback"
+Assert-Contains `
     "assets/astmod_vpk/scripts/gamemodes.txt" `
     '^\s*"astmod"\s*$' `
     "The AstMod VPK source does not define the astmod mutation"
+Assert-Contains `
+    "assets/astmod_vpk/scripts/gamemodes.txt" `
+    '^\s*"astredux"\s*$' `
+    "The AstMod VPK source does not define the astredux bootstrap mutation"
 Assert-NotContains `
     "assets/astmod_vpk/scripts/gamemodes.txt" `
     '^\s*"amethyst"\s*$' `

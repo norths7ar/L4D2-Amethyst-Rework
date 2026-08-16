@@ -731,6 +731,23 @@
 		}
 	}
 
+	"astredux"
+	{
+		"base"		"versus"
+		"maxplayers"    "8"	// bootstrap from AstMod; Redux rules diverge in cfg/plugins
+		"x360ctx"	"1"
+		"x360matchrule"		"1"
+		"x360matchruleteam"	"3"
+		"x360presence"		"7"
+
+		"playercontrolledzombies"	"1"
+
+		convar
+		{
+
+		}
+	}
+
 	"hunter"
 	{
 		"base"		"versus"
