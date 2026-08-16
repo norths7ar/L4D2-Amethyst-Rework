@@ -1,226 +1,133 @@
-# AstMod integration
+# AstMod 集成说明
 
-This repository is an independent integration build based on
-L4D2-Competitive-Rework. A clean upstream clone and the historical extracted
-references are maintained outside this repository and are not modified here.
+本仓库是在 L4D2 Competitive Rework 基础上维护的一份独立集成版本。
 
-## Naming
+## 命名
 
-- Competitive Rework matchmode ID: `astmod`
-- Player-facing name: `AstMod - 进阶战役`
-- Original L4D2 mutation and asset name: `amethyst`
+- Competitive Rework matchmode ID：`astmod`
+- 面向玩家的名称：`AstMod - 药役`
+- L4D2 mutation 与共享资产 namespace：`astmod`
 
-The framework-facing name is deliberately consistent. The original mutation
-name remains unchanged because it is referenced by the VPK, VScript, Stripper
-configuration, and gameplay configuration.
+运行时命名现已统一为 `astmod`：VPK、VScript、Stripper、插件目录和主配置不再使用旧 `amethyst` 。旧名称只保留在上游历史和版本来源说明中。
 
-## Integration decisions
+## 集成决策
 
-- Competitive Rework owns SourceMod, MetaMod, Confogl, Left4DHooks, extensions,
-  general fixes, and the base administrative plugins.
-- AstMod-specific root plugins were moved under
-  `addons/sourcemod/plugins/optional/amethyst/` so they do not autoload outside
-  this matchmode.
-- `confogl_autoloader.smx` was not copied. Matchmode entry and exit are owned by
-  Competitive Rework through `!match`, `!chmatch`, and `!rmatch`.
-- `confoglcompmod.smx` and `match_vote.smx` are loaded from Competitive Rework
-  at the end of the AstMod plugin configuration, matching the other Rework
-  modes.
-- Mode shutdown uses `pred_unload_plugins`; AstMod configuration files do not
-  manage plugin locking or call `unload_all` themselves.
-- The Rework build of `optional/l4d2_skill_detect.smx` is used instead of the
-  older AstMod copy. Their translation format contracts differ, so mixing the
-  AstMod binary with Rework translations would be unsafe across mode switches.
-- The legacy mode-switching section was removed from AstMod's `cfgs.txt`.
-  AstMod's `!vote` remains available for its other actions and ACS continues to
-  read the campaign entries from that file.
-- ACS and `!vote` keep the full third-party campaign catalog in `cfgs.txt`, but
-  hide entries whose first map is not installed. Installing a listed campaign
-  makes it available without another configuration edit.
+- SourceMod、MetaMod、Confogl、Left4DHooks、扩展、全局修复 和基础管理插件由 Competitive Rework 提供并负责维护。
+- 原先位于 AstMod plugins 根目录的专属插件已移动到 `addons/sourcemod/plugins/optional/astmod/`，避免它们自动加载。
+- 没有复制 `confogl_autoloader.smx`。模式启动、退出、切换统一交给 Competitive Rework，通过 `!match`、`!chmatch` 和 `!rmatch` 完成。
+- `confoglcompmod.smx` 和 `match_vote.smx` 使用 Competitive Rework 的版本，并在 AstMod plugin 配置末尾加载，与其他药抗模式保持一致。
+- 模式关闭使用 `pred_unload_plugins`；AstMod 配置文件不自行管理插件加载锁，也不直接调用 `unload_all`。
+- `optional/l4d2_skill_detect.smx` 使用 Rework 版本，而不是较旧的 AstMod 副本。两者对 translations 文件格式的约定不同，在模式切换过程中混用 AstMod 二进制和 Rework translations 存在风险。
+- AstMod `cfgs.txt` 中旧有的模式切换部分已删除。原包内的 Wingman / Hunter等模式未作迁移。
+- ACS 和 `!vote` 读取 `cfgs.txt` 时，会自动忽略服务器端不存在的地图。但目前 `cfgs.txt` 仍需手动维护。
 
-## Gameplay variants
+## 玩法变体
 
 ### `astmod`
 
-This is the maintained hard-core AstMod Baseline. It keeps AstMod's custom SI
-wave spawning and enables Hard SI AI by default.
+AstMod 是当前可用且持续维护的 Baseline。它保留原版的自定义刷特、默认开启的 Hard SI AI、资源控制和借用 Versus 行为的 `versus_coop_mode.smx`；章节过程中使用 Versus，回合结束时切回 Coop 以继续战役流程。
+
+- 现有 `/tz` 菜单也可以通过 `!settings` 打开，第二页提供 `ai_hardsi_enable` 总开关投票；每次加载 `astmod` 时默认重新开启 Hard SI AI。
+- Uzi、消音微冲、木喷、铁喷和确定性霰弹散布已与 Zonemod 同步；AstMod 自己的武器替换规则、栓狙路线和 PVE 备弹限制仍然保留。
+- 当前加载 Zonemod 的 `optional/l4d2_weapon_attributes.smx` 和 `optional/l4d2_static_shotgun_spread.smx`。旧 AstMod weapon-attributes binary 不支持 `reloadduration`，因此不再使用；`l4d2_smg_reload_tweak.smx` 也保持停用，避免覆盖同步后的换弹行为。
+- AstMod 旧有的 `sm_melee ... damageflags` 命令已经停用，因为当前 Zonemod plugin 不再提供该接口；DAS 的近战对 Tank 倍率继续使用 `sm_weapon melee tankdamagemult`。
+- `clip_removal.smx` 作为上游文件保留但不加载。它没有源码，行为无法确认，海洋也无法确定用途，Zonemod 同样不使用该插件。
+- `astmod.nut` 为模式初始化期间的第二次 `update_diff` 回调增加了保护，避免直接切换 matchmode 时因 `g_ModeScript` 尚未包含该回调而短暂产生 Squirrel 异常。
+
+### `astredux`
+
+AstRedux 是当前开发主线，将作为与 AstMod 并列的独立实验 ruleset，而不是在 AstMod 上追加少量开关。目标是建立可用于第三方战役的 Coop-native 底层，再逐项审计并重建真正需要的 Versus 特性；重点包括不支持 Versus 的第三方地图、自制剧情与 Boss、地图自己的 Director/VScript，以及章节和终章推进。AstRedux 尚未形成可玩配置，也未注册到 `!match` 菜单。
 
 ### `astflex`
 
-This is the lighter profile shown as `AstFlex - 休闲药役` in `!match`:
+现有 AstFlex 配置来自前期关于减压玩法的讨论：固定 Advanced、保留 AstMod 自定义刷特、默认关闭 Hard SI AI 和部分高压伤害/自动修正、使用 `_lite` 人数 profile，并允许第三方地图显示路线和机关提示。这些修改作为实验记录继续保留，但 AstFlex 当前仍复用 AstMod 的 Versus-backed mutation、VScript 和插件集合，因此没有解决第三方地图不支持 Versus 或脚本被接管的问题。
 
-- the game difficulty is fixed to Advanced (`z_difficulty hard`);
-- AstMod's custom SI wave spawning remains enabled;
-- Hard SI AI defaults to off and can be changed by vote;
-- AstMod's high-tier weapon and resource removals remain active;
-- the harsher damage, fast-action, automatic health, and automatic ammo
-  modifiers default to off;
-- separate `_lite` wave profiles scale the SI limit and spawn interval with the
-  survivor count without changing the real game difficulty.
+AstFlex 现已暂停开发。当前方向是先完成 AstRedux 或找到其他可行的 Coop-native 方案；只有底层能够可靠进入并尊重第三方战役后，才会重新启动 AstFlex，并把它设计成该 Coop ruleset 上的减压 preset，而不是第三套重复实现。
 
-The existing `/tz` menu is also available as `!settings`. Its second page now
-contains a majority vote for the `ai_hardsi_enable` master switch. AstMod sets
-that switch back to on whenever the original `astmod` profile loads.
+## Stripper 同步
 
-The shared Uzi, silenced SMG, pump shotgun, chrome shotgun, and deterministic
-shotgun-spread values are synchronized with Zonemod in both profiles. AstMod's
-weapon replacement rules, bolt-action sniper path, and PVE reserve-ammo limits
-remain mode-specific. Both profiles load Zonemod's current
-`optional/l4d2_weapon_attributes.smx` and
-`optional/l4d2_static_shotgun_spread.smx`; the older isolated binaries remain
-unused because AstMod's weapon-attributes build does not support the
-`reloadduration` attribute. The separate `l4d2_smg_reload_tweak.smx` load and
-its DAS cvars are disabled so player-count profiles cannot override the
-synchronized reload behavior. AstMod's legacy `sm_melee ... damageflags`
-commands are also disabled because the current Zonemod plugin no longer
-exposes that old interface; DAS melee-versus-Tank multipliers continue to use
-the supported `sm_weapon melee tankdamagemult` command.
+Zonemod 中符合 `cXmY*.cfg` 命名规则的 57 份官图文件已同步到 `cfg/stripper/astmod/maps/`。global filters 和第三方地图文件没有被覆盖。校验脚本会比较这些官图文件的哈希，避免后续 Zonemod 更新后 AstMod 副本在无人察觉的情况下发生偏离。
 
-`clip_removal.smx` is retained as an upstream artifact but is not loaded by
-either profile. Its source is absent, its behavior could not be confirmed, and
-the AstMod author could not identify its purpose; Zonemod does not use it.
+## 从 AstMod 2.7.1 引入的文件
 
-The bundled `amethyst.nut` also guards its second `update_diff` callback during
-mode initialization. The original called into `g_ModeScript` before that table
-always contained the callback, producing a transient Squirrel exception during
-direct matchmode changes.
-
-## Stripper synchronization
-
-The 57 official-map files matching `cXmY*.cfg` in Zonemod are mirrored into
-`cfg/stripper/amethyst/maps/`. Global filters and third-party map files are not
-overwritten. The validator compares the official-map hashes so later Zonemod
-updates cannot silently drift from the AstMod copy.
-
-## Files brought in from AstMod 2.7.1
-
-- `cfg/cfgogl/amethyst/` as `cfg/cfgogl/astmod/`
-- `cfg/stripper/amethyst/`
+- 模式 cfg，集成到 `cfg/cfgogl/astmod/`
+- `cfg/stripper/astmod/`
 - `cfg/sourcemod/difficulty_adjustment_system/`
-- `scripts/vscripts/amethyst.nut`
-- `addons/amethyst.vpk`
-- `addons/sourcemod/plugins/optional/amethyst/`
-- `vote.smx`, `all4dead2.smx`, `server.smx`, `hostname.smx`, and
-  `sceneprocessor.smx`, relocated into `optional/amethyst/`
+- `scripts/vscripts/astmod.nut`
+- `addons/astmod.vpk`，解包源文件保存在 `assets/astmod_vpk/`
+- `addons/sourcemod/plugins/optional/astmod/`
+- `vote.smx`、`all4dead2.smx`、`server.smx`、`hostname.smx` 和 `sceneprocessor.smx`，统一迁移到 `optional/astmod/`
 - `addons/sourcemod/configs/cfgs.txt`
 - `addons/sourcemod/configs/hostname/`
-- AstMod-specific data, gamedata, and translation files required by the
-  included plugins
-- integration source for the modified `ACS`, `vote`, `challenge`, and
-  `AI_HardSI` plugins, including the local compiler dependencies
+- 已包含插件所需的 AstMod 专用 data、gamedata 和 translations 文件
+- 本项目修改过的 `ACS`、`vote`、`challenge` 和 `AI_HardSI` 的集成源码，以及本地编译依赖
 
-AstMod's SourceMod/MetaMod core files and extensions were intentionally not
-copied. Same-name Competitive Rework core files were not overwritten.
+AstMod 自带的 SourceMod/MetaMod core files 和扩展没有复制，同名的 Competitive Rework core files 也没有被旧版 AstMod 文件覆盖。
 
-## Open issues
+## 待解决问题
 
-### `amethyst.vpk`
+### `astmod.vpk`
 
-The VPK currently remains because it supplies the `amethyst` and `hunter`
-entries in `scripts/gamemodes.txt`, and the mode sets
-`mp_gamemode "amethyst"`. It also contains a full 2023-era copy of
-`gamemodes.txt`, so its effect on current vanilla and competitive modes must be
-tested. Removal or replacement is deferred.
+`astmod.vpk` 在 `scripts/gamemodes.txt` 中提供 `astmod` 和历史 `hunter` 条目，当前模式设置 `mp_gamemode "astmod"`。VPK 已拆出可审阅源文件，并可通过 `tools/build_astmod_vpk.ps1` 重建。2026-08-16 从本机 App 222860 的 `update/pak01_dir.vpk` 提取现行官方文件后逐行比较，AstMod 副本仅在文件末尾追加上述两个模式，没有修改任何内置模式；改名后的 mutation、VScript 和插件 namespace 也已在 WSL2 实际加载。当前剩余风险不再是“旧版内置模式定义”，而是游戏未来更新后副本可能落后，以及其他同样携带 `scripts/gamemodes.txt` 的 addon 可能产生加载顺序冲突。历史 `hunter` 条目目前未使用，可在后续清理。
 
-### Missing `wave_spawner.smx`
+### 缺失的 `wave_spawner.smx`
 
-The upstream Amethyst plugin configuration references
-`optional/amethyst/wave_spawner.smx`, but neither the AstMod 2.7.1 runtime
-package nor the supplied source archive contains it. The load line is retained
-as a disabled comment until the missing component or intended replacement is
-identified.
+AstMod 2.7.1 plugin 配置引用了 `optional/astmod/wave_spawner.smx`，但 runtime 包和提供的源码归档中都没有该文件。在找到缺失组件或确认预期替代品之前，对应加载行会以禁用注释的形式保留。
 
-### Remaining runtime validation
+### 尚未完成的 runtime 验证
 
-Most active AstMod plugins do not have matching source files in the supplied
-source archive. Core Linux loading, mode switching, campaign filtering, the Hard
-SI AI switch, and resource restrictions have been exercised. The in-game vote
-menus, normal chapter completion, and finale campaign switch still need a
-connected-player play test.
+AstMod 提供的源码归档没有覆盖大部分当前启用的插件。Linux 核心插件加载、模式切换、战役过滤、Hard SI AI 开关和资源限制已经实际测试；游戏内投票菜单、正常完成章节以及终章后的战役切换，仍需要有玩家连接的实机测试。
 
 ### `server.smx`
 
-This AstMod plugin is isolated to the mode, but it can change level when the
-server becomes empty and exposes an administrator restart command implemented
-through `sv_crash`. Decide whether that behavior is wanted after runtime
-testing.
+这个 AstMod plugin 已隔离在模式内部，但它可以在服务器变为空服时换图，并暴露一个通过 `sv_crash` 实现的管理员重启命令。是否需要这些行为，应在实机运行测试后决定。
 
-## Static validation
+## 静态校验
 
-Run from this directory:
+在本目录运行：
 
 ```powershell
 pwsh -File tools/validate_astmod_integration.ps1
 ```
 
-The validator checks required assets, 206 active plugin loads across both
-profiles, forbidden lifecycle commands, matchmode registration, map filtering,
-Hard SI AI wiring, the 57 official Stripper hashes, and basic KeyValues brace
-balance.
+校验脚本会检查必要资产、两个 profile 合计 206 条有效插件加载项、禁止使用的生命周期命令、matchmode 注册、地图过滤、Hard SI AI 开关链路、57 份官图 Stripper 哈希，以及基本的 KeyValues 花括号平衡。
 
-## Validation and test environments
+## 验证与测试环境
 
-The runtime checklist below is environment-independent. The WSL2 desktop
-deployment is the environment actually run so far; a rented Ubuntu VPS is
-planned but has not been stood up or verified. Do not mark an item verified
-against an environment that has not run it.
+下面的 runtime checklist 不绑定具体环境。目前真正执行过的是 WSL2 desktop 部署；Ubuntu VPS 仍在计划中，尚未部署或验证。没有实际运行过的环境，不应被标记为已验证。
 
-AstMod's 100+ plugin loads are split across `plugins_1.cfg`, `plugins_2.cfg`,
-and `plugins_3.cfg`: a single cfg exceeded the Source engine command buffer
-after `generalfixes.cfg` and silently stopped before the framework plugins.
-The difficulty manager loads last because its generated cfg temporarily
-manages SourceMod's loading lock.
+AstMod 的 100 多条插件加载命令被拆分到 `plugins_1.cfg`、`plugins_2.cfg` 和 `plugins_3.cfg`：单个 cfg 在 `generalfixes.cfg` 之后超过了 Source engine command buffer，导致后续框架插件在没有明显报错的情况下停止加载。difficulty manager 最后加载，因为它生成的 cfg 会临时管理 SourceMod 插件加载锁。
 
-### Runtime checklist (environment-independent)
+### Runtime checklist（与环境无关）
 
-1. [x] Cold start without an active matchmode.
-2. [ ] Load AstMod through the in-game `!match` menu. (Console
-   `sm_forcematch astmod` is verified on the WSL2 desktop environment.)
-3. [x] Inspect `sm plugins list`, SourceMod errors, missing natives, and
-   gamedata failures.
-4. [x] Verify the core AstMod and AstFlex cvars and plugin state.
-5. [ ] Complete a normal chapter and a finale.
-6. [ ] Verify ACS `!mapvote`, `!vote`, `/tz`, and campaign switching with a
-   connected player.
-7. [ ] Exit through `!rmatch` and confirm every AstMod-specific plugin is gone.
-8. [x] Switch directly from AstMod to Zonemod with a connected client (verified
-   on WSL2) and confirm `versus_coop_mode.smx`, ACS, AstMod AI, and AstMod
-   voting plugins are gone.
-9. [ ] Switch back to AstMod.
-10. [ ] Repeat the cycle at least three times and inspect residual cvars,
-    duplicate commands, plugin load failures, and crashes.
+1. [x] 在没有已激活 matchmode 的情况下冷启动。
+2. [ ] 通过游戏内 `!match` 菜单加载 AstMod。（WSL2 desktop 环境已验证控制台命令 `sm_forcematch astmod`。）
+3. [x] 检查 `sm plugins list`、SourceMod errors、missing natives 和 gamedata failures。
+4. [x] 检查 AstMod 与 AstFlex 的核心 cvar 和插件状态。
+5. [ ] 正常完成一个章节和一个终章。
+6. [ ] 在有玩家连接的环境下验证 ACS `!mapvote`、`!vote`、`/tz` 和战役切换。
+7. [ ] 通过 `!rmatch` 退出，确认所有 AstMod 专属插件都已卸载。
+8. [x] 在有客户端连接的情况下从 AstMod 直接切换到 Zonemod；该流程已在 WSL2 验证，并确认 `versus_coop_mode.smx`、ACS、AstMod AI 和 AstMod 投票插件均已卸载。
+9. [ ] 切回 AstMod。
+10. [ ] 至少重复三次切换流程，并检查残留 cvar、重复命令、插件加载失败和崩溃。
 
-Items marked `[x]` were exercised on the executed environment below. The
-unchecked items still need a connected-player pass; which environment
-completes them first is open.
+标记为 `[x]` 的项目都在下面记录的已执行环境中实际验证过。未勾选项目仍需要有玩家连接的测试；最终先在哪个环境完成并不预设。
 
-### Executed environment: WSL2 desktop
+### 已执行环境：WSL2 desktop
 
-This is one environment, not a specification:
+这只是一个实际测试环境，不是项目规格：
 
-- WSL distribution: `Ubuntu-22.04`
-- Service account: `l4d2` (locked password)
-- SteamCMD: `/home/l4d2/steamcmd`
-- Dedicated server: `/home/l4d2/server`
-- Reviewable integration snapshot: `/home/l4d2/integration`
-- Local test overrides: `cfg/astmod_test.cfg`
+- WSL 发行版：`Ubuntu-22.04`
+- 服务账号：`l4d2`（密码已锁定）
+- SteamCMD：`/home/l4d2/steamcmd`
+- Dedicated server：`/home/l4d2/server`
+- 可审阅的集成快照：`/home/l4d2/integration`
+- 本地测试覆盖配置：`cfg/astmod_test.cfg`
 
-### Planned environment: Ubuntu VPS
+### 计划环境：Ubuntu VPS
 
-A rented Ubuntu VPS dedicated server is planned. No VPS install, service,
-port, or runtime verification has been performed yet; nothing here should be
-read as VPS-verified. While it remains planned, do not mirror WSL2-specific
-host paths here. When it comes online, run the same checklist against it and
-record results here, without repointing the checklist wording.
+计划在租用的 Ubuntu VPS 上部署 Dedicated Server。目前尚未完成 VPS 安装、服务配置、端口配置或 runtime 验证，本文任何内容都不应被理解为已经通过 VPS 验证。在它仍处于计划阶段时，不要把 WSL2 特有的 host path 照搬到这里；VPS 上线后，应对它执行同一份 checklist 并在此记录结果，无需改变 checklist 本身的表述。
 
-### SteamCMD anonymous download note
+### SteamCMD anonymous download 说明
 
-As of 2026-07-29, a fresh anonymous Linux install of App 222860 returned
-`Invalid platform`. This appears to be a SteamCMD anonymous-download behavior,
-not a WSL2-specific one. The verified workaround is to run
-`app_update 222860 validate` first with `@sSteamCmdForcePlatformType windows`,
-then again against the same install directory with
-`@sSteamCmdForcePlatformType linux`: the first pass installs shared content,
-the second adds the Linux platform layer. If a clean Ubuntu VPS installs
-without encountering this issue, note it here rather than assuming the
-workaround is always required.
+截至 2026-07-29，在全新环境中匿名下载 App 222860 的 Linux 版本会返回 `Invalid platform`。这看起来是 SteamCMD 的匿名下载行为，而不是 WSL2 特有的问题。已经验证的 workaround 是：先设置 `@sSteamCmdForcePlatformType windows` 并执行 `app_update 222860 validate`，随后针对同一安装目录改为 `@sSteamCmdForcePlatformType linux` 再执行一次；第一遍安装共享内容，第二遍补齐 Linux platform layer。如果以后干净的 Ubuntu VPS 不再遇到这个问题，应在这里记录实际情况，而不是假设该 workaround 永远必需。
