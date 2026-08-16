@@ -446,4 +446,4 @@ if ("update_diff" in g_ModeScript)
 {
 	g_ModeScript.update_diff();
 }
-Msg("======== amethyst.nut: Reload Complete. ========\n");
+Msg("======== astmod.nut: Reload Complete. ========\n");

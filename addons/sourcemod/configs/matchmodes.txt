@@ -128,7 +128,7 @@
 	{
 		"astmod"
 		{
-			"name" "AstMod - 进阶战役"
+			"name" "AstMod - 药役"
 		}
 		"astflex"
 		{

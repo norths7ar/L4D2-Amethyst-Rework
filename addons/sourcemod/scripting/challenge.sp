@@ -86,9 +86,9 @@ ConVar hWaveSpawnEnabled;
 
 public Plugin myinfo =
 {
-	name = "Amethyst Challenge",
+	name = "AstMod Challenge",
 	author = "海洋空氣",
-	description = "Difficulty Controller for Amethyst Mod.",
+	description = "Difficulty Controller for AstMod.",
 	version = "2.5-integration",
 	url = "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
 };
