@@ -26,6 +26,7 @@ ConVar g_cvReviveHealth;
 bool g_bCanStart;
 bool g_bWipePending;
 bool g_bRoundLive;
+bool g_bHasHealthSnapshot[MAXPLAYERS + 1];
 int g_iSurvivorHealth[MAXPLAYERS + 1];
 float g_fSurvivorTempHealth[MAXPLAYERS + 1];
 
@@ -50,6 +51,15 @@ public void OnMapStart()
     g_bCanStart = false;
     g_bWipePending = false;
     g_bRoundLive = false;
+    for (int client = 1; client <= MaxClients; client++)
+    {
+        g_bHasHealthSnapshot[client] = false;
+    }
+}
+
+public void OnClientDisconnect(int client)
+{
+    g_bHasHealthSnapshot[client] = false;
 }
 
 public Action Event_DisableAutoWipe(Event event, const char[] name, bool dontBroadcast)
@@ -77,6 +87,7 @@ public Action Event_SurvivorDominated(Event event, const char[] name, bool dontB
 
     g_iSurvivorHealth[victim] = GetClientHealth(victim);
     g_fSurvivorTempHealth[victim] = L4D_GetTempHealth(victim);
+    g_bHasHealthSnapshot[victim] = true;
     return Plugin_Continue;
 }
 
@@ -86,8 +97,11 @@ public void OnGameFrame()
     {
         g_bCanStart = false;
         g_bWipePending = false;
+        ClearHealthSnapshots();
         return;
     }
+
+    RefreshHealthSnapshots();
 
     if (g_bRoundLive && !g_bWipePending)
     {
@@ -130,6 +144,11 @@ void WipeSurvivors()
     {
         if (IsSurvivor(client) && IsPlayerAlive(client))
         {
+            if (!g_bHasHealthSnapshot[client])
+            {
+                continue;
+            }
+
             int remainingHealth = g_iSurvivorHealth[client] - g_cvWipeDamage.IntValue;
             float remainingTotal = g_fSurvivorTempHealth[client] + float(remainingHealth);
 
@@ -170,6 +189,7 @@ void WipeSurvivors()
                     L4D_SetTempHealth(client, g_cvReviveHealth.FloatValue);
                 }
             }
+            g_bHasHealthSnapshot[client] = false;
         }
         else if (IsInfected(client) && GetEntProp(client, Prop_Send, "m_zombieClass") != ZOMBIECLASS_TANK)
         {
@@ -185,6 +205,25 @@ bool IsEnabled()
         g_cvEnabled = FindConVar("astredux_autowipe_enable");
     }
     return g_cvEnabled != null && g_cvEnabled.BoolValue;
+}
+
+void RefreshHealthSnapshots()
+{
+    for (int client = 1; client <= MaxClients; client++)
+    {
+        if (g_bHasHealthSnapshot[client] && (!IsSurvivor(client) || (!IsPinned(client) && !IsIncapacitated(client))))
+        {
+            g_bHasHealthSnapshot[client] = false;
+        }
+    }
+}
+
+void ClearHealthSnapshots()
+{
+    for (int client = 1; client <= MaxClients; client++)
+    {
+        g_bHasHealthSnapshot[client] = false;
+    }
 }
 
 bool IsTeamImmobilised()

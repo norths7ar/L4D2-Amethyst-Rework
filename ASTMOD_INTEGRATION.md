@@ -48,9 +48,9 @@ Redux 第一项大改已经落地：它不再加载旧 `difficulty_adjustment_sy
 | 3P | 4500 | 300 | 6 特 / 22 秒 |
 | 4P | 6750 | 300 | 6 特 / 17 秒 |
 
-Tank 血量在 profile 中写最终可读值，Controller 再把当前 mutation 的 1.5 倍引擎系数换算为 `z_tank_health`，并只在后续 `tank_spawn` 时校正实体最大/当前血量；人数变化不会追溯扣改场上已有 Tank。近战不枚举脚本武器名，而是在伤害 hook 中识别通用 `weapon_melee` 并固定为 300；电锯和不基于该实体类的自定义武器不在此范围。1P No-Witch 和 2P AutoWipe 也不再通过动态 load/unload 切换：Redux Controller 负责开关，常驻 adapter 执行行为。
+Tank 血量在 profile 中写最终可读值，Controller 再把当前 mutation 的 1.5 倍引擎系数换算为 `z_tank_health`，并只在后续 `tank_spawn` 时校正实体最大/当前血量；人数变化不会追溯扣改场上已有 Tank。近战不枚举脚本武器名，而是在伤害 hook 中识别通用 `weapon_melee` 并固定为 300；电锯和不基于该实体类的自定义武器不在此范围。1P No-Witch 和 2P AutoWipe 也不再通过动态 load/unload 切换：Redux Controller 负责开关，常驻 adapter 执行行为。AutoWipe 只处罚拥有当前控制快照的玩家；在“部分倒地、其余被控”的混合状态中，直接被伤害打倒且没有控制快照的玩家保持倒地，全员倒地则继续交给游戏原生灭团机制。
 
-Redux 专用 `challenge.smx` 继续提供 `/tz`，读取 `astredux_profile_current` 而不是旧 `das_fakedifficulty`，VScript 的新旧刷特路径也都改读 Redux cvar。当前尚未实现正式的“profile 基线 + `/tz` override layer”：投票修改可保持到下一次 profile 变化，恢复默认会重新应用当前 profile；这部分要在后续单独设计，避免 Controller 和投票互相覆盖。
+Redux 专用 `challenge.smx` 继续提供 `/tz`，读取 `astredux_profile_current` 而不是旧 `das_fakedifficulty`，VScript 的新旧刷特路径也都改读 Redux cvar；新版刷特的 `!si` 投票成功后会显式 reload 一次 VScript 并立即生效。当前尚未实现正式的“profile 基线 + `/tz` override layer”：投票修改会保持到下一次 profile 变化，恢复默认会重新应用当前 profile；这部分要在后续单独设计，避免 Controller 和投票互相覆盖。
 
 下一阶段会继续逐项审计并重建真正需要的 Versus 特性。目标仍是建立可用于第三方战役的 Coop-native 底层，重点包括不支持 Versus 的第三方地图、自制剧情与 Boss、地图自己的 Director/VScript，以及章节和终章推进。
 

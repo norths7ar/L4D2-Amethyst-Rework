@@ -47,6 +47,19 @@ function Assert-NotContains {
     }
 }
 
+function Assert-RawContains {
+    param(
+        [string]$RelativePath,
+        [string]$Pattern,
+        [string]$Description
+    )
+    $path = Join-Path $Root $RelativePath
+    $content = Get-Content -LiteralPath $path -Raw -Encoding utf8
+    if ($content -notmatch $Pattern) {
+        Add-Failure "$Description ($RelativePath)"
+    }
+}
+
 function Assert-KeyValuesBraceBalance {
     param([string]$RelativePath)
     $path = Join-Path $Root $RelativePath
@@ -321,6 +334,10 @@ Assert-NotContains `
     '^\s*sm_weapon\s+melee\s+tankdamagemult\s+' `
     "AstRedux still delegates Tank melee damage to concrete weapon-attribute enumeration"
 Assert-Contains `
+    "cfg/cfgogl/astredux/astredux.cfg" `
+    '^\s*confogl_addcvar l4d2_melee_damage_tank_nerf 0\s+' `
+    "AstRedux does not disable the globally loaded melee damage nerf"
+Assert-Contains `
     "cfg/cfgogl/astredux/shared_cvars.cfg" `
     '^\s*confogl_addcvar mp_gamemode "astredux"\s*$' `
     "AstRedux does not select its dedicated mutation"
@@ -389,6 +406,36 @@ Assert-NotContains `
     "scripts/vscripts/astredux.nut" `
     'das_fakedifficulty' `
     "The AstRedux VScript still depends on the legacy fake difficulty cvar"
+Assert-RawContains `
+    "scripts/vscripts/astredux.nut" `
+    '(?s)function update_diff_old\(\).*?astredux_si_hunter_limit.*?astredux_si_preferred_direction' `
+    "The AstRedux old-wave path does not reuse the declarative SI composition"
+Assert-RawContains `
+    "addons/sourcemod/scripting/challenge.sp" `
+    '(?s)public void SITimerNewVoteResultHandler\(.*?SetConVarInt\(hSILimitNew, tempSILimitNew\);\s*#if defined ASTREDUX_BUILD\s*ReloadVScript\(null, "", ""\);\s*#endif' `
+    "The AstRedux SI vote result does not reload its VScript"
+Assert-NotContains `
+    "addons/sourcemod/scripting/astredux_profile_controller.sp" `
+    'ast_humantankhp' `
+    "The AstRedux profile controller still depends on dormant human-Tank health"
+Assert-RawContains `
+    "addons/sourcemod/scripting/astredux_autowipe.sp" `
+    '(?s)if \(!g_bHasHealthSnapshot\[client\]\)\s*\{\s*continue;' `
+    "AstRedux AutoWipe does not preserve directly incapacitated survivors without a control snapshot"
+
+foreach ($legacyConfig in @(
+    "cfg/cfgogl/astmod/astmod.cfg",
+    "cfg/cfgogl/astmod/confogl_off.cfg",
+    "cfg/cfgogl/astredux/astredux.cfg",
+    "cfg/cfgogl/astredux/confogl_off.cfg",
+    "cfg/cfgogl/astflex/astflex.cfg",
+    "cfg/cfgogl/astflex/confogl_off.cfg"
+)) {
+    Assert-NotContains `
+        $legacyConfig `
+        'confogl_current_config' `
+        "A custom mode still references the unloaded confogl_autoloader marker"
+}
 Assert-Contains `
     "assets/astmod_vpk/scripts/gamemodes.txt" `
     '^\s*"astmod"\s*$' `
