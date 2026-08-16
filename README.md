@@ -1,4 +1,24 @@
-# **L4D2 Competitive Rework**
+# **L4D2 Amethyst Rework**
+
+This repository is a complete L4D2 server configuration built on top of
+[L4D2 Competitive Rework](https://github.com/SirPlease/L4D2-Competitive-Rework).
+It retains the upstream competitive matchmodes and adds the maintained
+Amethyst/AstMod PVE family.
+
+Current custom matchmodes:
+
+* **AstMod** - the maintained AstMod baseline.
+* **AstFlex** - the current lower-pressure AstMod variant; gameplay reduction
+  will be refined after AstRedux.
+* **AstRedux** - planned native-Coop rules rework; not yet available in
+  `!match`.
+
+See [ASTMOD_INTEGRATION.md](ASTMOD_INTEGRATION.md) for the integration boundary,
+runtime decisions, and validation status.
+
+---
+
+## **Upstream foundation: L4D2 Competitive Rework**
 
 > [!IMPORTANT]
 > It is recommended to host servers on Linux, but Windows is supported.  

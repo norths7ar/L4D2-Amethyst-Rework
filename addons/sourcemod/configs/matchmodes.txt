@@ -124,4 +124,15 @@
 			"name" "1v1 ZoneHunters"
 		}
 	}
+	"Co-op Configs"
+	{
+		"astmod"
+		{
+			"name" "AstMod - 进阶战役"
+		}
+		"astflex"
+		{
+			"name" "AstFlex - 休闲药役"
+		}
+	}
 }
