@@ -1,13 +1,13 @@
 # AstMod 插件源码与 SMX 对应清单
 
-> 初始盘点基于 2026-08-16 的仓库提交 `a330a487`；当前文档已追加 AstMod namespace 迁移和 `challenge.smx` 重建结果。
+> 初始盘点基于 2026-08-16 的仓库提交 `a330a487`；当前文档已追加 AstMod namespace 迁移、`challenge.smx` 重建结果和 AstRedux 专属可复现构建。
 
 这份清单用于回答两个不同的问题：服务器里的 `.smx` 二进制从哪里来，以及仓库里哪份 `.sp` **可能**是它的源码。二者不能混为一谈：同名文件只能证明“值得核对”，不能证明该 `.smx` 确实由该源码、以当前编译器和依赖编译而成。本次数据由本地审计脚本从插件加载配置、SHA-256 对照和源码路径扫描生成，再经少量文件名别名复核；下面是静态盘点快照，不是逐项凭印象填写。
 
 ## 范围与判定标准
 
 - 主清单范围：`addons/sourcemod/plugins/optional/astmod/*.smx`，共 122 个。
-- “当前加载”指 `astmod`、`astredux` 或 `astflex` 的插件加载配置中至少有一处启用；AstRedux scaffold 目前与另外两个模式复用同一套 AstMod 插件集合。
+- “当前加载”指 `astmod`、`astredux` 或 `astflex` 的插件加载配置中至少有一处启用；AstRedux 继续复用大部分 AstMod 插件，但已用自己的 Challenge、AutoWipe adapter 和 Profile Controller 替换旧 DAS 链路。
 - “AstMod 2.7.1 一致”指当前 `.smx` 与归档原包中的同名二进制 SHA-256 完全一致，只确认二进制来源。
 - `repo:` 指本仓库 `addons/sourcemod/scripting/` 下的路径；`AstSrc:` 指工作区外部保存的 AstMod 公开源码快照 `../../references/L4D2-AstMod-Scriptings-main/`，该参考目录本身不属于本仓库。
 - “源码候选”仅表示按文件名、目录和已知别名找到候选，尚未通过可重复编译确认。
@@ -42,6 +42,16 @@
 | `optional/l4d2_weapon_attributes.smx` | `addons/sourcemod/scripting/l4d2_weapon_attributes.sp` |
 | `optional/l4d2_static_shotgun_spread.smx` | `addons/sourcemod/scripting/l4d2_static_shotgun_spread.sp` |
 | `optional/l4d2_skill_detect.smx` | `addons/sourcemod/scripting/l4d2_skill_detect.sp` |
+
+## AstRedux 专属、可从仓库源码重建的插件
+
+下面 3 个插件位于 `optional/astredux/`，不计入后文 `optional/astmod/` 的 122 个历史二进制。它们已经用仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 编译通过；构建产物的来源关系由本仓库直接维护，不是按同名猜测。
+
+| 加载路径 | 源码 | 职责 |
+| --- | --- | --- |
+| `optional/astredux/astredux_profile_controller.smx` | `addons/sourcemod/scripting/astredux_profile_controller.sp` | 读取并应用 1–4 人声明式 profile，协调 Tank、刷特、No-Witch 和 adapter 开关 |
+| `optional/astredux/astredux_autowipe.smx` | `addons/sourcemod/scripting/astredux_autowipe.sp` | 常驻 AutoWipe adapter，由 profile cvar 控制是否生效 |
+| `optional/astredux/challenge.smx` | `addons/sourcemod/scripting/astredux_challenge.sp` + `challenge.sp` | Redux 专用 `/tz` build，读取当前 Redux profile 并与旧 DAS 解耦 |
 
 ## 按状态分类的插件清单
 

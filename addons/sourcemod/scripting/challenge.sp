@@ -86,9 +86,15 @@ ConVar hWaveSpawnEnabled;
 
 public Plugin myinfo =
 {
+#if defined ASTREDUX_BUILD
+	name = "AstRedux Challenge",
+	author = "海洋空氣, norths7ar",
+	description = "Difficulty Controller for AstRedux.",
+#else
 	name = "AstMod Challenge",
 	author = "海洋空氣",
 	description = "Difficulty Controller for AstMod.",
+#endif
 	version = "2.5-integration",
 	url = "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
 };
@@ -134,8 +140,10 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_si", NewSITimerCommand, "新版特感刷新速率调节，无极调节");
 
 	HookConVarChange(hSITimer, ReloadVScript);
+#if !defined ASTREDUX_BUILD
 	HookConVarChange(hSITimerNew, ReloadVScript);
 	HookConVarChange(hSILimitNew, ReloadVScript);
+#endif
 	HookConVarChange(hWaveSpawnEnabled, ReloadVScript);
 }
 
@@ -915,6 +923,9 @@ public void ResetSettings()
 		SetConVarBool(FindConVar("ast_allowhumantank"), false);
 	}
 
+#if defined ASTREDUX_BUILD
+	ServerCommand("sm_astredux_profile_reapply");
+#else
 	ConVar hDifficulty = FindConVar("das_fakedifficulty");
 	if (hDifficulty != null) {
 		int iDifficulty = GetConVarInt(hDifficulty);
@@ -922,6 +933,7 @@ public void ResetSettings()
 		SetConVarInt(hDifficulty, iDifficulty);
 	}
 	ReloadVScript(null, "", "");
+#endif
 }
 
 public Action Menu_MorePills(int client, int args)
@@ -1443,12 +1455,21 @@ public bool IsClientSurvivor(int client, bool isMenu) {
 }
 
 public int GetDifficulty() {
+#if defined ASTREDUX_BUILD
+	ConVar cDifficulty = FindConVar("astredux_profile_current");
+	if (cDifficulty == null) {
+		PrintToServer("[AstRedux] astredux_profile_controller.smx is not loaded.");
+		LogError("astredux_profile_controller.smx is not loaded");
+		return 4;
+	}
+#else
 	ConVar cDifficulty = FindConVar("das_fakedifficulty");
 	if (cDifficulty == null) {
 		PrintToServer("\x04[ERROR!] \x05difficulty_adjustment_system.smx \x01插件未安装.");
 		LogError("difficulty_adjustment_system.smx 插件未安装");
 		return 4;
 	}
+#endif
 	return GetConVarInt(cDifficulty);
 }
 

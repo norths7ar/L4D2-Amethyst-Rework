@@ -69,19 +69,64 @@ function Assert-KeyValuesBraceBalance {
     }
 }
 
+function Get-KeyValuesSectionContent {
+    param(
+        [string]$RelativePath,
+        [string]$SectionName
+    )
+
+    $path = Join-Path $Root $RelativePath
+    $lines = Get-Content -LiteralPath $path -Encoding utf8
+    $sectionPattern = '^\s*"' + [regex]::Escape($SectionName) + '"\s*$'
+    $sectionLine = -1
+    for ($index = 0; $index -lt $lines.Count; $index++) {
+        if ($lines[$index] -match $sectionPattern) {
+            $sectionLine = $index
+            break
+        }
+    }
+    if ($sectionLine -lt 0) {
+        return $null
+    }
+
+    $depth = 0
+    $opened = $false
+    $content = [System.Collections.Generic.List[string]]::new()
+    for ($index = $sectionLine + 1; $index -lt $lines.Count; $index++) {
+        $line = $lines[$index]
+        $depth += ([regex]::Matches($line, '\{')).Count
+        if ($depth -gt 0) {
+            $opened = $true
+        }
+        $depth -= ([regex]::Matches($line, '\}')).Count
+        $content.Add($line)
+        if ($opened -and $depth -eq 0) {
+            return $content -join "`n"
+        }
+    }
+    return $null
+}
+
 $requiredPaths = @(
     "addons/astmod.vpk",
     "assets/astmod_vpk/addoninfo.txt",
     "assets/astmod_vpk/scripts/gamemodes.txt",
     "addons/sourcemod/configs/cfgs.txt",
+    "addons/sourcemod/configs/astredux_profiles.cfg",
     "addons/sourcemod/configs/hostname/hostname.txt",
     "addons/sourcemod/plugins/optional/astmod/versus_coop_mode.smx",
     "addons/sourcemod/plugins/optional/astmod/ACS.smx",
     "addons/sourcemod/plugins/optional/astmod/vote.smx",
     "addons/sourcemod/plugins/optional/astmod/sceneprocessor.smx",
+    "addons/sourcemod/plugins/optional/astredux/astredux_profile_controller.smx",
+    "addons/sourcemod/plugins/optional/astredux/astredux_autowipe.smx",
+    "addons/sourcemod/plugins/optional/astredux/challenge.smx",
     "addons/sourcemod/scripting/ACS.sp",
     "addons/sourcemod/scripting/AI_HardSI.sp",
     "addons/sourcemod/scripting/challenge.sp",
+    "addons/sourcemod/scripting/astredux_challenge.sp",
+    "addons/sourcemod/scripting/astredux_autowipe.sp",
+    "addons/sourcemod/scripting/astredux_profile_controller.sp",
     "addons/sourcemod/scripting/vote.sp",
     "cfg/cfgogl/astmod/astmod.cfg",
     "cfg/cfgogl/astmod/confogl.cfg",
@@ -256,6 +301,26 @@ Assert-Contains `
     '^\s*sm plugins load match_vote\.smx\s*$' `
     "AstRedux does not reload the Competitive Rework match vote"
 Assert-Contains `
+    "cfg/cfgogl/astredux/plugins_3.cfg" `
+    '^\s*sm plugins load optional/astredux/astredux_profile_controller\.smx\s*$' `
+    "AstRedux does not load its declarative profile controller"
+Assert-Contains `
+    "cfg/cfgogl/astredux/plugins_1.cfg" `
+    '^\s*sm plugins load optional/astredux/astredux_autowipe\.smx\s*$' `
+    "AstRedux does not load its profile-controlled AutoWipe adapter"
+Assert-Contains `
+    "cfg/cfgogl/astredux/plugins_1.cfg" `
+    '^\s*sm plugins load optional/astredux/challenge\.smx\s*$' `
+    "AstRedux does not load its profile-aware challenge build"
+Assert-NotContains `
+    "cfg/cfgogl/astredux/plugins_3.cfg" `
+    '^\s*sm plugins load optional/astmod/difficulty_adjustment_system\.smx\s*$' `
+    "AstRedux still loads the legacy AstMod DAS"
+Assert-NotContains `
+    "cfg/cfgogl/astredux/astredux.cfg" `
+    '^\s*sm_weapon\s+melee\s+tankdamagemult\s+' `
+    "AstRedux still delegates Tank melee damage to concrete weapon-attribute enumeration"
+Assert-Contains `
     "cfg/cfgogl/astredux/shared_cvars.cfg" `
     '^\s*confogl_addcvar mp_gamemode "astredux"\s*$' `
     "AstRedux does not select its dedicated mutation"
@@ -317,6 +382,14 @@ Assert-Contains `
     'if \("update_diff" in g_ModeScript\)' `
     "The AstRedux VScript does not guard its mode-switch reload callback"
 Assert-Contains `
+    "scripts/vscripts/astredux.nut" `
+    'Convars\.GetStr\("astredux_si_hunter_limit"\)' `
+    "The AstRedux VScript does not consume the declarative SI composition"
+Assert-NotContains `
+    "scripts/vscripts/astredux.nut" `
+    'das_fakedifficulty' `
+    "The AstRedux VScript still depends on the legacy fake difficulty cvar"
+Assert-Contains `
     "assets/astmod_vpk/scripts/gamemodes.txt" `
     '^\s*"astmod"\s*$' `
     "The AstMod VPK source does not define the astmod mutation"
@@ -353,6 +426,20 @@ if (Select-String -LiteralPath $cfgsPath -Pattern '^\s*"exec match/' -Quiet) {
 
 Assert-KeyValuesBraceBalance "addons/sourcemod/configs/matchmodes.txt"
 Assert-KeyValuesBraceBalance "addons/sourcemod/configs/cfgs.txt"
+Assert-KeyValuesBraceBalance "addons/sourcemod/configs/astredux_profiles.cfg"
+
+foreach ($profile in @(
+    @{ Players = 1; Health = 1200; WaveSize = 3; WaveInterval = "7.0" },
+    @{ Players = 2; Health = 2550; WaveSize = 4; WaveInterval = "12.0" },
+    @{ Players = 3; Health = 4500; WaveSize = 6; WaveInterval = "22.0" },
+    @{ Players = 4; Health = 6750; WaveSize = 6; WaveInterval = "17.0" }
+)) {
+    $profileText = Get-KeyValuesSectionContent "addons/sourcemod/configs/astredux_profiles.cfg" "players_$($profile.Players)"
+    $valuePattern = '(?s)"spawn_health"\s*"' + $profile.Health + '".*?"melee_damage"\s*"300".*?"wave_size"\s*"' + $profile.WaveSize + '".*?"wave_interval"\s*"' + [regex]::Escape($profile.WaveInterval) + '"'
+    if ($null -eq $profileText -or $profileText -notmatch $valuePattern) {
+        Add-Failure "AstRedux players_$($profile.Players) profile does not expose the expected Tank and SI values"
+    }
+}
 
 if ($failures.Count -gt 0) {
     Write-Host "AstMod integration validation failed:" -ForegroundColor Red

@@ -7,7 +7,7 @@
 - Competitive Rework matchmode ID：`astmod`
 - 面向玩家的名称：`AstMod - 药役`
 - L4D2 mutation 与共享资产 namespace：`astmod`
-- AstRedux scaffold matchmode / mutation / VScript ID：`astredux`
+- AstRedux matchmode / mutation / VScript ID：`astredux`
 
 运行时命名现已统一为 `astmod`：VPK、VScript、Stripper、插件目录和主配置不再使用旧 `amethyst` 。旧名称只保留在上游历史和版本来源说明中。
 
@@ -37,9 +37,22 @@ AstMod 是当前可用且持续维护的 Baseline。它保留原版的自定义�
 
 ### `astredux`
 
-AstRedux scaffold 已从当前 AstMod Baseline 初始化并注册为 `AstRedux - 实验药役`。它拥有独立的 `cfg/cfgogl/astredux/`、`astredux` mutation 和 `astredux.nut`，但初始行为仍以 AstMod 为准：未修改插件继续从 `optional/astmod/` 加载，Stripper 暂时复用 `cfg/stripper/astmod/`，旧 DAS 也仍在运行。这层 scaffold 只建立可对照的并行开发容器，不代表 Redux 的 Coop-native 规则已经实现。
+AstRedux 已从当前 AstMod Baseline 初始化并注册为 `AstRedux - 实验药役`。它拥有独立的 `cfg/cfgogl/astredux/`、`astredux` mutation、`astredux.nut` 和 `optional/astredux/`；未修改插件继续从 `optional/astmod/` 加载，Stripper 暂时复用 `cfg/stripper/astmod/`。这仍是 Versus-backed 并行实验容器，不代表 Coop-native 规则已经实现。
 
-Redux 第一项大改是用明确的 player profile controller 替换旧 DAS 链路，然后再逐项审计并重建真正需要的 Versus 特性。目标仍是建立可用于第三方战役的 Coop-native 底层，重点包括不支持 Versus 的第三方地图、自制剧情与 Boss、地图自己的 Director/VScript，以及章节和终章推进。
+Redux 第一项大改已经落地：它不再加载旧 `difficulty_adjustment_system.smx`，而是从 `addons/sourcemod/configs/astredux_profiles.cfg` 读取 1–4 人声明式 profile。Controller 每秒统计真人生还者并在人数变化后立即应用新规则；`sm_astredux_profile_force 1..4` 可用于诊断，`0` 恢复自动选择。Profile 只描述目标状态，Controller 负责选择与编排，Tank/AutoWipe/VScript 等 adapter 负责引擎细节。
+
+| Profile | 新 Tank 最终血量 | 固定近战伤害 | 自定义刷特 |
+| --- | ---: | ---: | --- |
+| 1P | 1200 | 300 | 3 特 / 7 秒 |
+| 2P | 2550 | 300 | 4 特 / 12 秒 |
+| 3P | 4500 | 300 | 6 特 / 22 秒 |
+| 4P | 6750 | 300 | 6 特 / 17 秒 |
+
+Tank 血量在 profile 中写最终可读值，Controller 再把当前 mutation 的 1.5 倍引擎系数换算为 `z_tank_health`，并只在后续 `tank_spawn` 时校正实体最大/当前血量；人数变化不会追溯扣改场上已有 Tank。近战不枚举脚本武器名，而是在伤害 hook 中识别通用 `weapon_melee` 并固定为 300；电锯和不基于该实体类的自定义武器不在此范围。1P No-Witch 和 2P AutoWipe 也不再通过动态 load/unload 切换：Redux Controller 负责开关，常驻 adapter 执行行为。
+
+Redux 专用 `challenge.smx` 继续提供 `/tz`，读取 `astredux_profile_current` 而不是旧 `das_fakedifficulty`，VScript 的新旧刷特路径也都改读 Redux cvar。当前尚未实现正式的“profile 基线 + `/tz` override layer”：投票修改可保持到下一次 profile 变化，恢复默认会重新应用当前 profile；这部分要在后续单独设计，避免 Controller 和投票互相覆盖。
+
+下一阶段会继续逐项审计并重建真正需要的 Versus 特性。目标仍是建立可用于第三方战役的 Coop-native 底层，重点包括不支持 Versus 的第三方地图、自制剧情与 Boss、地图自己的 Director/VScript，以及章节和终章推进。
 
 ### `astflex`
 
@@ -93,26 +106,27 @@ AstMod 提供的源码归档没有覆盖大部分当前启用的插件。Linux �
 pwsh -File tools/validate_astmod_integration.ps1
 ```
 
-校验脚本会检查必要资产、两个 profile 合计 206 条有效插件加载项、禁止使用的生命周期命令、matchmode 注册、地图过滤、Hard SI AI 开关链路、57 份官图 Stripper 哈希，以及基本的 KeyValues 花括号平衡。
+校验脚本会检查必要资产、三种模式合计 310 条有效插件加载项、Redux 专属 plugin/source/profile、旧 DAS 隔离、禁止使用的生命周期命令、matchmode 注册、地图过滤、Hard SI AI 开关链路、57 份官图 Stripper 哈希，以及基本的 KeyValues 花括号平衡。
 
 ## 验证与测试环境
 
 下面的 runtime checklist 不绑定具体环境。目前真正执行过的是 WSL2 desktop 部署；Ubuntu VPS 仍在计划中，尚未部署或验证。没有实际运行过的环境，不应被标记为已验证。
 
-AstMod 的 100 多条插件加载命令被拆分到 `plugins_1.cfg`、`plugins_2.cfg` 和 `plugins_3.cfg`：单个 cfg 在 `generalfixes.cfg` 之后超过了 Source engine command buffer，导致后续框架插件在没有明显报错的情况下停止加载。difficulty manager 最后加载，因为它生成的 cfg 会临时管理 SourceMod 插件加载锁。
+AstMod 的 100 多条插件加载命令被拆分到 `plugins_1.cfg`、`plugins_2.cfg` 和 `plugins_3.cfg`：单个 cfg 在 `generalfixes.cfg` 之后超过了 Source engine command buffer，导致后续框架插件在没有明显报错的情况下停止加载。AstMod/AstFlex 的旧 difficulty manager 继续最后加载；AstRedux 在同一位置改为最后加载 Profile Controller，确保它应用 profile 时其他插件拥有的 cvar 已经存在。
 
 ### Runtime checklist（与环境无关）
 
 1. [x] 在没有已激活 matchmode 的情况下冷启动。
 2. [ ] 通过游戏内 `!match` 菜单加载 AstMod。（WSL2 desktop 环境已验证控制台命令 `sm_forcematch astmod`。）
 3. [x] 检查 `sm plugins list`、SourceMod errors、missing natives 和 gamedata failures。
-4. [x] 检查 AstMod 与 AstFlex 的核心 cvar 和插件状态；AstRedux scaffold 已在 WSL2 冷加载，确认 `mp_gamemode astredux`、`astredux.nut`、Baseline Stripper 路径和旧 DAS。
+4. [x] 检查 AstMod 与 AstFlex 的核心 cvar 和插件状态；AstRedux 已在 WSL2 冷加载，确认 `mp_gamemode astredux`、`astredux.nut`、Baseline Stripper 路径、三份 Redux 专属插件和旧 DAS 未加载，并逐档验证 1P–4P profile cvar。
 5. [ ] 正常完成一个章节和一个终章。
 6. [ ] 在有玩家连接的环境下验证 ACS `!mapvote`、`!vote`、`/tz` 和战役切换。
 7. [ ] 通过 `!rmatch` 退出，确认所有 AstMod 专属插件都已卸载。
 8. [x] 在有客户端连接的情况下从 AstMod 直接切换到 Zonemod；该流程已在 WSL2 验证，并确认 `versus_coop_mode.smx`、ACS、AstMod AI 和 AstMod 投票插件均已卸载。
 9. [ ] 切回 AstMod。
 10. [ ] 至少重复三次切换流程，并检查残留 cvar、重复命令、插件加载失败和崩溃。
+11. [ ] 有真人连接时验证 AstRedux 自动人数切档、现有/新生 Tank 边界和固定近战伤害。
 
 标记为 `[x]` 的项目都在下面记录的已执行环境中实际验证过。未勾选项目仍需要有玩家连接的测试；最终先在哪个环境完成并不预设。
 
