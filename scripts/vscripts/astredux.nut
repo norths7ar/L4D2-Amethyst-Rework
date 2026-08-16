@@ -76,50 +76,16 @@ function update_diff()
 
 function update_diff_new()
 {
-	local difficulty = Convars.GetStr("das_fakedifficulty");
 	local timer_new = Convars.GetStr("ast_sitimer_new").tofloat();
 	local limit_new = Convars.GetStr("ast_silimit_new").tointeger();
 
-	switch (difficulty) {
-		case "1":
-			DirectorOptions.HunterLimit = 1
-			DirectorOptions.SmokerLimit = 1
-			DirectorOptions.BoomerLimit = 0
-			DirectorOptions.SpitterLimit = 0
-			DirectorOptions.JockeyLimit = 1
-			DirectorOptions.ChargerLimit = 1
-			DirectorOptions.PreferredSpecialDirection = 4
-			break;
-		case "2":
-			DirectorOptions.HunterLimit = 2
-			DirectorOptions.SmokerLimit = 0
-			DirectorOptions.BoomerLimit = 1
-			DirectorOptions.SpitterLimit = 0
-			DirectorOptions.JockeyLimit = 1
-			DirectorOptions.ChargerLimit = 1
-			DirectorOptions.PreferredSpecialDirection = 4
-			break;
-		case "3":
-			DirectorOptions.HunterLimit = 3
-			DirectorOptions.SmokerLimit = 1
-			DirectorOptions.BoomerLimit = 1
-			DirectorOptions.SpitterLimit = 1
-			DirectorOptions.JockeyLimit = 2
-			DirectorOptions.ChargerLimit = 2
-			DirectorOptions.PreferredSpecialDirection = 1
-			break;
-		case "4":
-			DirectorOptions.HunterLimit = 4
-			DirectorOptions.SpitterLimit = 1
-			DirectorOptions.SmokerLimit = 1
-			DirectorOptions.BoomerLimit = 1
-			DirectorOptions.JockeyLimit = 2
-			DirectorOptions.ChargerLimit = 2
-			DirectorOptions.PreferredSpecialDirection = 1
-			break;
-		default:
-			break;
-	}
+	DirectorOptions.HunterLimit = Convars.GetStr("astredux_si_hunter_limit").tointeger();
+	DirectorOptions.SmokerLimit = Convars.GetStr("astredux_si_smoker_limit").tointeger();
+	DirectorOptions.BoomerLimit = Convars.GetStr("astredux_si_boomer_limit").tointeger();
+	DirectorOptions.SpitterLimit = Convars.GetStr("astredux_si_spitter_limit").tointeger();
+	DirectorOptions.JockeyLimit = Convars.GetStr("astredux_si_jockey_limit").tointeger();
+	DirectorOptions.ChargerLimit = Convars.GetStr("astredux_si_charger_limit").tointeger();
+	DirectorOptions.PreferredSpecialDirection = Convars.GetStr("astredux_si_preferred_direction").tointeger();
 
 	DirectorOptions.cm_BaseSpecialLimit 					= ModeData.g_nSI
 	DirectorOptions.cm_MaxSpecials 							= ModeData.g_nSI
@@ -134,7 +100,7 @@ function update_diff_new()
 // 替换时注意修改 MapData 为 ModeData
 function update_diff_old()
 {
-	local difficulty = Convars.GetStr("das_fakedifficulty");
+	local difficulty = Convars.GetStr("astredux_profile_current");
 	local timer = Convars.GetStr("ast_sitimer");
 	switch (difficulty) {
 		case "1":
