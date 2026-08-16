@@ -2,117 +2,90 @@
 
 ## Project Identity
 
-- Purpose: maintain a complete L4D2 server configuration based on Competitive
-  Rework, with the AstMod PVE family available as independent Confogl
+- Maintain a complete L4D2 server configuration on top of L4D2 Competitive
+  Rework, with the AstMod PVE family exposed as independent Confogl
   matchmodes.
-- Custom mode identities:
-  - `astmod`: the maintained personal Baseline, not a byte-for-byte AstMod
-    2.7.1 archive;
-  - `astredux`: the next priority, focused on auditing and rebuilding the
-    rules-layer relationship between Versus behavior and Coop progression;
-  - `astflex`: the lower-pressure derivative of AstRedux. Do not redesign it before AstRedux unless asked.
-- Non-goals:
-  - do not turn this repository into an untouched historical mirror of AstMod;
-  - do not replace or broadly rewrite Competitive Rework core code without a
-    concrete mode requirement and explicit review;
-  - do not install, start, expose, or administer a public game server as part
-    of an ordinary configuration/documentation task;
-  - do not treat incomplete upstream SourcePawn coverage as a requirement to
-    reconstruct every bundled binary before useful maintenance can proceed.
-- Sources of truth:
-  - `README.md` for project intent, mode positioning, current status, and
-    roadmap;
-  - `ASTMOD_INTEGRATION.md` for integration boundaries, known issues, and
-    validation history;
-  - `addons/sourcemod/configs/matchmodes.txt` for registered matchmode IDs;
-  - `cfg/cfgogl/<mode>/` and active plugin-load cfgs for actual runtime
-    behavior;
-  - `tools/validate_astmod_integration.ps1` for the maintained static checks.
-- Runtime-only data is outside this repository. Do not commit WSL2 dedicated
-  server installs, SteamCMD depots, runtime logs, credentials, RCON passwords,
-  crash dumps, or temporary deployment snapshots.
+- Mode roles: `astmod` = maintained personal Baseline (not a byte-for-byte
+  2.7.1 archive); `astredux` = reserved name for the next-priority rules audit
+  rebuilding the Versus/Coop relationship; `astflex` = current low-pressure
+  preview and eventual derivative of AstRedux. Read `README.md` for current
+  priorities rather than duplicating the roadmap here.
+- Non-goals: do not make this an untouched AstMod mirror; do not broadly
+  rewrite Competitive Rework core without a concrete mode need and review; do
+  not stand up or administer a public server as part of a config/docs task; do
+  not treat bundled binaries as blocked on full source recompilation before
+  useful maintenance can proceed.
 
-## Runtime and Commands
+## Sources of truth
 
-- Runtime: Left 4 Dead 2 Dedicated Server with the repository's MetaMod,
-  SourceMod 1.12+, Left4DHooks, Confogl, extensions, plugins, cfgs, VScript,
-  Stripper, and VPK assets. This is not a Python project.
-- Primary static validation, run from the repository root:
+- `README.md`: project intent, mode positioning, status, roadmap.
+- `ASTMOD_INTEGRATION.md`: integration boundaries, copied assets, known
+  issues, validation history — the single source for implementation facts.
+- `addons/sourcemod/configs/matchmodes.txt`: registered matchmode IDs.
+- `cfg/cfgogl/<mode>/` and active plugin-load cfgs: actual runtime behavior.
+- `tools/validate_astmod_integration.ps1`: maintained static checks.
 
-  ```powershell
-  pwsh -File tools/validate_astmod_integration.ps1
-  ```
+Keep these in their own lane. Do not duplicate implementation facts in AGENTS;
+reference ASTMOD_INTEGRATION instead.
 
-- WSL2 deployment and diagnostic helpers live under `scripts/`. Run them only
-  when the user explicitly requests server deployment, startup, diagnosis, or
-  runtime testing.
-- Required validation before handoff:
-  - documentation-only changes: inspect the rendered Markdown structure and
-    run targeted searches for stale names or contradictory status claims;
-  - cfg/plugin integration changes: run the static validator and inspect the
-    focused Git diff;
-  - gameplay or lifecycle changes: do not call them runtime-verified until the
-    relevant server and connected-player flow has actually been exercised.
+## Runtime and validation
 
-## Ownership and Delivery
+- Runtime: L4D2 Dedicated Server with the repository's MetaMod, SourceMod
+  1.12+, Left4DHooks, Confogl, extensions, plugins, cfgs, VScript, Stripper,
+  and VPK assets. This is not a Python project.
+- Primary static validation from the repository root:
+  `pwsh -File tools/validate_astmod_integration.ps1`.
+- Deployment/diagnostic helpers live under `scripts/` (WSL2 desktop today; a
+  rented Ubuntu VPS is planned). Run them only when the user explicitly
+  requests server deployment, startup, diagnosis, or runtime testing.
+- Per-change validation floor: docs-only → check the rendered Markdown and
+  search for stale names or contradictory status; cfg/plugin → run the static
+  validator and inspect the focused Git diff; gameplay/lifecycle → not
+  "runtime-verified" until the relevant server and connected-player flow has
+  actually been exercised.
+- Do not commit runtime-only data: WSL2/VPS server installs, SteamCMD depots,
+  logs, credentials, RCON passwords, crash dumps, or deployment snapshots.
 
-- This is a single-maintainer repository.
-- Do not commit or push unless the user explicitly asks.
-- For accepted routine changes, commit directly to `main`; do not create a
-  feature branch or pull request unless explicitly requested.
-- Remote roles:
-  - `origin`: `git@github.com:norths7ar/L4D2-Amethyst-Rework.git`, the public
-    primary remote;
-  - `gitea`: `ssh://git@100.106.66.21:2222/norths7ar/L4D2-Amethyst-Rework.git`,
-    the private backup mirror;
-  - `upstream-rework`: the official Competitive Rework repository, fetch-only.
-- `main` may track only one remote branch. Keep `origin/main` as the normal
-  tracking branch and explicitly push the same accepted commit to
-  `gitea main` as the backup. When the user asks to commit and push without
-  narrowing the destination, push both `origin main` and `gitea main`.
-- For upstream updates, fetch `upstream-rework`, inspect the incoming commits
-  and conflicts, then integrate deliberately. Do not blindly merge/rebase and
-  do not enable pushes to the upstream remote.
-- Preserve unrelated or user-created work. An untracked file is not disposable.
+## Ownership and delivery
 
-## Project-Specific Constraints
+- Single-maintainer repository. Do not commit or push unless the user asks.
+- Accepted routine changes commit directly to `main`; do not create a feature
+  branch or PR unless explicitly requested. Preserve unrelated or
+  user-created work; an untracked file is not disposable.
+- Honor the maintainer's configured SSH commit signing. If a sandbox cannot
+  access the signing key, rerun the commit in the correct user context; never
+  disable signing locally or globally as a workaround.
+- Remotes: `origin` = public primary
+  (`git@github.com:norths7ar/L4D2-Amethyst-Rework.git`); `gitea` = private
+  backup mirror; `upstream-rework` = official Competitive Rework, fetch-only.
+  `main` tracks `origin/main`; push the same accepted commit to `gitea main`
+  as backup unless the user narrows the destination. For upstream updates,
+  fetch `upstream-rework`, inspect incoming commits and conflicts, then
+  integrate deliberately — no blind merge/rebase and no push to the upstream
+  remote.
 
-- Keep the naming boundary stable:
-  - `amethyst` is the legacy internal mutation/asset name used by the VPK,
-    VScript, Stripper path, and existing plugin assets;
-  - `astmod`, `astredux`, and `astflex` are framework-facing matchmode IDs.
-- Competitive Rework owns framework lifecycle. Do not place
-  `sm plugins load_unlock`, `sm plugins unload_all`, `sm plugins load_lock`, or
-  `sm plugins refresh` in custom mode cfgs. Do not hand-maintain 100+ unload
-  lines when the framework lifecycle already supplies the correct path.
-- Keep AstMod-only plugins under `addons/sourcemod/plugins/optional/amethyst/`.
-  Do not copy `confogl_autoloader.smx` into the active runtime.
-- Do not overwrite same-name Competitive Rework core files with the older
-  AstMod runtime copies. Reuse Rework framework plugins and general fixes when
-  their contracts match.
-- The plugin-load cfg is intentionally split into `plugins_1.cfg`,
-  `plugins_2.cfg`, and `plugins_3.cfg` because one large cfg exceeded the Source
-  engine command buffer. Preserve the load order unless runtime evidence
-  supports a change.
-- Treat `addons/amethyst.vpk` as unresolved but currently required. Do not
-  delete or replace it until its mutation and `gamemodes.txt` effects have been
-  tested.
-- Some bundled `.smx` files have no matching source in the supplied AstMod
-  archive. Record that provenance honestly. Do not claim they were rebuilt or
-  audited when they were not.
-- Keep `clip_removal.smx` and `l4d2_smg_reload_tweak.smx` unloaded unless new
-  source/runtime evidence justifies them. Preserve the shared SMG, pump/chrome
-  shotgun, reload, and deterministic-spread alignment with Zonemod.
-- Preserve AstMod custom SI spawning as a mode identity unless the user
-  explicitly changes that decision.
-- Third-party campaign compatibility is a first-class requirement. Avoid
-  suppressing map-provided instructor hints, scripted bosses, mechanisms, or
-  finale progression without a mode-specific reason and runtime test.
-- AstRedux is a rules audit, not a predetermined “remove Versus at all costs”
-  rewrite. Identify which behaviors truly require Versus and prefer a smaller,
-  testable plugin replacement only where it is reliable.
-- A future per-map route-Tank override must distinguish Director progress Tanks
-  from scripted/plugin bosses and persist decisions in a readable, reversible,
-  auditable store.
-- Keep `README.md` and `ASTMOD_INTEGRATION.md` synchronized with changes to mode
-  identity, lifecycle, copied assets, known risks, and validation status.
+## Hard constraints
+
+- Naming boundary: `amethyst` is the legacy internal mutation/asset name used
+  by the VPK, VScript, Stripper path, and existing plugins; `astmod` and
+  `astflex` are active framework matchmode IDs, while `astredux` is the
+  reserved ID for the planned mode. Keep the active names and asset boundary
+  stable.
+- Competitive Rework owns framework lifecycle. Never place
+  `sm plugins load_unlock`, `unload_all`, `load_lock`, or `refresh` in custom
+  mode cfgs. Custom modes must follow the current Rework lifecycle instead of
+  managing plugin locking or full teardown themselves.
+- AstMod-only plugins stay under `addons/sourcemod/plugins/optional/amethyst/`.
+  Do not reintroduce `confogl_autoloader.smx`.
+- Do not overwrite same-name Competitive Rework core files with older AstMod
+  copies. The plugin-load cfg split (`plugins_1/2/3.cfg`) preserves load order;
+  change it only with runtime evidence.
+- `amethyst.vpk` must stay until its `gamemodes.txt`/mutation effect is tested;
+  `clip_removal.smx` and `l4d2_smg_reload_tweak.smx` remain present but are not
+  loaded by default. State provenance honestly — do not claim bundled `.smx`
+  were rebuilt or audited when they were not.
+- Third-party campaign compatibility is first-class. Do not suppress map
+  instructor hints, scripted bosses, mechanisms, or finale progression
+  without a mode-specific reason and a runtime test. Preserve AstMod custom SI
+  spawning as mode identity unless the user explicitly changes that decision.
+- `astredux` is a rules audit, not a predetermined "remove Versus" rewrite.

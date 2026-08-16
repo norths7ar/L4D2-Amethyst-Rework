@@ -41,39 +41,21 @@ Rework、第三方地图机制产生摩擦。
 
 ## 当前 Baseline 已经改了什么
 
-当前仓库里的 `AstMod` 已经是维护版 Baseline，主要变化如下。更细的文件边界和
-运行记录见 [ASTMOD_INTEGRATION.md](ASTMOD_INTEGRATION.md)。
+当前仓库里的 `AstMod` 已经是维护版 Baseline。完整文件边界、武器同步清单、Stripper
+哈希和运行记录见 [ASTMOD_INTEGRATION.md](ASTMOD_INTEGRATION.md)，下面只给定位级概述。
 
-### Competitive Rework 融合
-
-- AstMod 和 AstFlex 已注册进 `matchmodes.txt`，由 Confogl/Rework 负责模式切换；
-- AstMod 专属插件被隔离到 `plugins/optional/amethyst/`，不会在其他模式自动加载；
-- 没有引入旧的 `confogl_autoloader.smx`，也没有在模式 cfg 里自行执行
-  `load_unlock`、`unload_all` 或 `load_lock`；
-- 退出模式使用 Rework 的 `pred_unload_plugins` 约定；直接切换模式时则遵循
-  Confogl 自己的完整卸载/重载流程；
-- 100 多条插件加载拆成三个 cfg，避开 Source 引擎单个命令缓冲区被截断的问题；
-- Competitive Rework 负责 SourceMod、MetaMod、Confogl、扩展、通用修复和框架插件，
-  AstMod 不再携带一套会互相覆盖的旧核心。
-
-### 玩法和兼容性调整
-
-- Uzi、消音微冲、木喷、铁喷以及确定性霰弹散布已经与当前 Zonemod 同步；
-- 改用 Rework/Zonemod 的 `l4d2_weapon_attributes.smx` 和
-  `l4d2_static_shotgun_spread.smx`，从而支持 `reloadduration`；
-- `l4d2_smg_reload_tweak.smx` 不再加载，避免人数档位覆盖已经同步的换弹参数；
-- `clip_removal.smx` 保留为上游文件，但默认不加载：缺少源码、行为无法确认，
-  原作者也无法确认其用途，而 Zonemod 并不使用它；
-- 57 张官图的 `cXmY` Stripper 配置已从当前 Zonemod 同步到 AstMod；第三方地图
-  的 Stripper 文件和全局过滤没有被覆盖；
-- `amethyst.nut` 对初始化时的第二次 `update_diff` 回调增加了保护，避免直接切换
-  matchmode 时出现瞬时 Squirrel 异常；
-- AstFlex 将 `sv_gameinstructor_disable` 设为 `0`，允许第三方地图显示路线、机关和
-  自制机制提示；AstMod Baseline 当前仍保留原来的禁用设置；
-- AstFlex 保留 AstMod 自定义刷特，默认关闭 Hard SI 总开关，并在 `/tz`（也可用
-  `!settings`）第二页提供多数投票；切回 AstMod 时会恢复 Hard SI 默认开启；
-- AstFlex 当前仍保留高阶武器和资源限制，但关闭较激进的额外伤害、快速动作、
-  自动补血和自动补弹等修正。它只是现阶段可玩的配置，不代表最终减压方案。
+- Competitive Rework 负责框架、扩展、通用修复和模式切换生命周期；AstMod 专属插件
+  隔离在 `plugins/optional/amethyst/`，不会在其他模式自动加载。模式进出由 Rework
+  的 `!match` / `!rmatch` 负责，模式 cfg 遵循框架生命周期，不自行执行
+  `load_unlock` / `unload_all` / `load_lock`。
+- 武器参数随当前 Zonemod 同步（Uzi、消音微冲、木喷、铁喷、确定性霰弹散布），改用
+  支持 `reloadduration` 的插件，并停掉会覆盖已同步换弹参数或缺源/用途不明的旧插件；
+  `clip_removal.smx` 保留为上游文件但默认不加载。具体清单见 ASTMOD_INTEGRATION。
+- 57 张官图 Stripper 配置从 Zonemod 同步到 AstMod，第三方地图文件和全局过滤未覆盖；
+  `amethyst.nut` 对直接切换 matchmode 时的瞬时 Squirrel 异常加了保护。
+- AstFlex 作为减压预览：保留 AstMod 自定义刷特，默认关 Hard SI 总开关并开放投票，
+  允许第三方地图显示路线/机关提示，关闭更激进的伤害和自动修正。它是现阶段可玩配置，
+  不代表最终减压方案；最终 AstFlex 从 AstRedux 派生。
 
 ### 战役投票和第三方地图
 

@@ -1,8 +1,8 @@
 # AstMod integration
 
-This directory is an independent integration build based on
-L4D2-Competitive-Rework. The two extracted upstream directories next to it are
-kept unchanged.
+This repository is an independent integration build based on
+L4D2-Competitive-Rework. A clean upstream clone and the historical extracted
+references are maintained outside this repository and are not modified here.
 
 ## Naming
 
@@ -42,8 +42,8 @@ configuration, and gameplay configuration.
 
 ### `astmod`
 
-This is the original hard-core AstMod profile. It keeps AstMod's custom SI wave
-spawning and enables Hard SI AI by default.
+This is the maintained hard-core AstMod Baseline. It keeps AstMod's custom SI
+wave spawning and enables Hard SI AI by default.
 
 ### `astflex`
 
@@ -158,9 +158,45 @@ profiles, forbidden lifecycle commands, matchmode registration, map filtering,
 Hard SI AI wiring, the 57 official Stripper hashes, and basic KeyValues brace
 balance.
 
-## WSL2 test checklist
+## Validation and test environments
 
-The local test deployment uses:
+The runtime checklist below is environment-independent. The WSL2 desktop
+deployment is the environment actually run so far; a rented Ubuntu VPS is
+planned but has not been stood up or verified. Do not mark an item verified
+against an environment that has not run it.
+
+AstMod's 100+ plugin loads are split across `plugins_1.cfg`, `plugins_2.cfg`,
+and `plugins_3.cfg`: a single cfg exceeded the Source engine command buffer
+after `generalfixes.cfg` and silently stopped before the framework plugins.
+The difficulty manager loads last because its generated cfg temporarily
+manages SourceMod's loading lock.
+
+### Runtime checklist (environment-independent)
+
+1. [x] Cold start without an active matchmode.
+2. [ ] Load AstMod through the in-game `!match` menu. (Console
+   `sm_forcematch astmod` is verified on the WSL2 desktop environment.)
+3. [x] Inspect `sm plugins list`, SourceMod errors, missing natives, and
+   gamedata failures.
+4. [x] Verify the core AstMod and AstFlex cvars and plugin state.
+5. [ ] Complete a normal chapter and a finale.
+6. [ ] Verify ACS `!mapvote`, `!vote`, `/tz`, and campaign switching with a
+   connected player.
+7. [ ] Exit through `!rmatch` and confirm every AstMod-specific plugin is gone.
+8. [x] Switch directly from AstMod to Zonemod with a connected client (verified
+   on WSL2) and confirm `versus_coop_mode.smx`, ACS, AstMod AI, and AstMod
+   voting plugins are gone.
+9. [ ] Switch back to AstMod.
+10. [ ] Repeat the cycle at least three times and inspect residual cvars,
+    duplicate commands, plugin load failures, and crashes.
+
+Items marked `[x]` were exercised on the executed environment below. The
+unchecked items still need a connected-player pass; which environment
+completes them first is open.
+
+### Executed environment: WSL2 desktop
+
+This is one environment, not a specification:
 
 - WSL distribution: `Ubuntu-22.04`
 - Service account: `l4d2` (locked password)
@@ -169,32 +205,22 @@ The local test deployment uses:
 - Reviewable integration snapshot: `/home/l4d2/integration`
 - Local test overrides: `cfg/astmod_test.cfg`
 
-AstMod's 100+ plugin loads are split across `plugins_1.cfg`,
-`plugins_2.cfg`, and `plugins_3.cfg`. A single cfg exceeded the Source engine
-command buffer after `generalfixes.cfg` and silently stopped before the
-framework plugins. The difficulty manager loads last because its generated
-cfg temporarily manages SourceMod's loading lock.
+### Planned environment: Ubuntu VPS
 
-As of 2026-07-29, a fresh anonymous Linux install of App 222860 returns
-`Invalid platform`. The verified anonymous workaround is to run
-`app_update 222860 validate` first with
-`@sSteamCmdForcePlatformType windows`, then run it again against the same
-install directory with `@sSteamCmdForcePlatformType linux`. The first pass
-installs shared content; the second replaces/adds the Linux platform layer.
+A rented Ubuntu VPS dedicated server is planned. No VPS install, service,
+port, or runtime verification has been performed yet; nothing here should be
+read as VPS-verified. While it remains planned, do not mirror WSL2-specific
+host paths here. When it comes online, run the same checklist against it and
+record results here, without repointing the checklist wording.
 
-Runtime verification checklist:
+### SteamCMD anonymous download note
 
-1. [x] Cold start without an active matchmode.
-2. [ ] Load AstMod through the in-game `!match` menu (console
-   `sm_forcematch astmod` is verified).
-3. [x] Inspect `sm plugins list`, SourceMod errors, missing natives, and
-   gamedata failures.
-4. [x] Verify the core AstMod and AstFlex cvars and plugin state.
-5. Complete a normal chapter and a finale.
-6. Verify ACS `!mapvote`, `!vote`, `/tz`, and campaign switching with a player.
-7. Exit through `!rmatch` and confirm every AstMod-specific plugin is gone.
-8. [x] Switch directly from AstMod to Zonemod with a connected client and confirm
-   `versus_coop_mode.smx`, ACS, AstMod AI, and AstMod voting plugins are gone.
-9. Switch back to AstMod.
-10. Repeat the cycle at least three times and inspect residual cvars, duplicate
-    commands, plugin load failures, and crashes.
+As of 2026-07-29, a fresh anonymous Linux install of App 222860 returned
+`Invalid platform`. This appears to be a SteamCMD anonymous-download behavior,
+not a WSL2-specific one. The verified workaround is to run
+`app_update 222860 validate` first with `@sSteamCmdForcePlatformType windows`,
+then again against the same install directory with
+`@sSteamCmdForcePlatformType linux`: the first pass installs shared content,
+the second adds the Linux platform layer. If a clean Ubuntu VPS installs
+without encountering this issue, note it here rather than assuming the
+workaround is always required.
