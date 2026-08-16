@@ -653,6 +653,9 @@ public void SITimerNewVoteResultHandler(Handle vote, int num_votes, int num_clie
 				DisplayBuiltinVotePass(vote, sBuffer);
 				SetConVarFloat(hSITimerNew, tempSITimerNew);
 				SetConVarInt(hSILimitNew, tempSILimitNew);
+#if defined ASTREDUX_BUILD
+				ReloadVScript(null, "", "");
+#endif
 				return;
 			}
 		}

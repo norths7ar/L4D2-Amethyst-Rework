@@ -102,15 +102,15 @@ function update_diff_old()
 {
 	local difficulty = Convars.GetStr("astredux_profile_current");
 	local timer = Convars.GetStr("ast_sitimer");
+	DirectorOptions.HunterLimit = Convars.GetStr("astredux_si_hunter_limit").tointeger();
+	DirectorOptions.SmokerLimit = Convars.GetStr("astredux_si_smoker_limit").tointeger();
+	DirectorOptions.BoomerLimit = Convars.GetStr("astredux_si_boomer_limit").tointeger();
+	DirectorOptions.SpitterLimit = Convars.GetStr("astredux_si_spitter_limit").tointeger();
+	DirectorOptions.JockeyLimit = Convars.GetStr("astredux_si_jockey_limit").tointeger();
+	DirectorOptions.ChargerLimit = Convars.GetStr("astredux_si_charger_limit").tointeger();
+	DirectorOptions.PreferredSpecialDirection = Convars.GetStr("astredux_si_preferred_direction").tointeger();
 	switch (difficulty) {
 		case "1":
-			DirectorOptions.HunterLimit = 1
-			DirectorOptions.SmokerLimit = 1
-			DirectorOptions.BoomerLimit = 0
-			DirectorOptions.SpitterLimit = 0
-			DirectorOptions.JockeyLimit = 1
-			DirectorOptions.ChargerLimit = 1
-			DirectorOptions.PreferredSpecialDirection = 4
 			switch (timer) {
 				case "0":
 					ModeData.g_nTime = 6
@@ -135,13 +135,6 @@ function update_diff_old()
 			}
 			break;
 		case "2":
-			DirectorOptions.HunterLimit = 2
-			DirectorOptions.SmokerLimit = 0
-			DirectorOptions.BoomerLimit = 1
-			DirectorOptions.SpitterLimit = 0
-			DirectorOptions.JockeyLimit = 1
-			DirectorOptions.ChargerLimit = 1
-			DirectorOptions.PreferredSpecialDirection = 4
 			switch (timer) {
 				case "0":
 					ModeData.g_nTime = 10
@@ -166,13 +159,6 @@ function update_diff_old()
 			}
 			break;
 		case "3":
-			DirectorOptions.HunterLimit = 3
-			DirectorOptions.SmokerLimit = 1
-			DirectorOptions.BoomerLimit = 1
-			DirectorOptions.SpitterLimit = 1
-			DirectorOptions.JockeyLimit = 2 
-			DirectorOptions.ChargerLimit = 1
-			DirectorOptions.PreferredSpecialDirection = 1
 			ModeData.g_nSI = 6
 			switch (timer) {
 				case "0":
@@ -193,13 +179,6 @@ function update_diff_old()
 			}
 			break;
 		case "4":
-			DirectorOptions.HunterLimit = 4
-			DirectorOptions.SpitterLimit = 1
-			DirectorOptions.SmokerLimit = 1
-			DirectorOptions.BoomerLimit = 1
-			DirectorOptions.JockeyLimit = 2
-			DirectorOptions.ChargerLimit = 2
-			DirectorOptions.PreferredSpecialDirection = 1
 			ModeData.g_nSI = 6
 			switch (timer) {
 				case "0":

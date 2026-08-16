@@ -326,7 +326,6 @@ bool ApplyProfile(int players, const char[] reason)
 
     SetExistingConVarFloat("ast_sitimer_new", profile.waveInterval);
     SetExistingConVarInt("ast_silimit_new", profile.waveSize);
-    SetExistingConVarInt("ast_humantankhp", profile.tankHealth);
 
     float engineScale = g_cvTankEngineScale.FloatValue;
     int engineTankHealth = RoundToNearest(float(profile.tankHealth) / engineScale);
@@ -478,7 +477,6 @@ bool ValidateRuntimeCvars()
     {
         "ast_sitimer_new",
         "ast_silimit_new",
-        "ast_humantankhp",
         "z_tank_health"
     };
 
