@@ -1,20 +1,154 @@
-# **L4D2 Amethyst Rework**
+# L4D2 Amethyst Rework
 
-This repository is a complete L4D2 server configuration built on top of
-[L4D2 Competitive Rework](https://github.com/SirPlease/L4D2-Competitive-Rework).
-It retains the upstream competitive matchmodes and adds the maintained
-Amethyst/AstMod PVE family.
+这是一个以 [L4D2 Competitive Rework](https://github.com/SirPlease/L4D2-Competitive-Rework)
+为框架、以 AstMod 2.7.1 为 PVE 基础的完整服务端配置。仓库保留 Competitive
+Rework 原有的对抗配置，并把 AstMod 系列做成可以通过 `!match` / `!rmatch`
+进入、切换和退出的独立模式。
 
-Current custom matchmodes:
+AstMod 原版由海洋空气维护，公开源码来自
+[L4D2-AstMod-Scriptings](https://github.com/Sglight/L4D2-AstMod-Scriptings)。
+原作者确认，`Ast` 这个名字取自 `Amethyst` 的头尾组合。本项目不是 AstMod 的
+“官方续作”，也不是要评判或替代原版；它是服主基于自己的游玩习惯、朋友局和
+第三方战役需求维护的一份个人分支。欢迎原作者和熟悉 AstMod 的玩家一起讨论。
 
-* **AstMod** - the maintained AstMod baseline.
-* **AstFlex** - the current lower-pressure AstMod variant; gameplay reduction
-  will be refined after AstRedux.
-* **AstRedux** - planned native-Coop rules rework; not yet available in
-  `!match`.
+## 为什么做这个项目
 
-See [ASTMOD_INTEGRATION.md](ASTMOD_INTEGRATION.md) for the integration boundary,
-runtime decisions, and validation status.
+AstMod 的核心魅力并不只是“把数值调难”，而是围绕多人 PVE 形成的一整套药役
+体验：自定义刷特、特感 AI、资源控制、武器节奏、地图修正和难度投票。另一方面，
+它借用了 Versus 的若干底层行为，年代较早的插件和配置也会与今天的 Competitive
+Rework、第三方地图机制产生摩擦。
+
+本项目希望做到：
+
+- 保留 AstMod 有辨识度的玩法，而不是把它稀释成普通战役加几只特感；
+- 把不同取向做成互不污染的 matchmode，而不是靠临时改一堆 cvar；
+- 优先兼容第三方战役自己的提示、机关、固定 Boss 和脚本；
+- 尽量复用 Competitive Rework 的框架、修复和生命周期，不无谓分叉核心代码；
+- 所有重要取舍都能在配置、文档或持久化记录里查到，便于复盘和回滚；
+- 先把规则底层想清楚，再讨论“减多少难度”，不让休闲版反过来决定基础架构。
+
+## 三个模式的定位
+
+| 模式 | 当前状态 | 定位 |
+| --- | --- | --- |
+| **AstMod** | 已可在 `!match` 选择 | 维护后的个人 Baseline。保留原版的高压药役方向、自定义刷特和默认开启的 Hard SI；它不是未经修改的 2.7.1 历史镜像。 |
+| **AstRedux** | 规划中，当前工作重点 | 从规则底层重新梳理 AstMod。目标是保留需要的 Versus 特性，同时评估哪些行为可以由插件在 Coop 下可靠重建。它不是简单的“去掉 Versus”。 |
+| **AstFlex** | 已有可用配置，但尚未定型 | 原 `Advanced Co-op` 的正式名称。长期方向是在 AstRedux 稳定后，从 Redux 做减压版：保留 AstMod 刷特，降低加智和高压机制对普通玩家、初玩玩家的门槛。 |
+
+`amethyst` 继续作为 VPK、VScript、Stripper 和 mutation 的内部资产名；
+`astmod`、`astredux`、`astflex` 是面向框架和玩家的模式名。这层隔离是有意保留的，
+避免为了改展示名称而破坏历史资产引用。
+
+## 当前 Baseline 已经改了什么
+
+当前仓库里的 `AstMod` 已经是维护版 Baseline，主要变化如下。更细的文件边界和
+运行记录见 [ASTMOD_INTEGRATION.md](ASTMOD_INTEGRATION.md)。
+
+### Competitive Rework 融合
+
+- AstMod 和 AstFlex 已注册进 `matchmodes.txt`，由 Confogl/Rework 负责模式切换；
+- AstMod 专属插件被隔离到 `plugins/optional/amethyst/`，不会在其他模式自动加载；
+- 没有引入旧的 `confogl_autoloader.smx`，也没有在模式 cfg 里自行执行
+  `load_unlock`、`unload_all` 或 `load_lock`；
+- 退出模式使用 Rework 的 `pred_unload_plugins` 约定；直接切换模式时则遵循
+  Confogl 自己的完整卸载/重载流程；
+- 100 多条插件加载拆成三个 cfg，避开 Source 引擎单个命令缓冲区被截断的问题；
+- Competitive Rework 负责 SourceMod、MetaMod、Confogl、扩展、通用修复和框架插件，
+  AstMod 不再携带一套会互相覆盖的旧核心。
+
+### 玩法和兼容性调整
+
+- Uzi、消音微冲、木喷、铁喷以及确定性霰弹散布已经与当前 Zonemod 同步；
+- 改用 Rework/Zonemod 的 `l4d2_weapon_attributes.smx` 和
+  `l4d2_static_shotgun_spread.smx`，从而支持 `reloadduration`；
+- `l4d2_smg_reload_tweak.smx` 不再加载，避免人数档位覆盖已经同步的换弹参数；
+- `clip_removal.smx` 保留为上游文件，但默认不加载：缺少源码、行为无法确认，
+  原作者也无法确认其用途，而 Zonemod 并不使用它；
+- 57 张官图的 `cXmY` Stripper 配置已从当前 Zonemod 同步到 AstMod；第三方地图
+  的 Stripper 文件和全局过滤没有被覆盖；
+- `amethyst.nut` 对初始化时的第二次 `update_diff` 回调增加了保护，避免直接切换
+  matchmode 时出现瞬时 Squirrel 异常；
+- AstFlex 将 `sv_gameinstructor_disable` 设为 `0`，允许第三方地图显示路线、机关和
+  自制机制提示；AstMod Baseline 当前仍保留原来的禁用设置；
+- AstFlex 保留 AstMod 自定义刷特，默认关闭 Hard SI 总开关，并在 `/tz`（也可用
+  `!settings`）第二页提供多数投票；切回 AstMod 时会恢复 Hard SI 默认开启；
+- AstFlex 当前仍保留高阶武器和资源限制，但关闭较激进的额外伤害、快速动作、
+  自动补血和自动补弹等修正。它只是现阶段可玩的配置，不代表最终减压方案。
+
+### 战役投票和第三方地图
+
+AstMod 自带的 ACS 和 `!vote` 仍使用 `addons/sourcemod/configs/cfgs.txt` 作为战役
+目录。当前改动会检查每个目录项的第一张地图是否真实安装：没有安装的条目不会
+出现在投票中，安装后无需再改配置即可出现。
+
+这不是完全动态发现。服务器只能从地图 code 知道 `x1m1` 之类的名字，无法可靠
+推导玩家能看懂的战役标题。后续可能维护一份明确的战役目录，把 VPK/战役名称、
+首图 code 和展示名关联起来；在那之前，`cfgs.txt` 仍是可审计的白名单和元数据源。
+
+## AstRedux：接下来的主线
+
+AstRedux 首先处理规则底层，而不是先做难度减法。当前 AstMod 通过
+`versus_coop_mode.smx` 在章节过程中借用 Versus，在对抗回合结束时切回 Coop，
+从而同时取得部分对抗特感行为和战役推进能力。这套办法有效，但也带来回合逻辑、
+第三方地图兼容和自制机制方面的不确定性。
+
+Redux 的第一阶段会逐项回答：
+
+1. 当前实际依赖 Versus 的行为有哪些，哪些只是历史实现选择；
+2. 哪些能力能在原生 Coop 下由插件可靠实现，哪些强行重写反而风险更高；
+3. 如何保留 AstMod 的刷特、资源和武器身份，同时避免 Versus 回合结算干扰战役；
+4. 第三方地图的提示、固定 Tank、自制 Boss、机关和结局脚本能否不受模式底层破坏；
+5. 从 AstRedux 派生 AstFlex 时，哪些压力项应当成为可投票开关，哪些属于模式身份。
+
+[CompetitiveWithAnne](https://github.com/fantasylidong/CompetitiveWithAnne) 会作为
+实现思路参考之一，重点看它如何在插件层接管 Coop/药役行为；不会在没有逐项审计
+的情况下整体搬入。
+
+### 路程 Tank 的计划
+
+第三方战役可能同时存在地图固定 Tank、插件固定 Tank 和 Director 路程 Tank。
+初见时叠加并不罕见。计划是在安全门内提供投票，只关闭当前地图的 Director
+路程 Tank，并把结果按地图持久化到可读配置中：
+
+- 重开本关后仍然生效；
+- 不误杀地图脚本或插件明确安排的固定 Boss；
+- 后台可以直接查看哪些地图被人工覆盖，以及是谁/何时做了决定；
+- 后续可以删除记录，恢复该地图的默认行为。
+
+具体数据格式和 Tank 来源识别要在 AstRedux 规则审计后确定，目前尚未实现。
+
+## 已验证与待验证
+
+已完成：
+
+- 静态检查 206 条有效插件加载和 57 张官图 Stripper 哈希；
+- Ubuntu 22.04 / L4D2 Dedicated Server 的核心插件加载；
+- `sm_forcematch astmod`、AstMod/AstFlex 核心 cvar 和插件状态；
+- 有玩家连接时从 AstMod 直接切到 Zonemod，确认 `versus_coop_mode.smx`、ACS、
+  AstMod AI 和投票插件被清理；
+- 与 Zonemod 同步后的微冲、单喷换弹和散布配置不再产生旧插件接口报错。
+
+仍需完成：
+
+- 游戏内完整走一遍 `!match`、`!vote`、`!mapvote`、`/tz` / `!settings`；
+- 正常完成章节和终章，验证 ACS 战役切换；
+- 多次 AstMod / AstRedux（实现后）/ AstFlex / Zonemod 往返切换；
+- 判断 `addons/amethyst.vpk` 是否能缩减或替换。它目前仍提供 mutation 定义，
+  不能在缺少运行验证时直接删除；
+- 决定是否保留 `server.smx` 的空服换图和 `sv_crash` 管理命令；
+- 找回或明确替代上游配置提到、但运行包和源码包都缺失的 `wave_spawner.smx`。
+
+## 仓库关系
+
+- GitHub `origin`：公开主仓库；
+- 私有 Gitea `gitea`：个人备份镜像；
+- `upstream-rework`：Competitive Rework 上游，只拉取、不推送；
+- `main` 是单人维护主线。接受变更后通常将同一个已签名提交推送到 GitHub 和
+  Gitea，不为例行个人改动额外制造 PR。
+
+本仓库包含 AstMod 2.7.1 运行包带来的 `.smx`。原始源码包没有覆盖每一个二进制，
+因此文档会诚实区分“有源码且可重编译”“只有上游二进制”和“本项目修改过的源码”，
+不会假装能够从当前源码完整复现全部插件。
 
 ---
 
