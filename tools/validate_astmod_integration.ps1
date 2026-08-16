@@ -70,18 +70,20 @@ function Assert-KeyValuesBraceBalance {
 }
 
 $requiredPaths = @(
-    "addons/amethyst.vpk",
+    "addons/astmod.vpk",
+    "assets/astmod_vpk/addoninfo.txt",
+    "assets/astmod_vpk/scripts/gamemodes.txt",
     "addons/sourcemod/configs/cfgs.txt",
     "addons/sourcemod/configs/hostname/hostname.txt",
-    "addons/sourcemod/plugins/optional/amethyst/versus_coop_mode.smx",
-    "addons/sourcemod/plugins/optional/amethyst/ACS.smx",
-    "addons/sourcemod/plugins/optional/amethyst/vote.smx",
-    "addons/sourcemod/plugins/optional/amethyst/sceneprocessor.smx",
+    "addons/sourcemod/plugins/optional/astmod/versus_coop_mode.smx",
+    "addons/sourcemod/plugins/optional/astmod/ACS.smx",
+    "addons/sourcemod/plugins/optional/astmod/vote.smx",
+    "addons/sourcemod/plugins/optional/astmod/sceneprocessor.smx",
     "addons/sourcemod/scripting/ACS.sp",
     "addons/sourcemod/scripting/AI_HardSI.sp",
     "addons/sourcemod/scripting/challenge.sp",
     "addons/sourcemod/scripting/vote.sp",
-    "cfg/cfgogl/astmod/amethyst.cfg",
+    "cfg/cfgogl/astmod/astmod.cfg",
     "cfg/cfgogl/astmod/confogl.cfg",
     "cfg/cfgogl/astmod/confogl_off.cfg",
     "cfg/cfgogl/astmod/confogl_plugins.cfg",
@@ -105,8 +107,9 @@ $requiredPaths = @(
     "cfg/sourcemod/difficulty_adjustment_system/normal_lite.cfg",
     "cfg/sourcemod/difficulty_adjustment_system/hard_lite.cfg",
     "cfg/sourcemod/difficulty_adjustment_system/impossible_lite.cfg",
-    "cfg/stripper/amethyst",
-    "scripts/vscripts/amethyst.nut"
+    "cfg/stripper/astmod",
+    "scripts/vscripts/astmod.nut",
+    "tools/build_astmod_vpk.ps1"
 )
 
 foreach ($relativePath in $requiredPaths) {
@@ -138,15 +141,15 @@ foreach ($pluginConfig in @(
 )) {
     Assert-NotContains `
         $pluginConfig `
-        '^\s*sm plugins load\s+optional/amethyst/clip_removal\.smx\s*$' `
+        '^\s*sm plugins load\s+optional/astmod/clip_removal\.smx\s*$' `
         "Unverified clip_removal plugin is still active"
     Assert-NotContains `
         $pluginConfig `
-        '^\s*sm plugins load\s+optional/amethyst/l4d2_smg_reload_tweak\.smx\s*$' `
+        '^\s*sm plugins load\s+optional/astmod/l4d2_smg_reload_tweak\.smx\s*$' `
         "AstMod SMG reload plugin would override the Zonemod weapon values"
     Assert-NotContains `
         $pluginConfig `
-        '^\s*sm plugins load\s+optional/amethyst/l4d2_(weapon_attributes|static_shotgun_spread)\.smx\s*$' `
+        '^\s*sm plugins load\s+optional/astmod/l4d2_(weapon_attributes|static_shotgun_spread)\.smx\s*$' `
         "AstMod still loads an older isolated weapon-parameter plugin"
     Assert-Contains `
         $pluginConfig `
@@ -179,7 +182,7 @@ function Get-SharedWeaponSettings {
 
 $zonemodWeaponSettings = Get-SharedWeaponSettings "cfg/cfgogl/zonemod/shared_settings.cfg"
 foreach ($modeConfig in @(
-    "cfg/cfgogl/astmod/amethyst.cfg",
+    "cfg/cfgogl/astmod/astmod.cfg",
     "cfg/cfgogl/astflex/astflex.cfg"
 )) {
     $modeWeaponSettings = Get-SharedWeaponSettings $modeConfig
@@ -242,7 +245,7 @@ Assert-Contains `
     '^\s*confogl_addcvar das_suffix "_lite"\s*$' `
     "AstFlex does not use the lite wave profiles"
 Assert-Contains `
-    "cfg/cfgogl/astmod/amethyst.cfg" `
+    "cfg/cfgogl/astmod/astmod.cfg" `
     '^\s*sm_cvar ai_hardsi_enable 1\s*$' `
     "AstMod does not restore Hard SI AI to on"
 Assert-Contains `
@@ -262,14 +265,26 @@ Assert-Contains `
     'FindConVar\("ai_hardsi_enable"\)' `
     "The /tz menu does not expose the Hard SI AI vote"
 Assert-Contains `
-    "scripts/vscripts/amethyst.nut" `
+    "scripts/vscripts/astmod.nut" `
     'if \("update_diff" in g_ModeScript\)' `
     "The AstMod VScript does not guard its mode-switch reload callback"
+Assert-Contains `
+    "assets/astmod_vpk/scripts/gamemodes.txt" `
+    '^\s*"astmod"\s*$' `
+    "The AstMod VPK source does not define the astmod mutation"
+Assert-NotContains `
+    "assets/astmod_vpk/scripts/gamemodes.txt" `
+    '^\s*"amethyst"\s*$' `
+    "The legacy mutation ID remains in the AstMod VPK source"
+Assert-Contains `
+    "assets/astmod_vpk/addoninfo.txt" `
+    '^addontitle\s+"AstMod"\s*$' `
+    "The AstMod VPK addon title is not renamed"
 
 $zoneOfficialMaps = Get-ChildItem -LiteralPath (Join-Path $Root "cfg/stripper/zonemod/maps") -File |
     Where-Object { $_.Name -match '^c\d+m\d+.*\.cfg$' }
 foreach ($zoneMap in $zoneOfficialMaps) {
-    $astMap = Join-Path $Root "cfg/stripper/amethyst/maps/$($zoneMap.Name)"
+    $astMap = Join-Path $Root "cfg/stripper/astmod/maps/$($zoneMap.Name)"
     if (-not (Test-Path -LiteralPath $astMap -PathType Leaf)) {
         Add-Failure "AstMod is missing official Stripper map: $($zoneMap.Name)"
         continue

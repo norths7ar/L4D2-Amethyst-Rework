@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-source_root='/mnt/e/l4d2_configs_merge/L4D2-Competitive-Rework-AstMod'
+source_root='/mnt/e/l4d2_configs_merge/repos/L4D2-Amethyst-Rework'
 integration_root='/home/l4d2/integration'
 game_root='/home/l4d2/server/left4dead2'
 
@@ -13,6 +13,26 @@ cp -a \
     "$integration_root/scripts" \
     "$game_root/"
 
+legacy_paths=(
+    "$integration_root/addons/amethyst.vpk"
+    "$integration_root/addons/sourcemod/plugins/optional/amethyst"
+    "$integration_root/cfg/cfgogl/astmod/amethyst.cfg"
+    "$integration_root/cfg/stripper/amethyst"
+    "$integration_root/scripts/vscripts/amethyst.nut"
+    "$game_root/addons/amethyst.vpk"
+    "$game_root/addons/sourcemod/plugins/optional/amethyst"
+    "$game_root/cfg/cfgogl/astmod/amethyst.cfg"
+    "$game_root/cfg/stripper/amethyst"
+    "$game_root/scripts/vscripts/amethyst.nut"
+)
+
+for legacy_path in "${legacy_paths[@]}"; do
+    case "$legacy_path" in
+        "$integration_root"/*|"$game_root"/*) rm -rf -- "$legacy_path" ;;
+        *) echo "Refusing to remove unexpected path: $legacy_path" >&2; exit 1 ;;
+    esac
+done
+
 for file_name in host.txt motd.txt myhost.txt mymotd.txt; do
     if [[ -f "$integration_root/$file_name" ]]; then
         cp -a "$integration_root/$file_name" "$game_root/"
@@ -22,6 +42,6 @@ done
 test -x /home/l4d2/server/srcds_linux
 test -f "$game_root/addons/sourcemod/configs/matchmodes.txt"
 test -f "$game_root/cfg/cfgogl/astmod/confogl_plugins.cfg"
-test -f "$game_root/addons/amethyst.vpk"
+test -f "$game_root/addons/astmod.vpk"
 
 echo 'AstMod integration deployed to the WSL2 server.'

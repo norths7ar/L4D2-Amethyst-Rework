@@ -1,0 +1,6 @@
+"AddonInfo"
+{
+addontitle "AstMod"
+addonversion "1.0"
+addonauthor "海洋空氣"
+}
