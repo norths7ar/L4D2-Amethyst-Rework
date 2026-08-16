@@ -22,10 +22,10 @@ AstMod 的核心魅力并不只是“把数值调难”，而是围绕多人 PVE
 | 模式 | 当前状态 | 定位 |
 | --- | --- | --- |
 | **AstMod** | 已可在 `!match` 选择 | 维护后的个人 Baseline。保留原版的高压药役方向、自定义刷特和默认开启的 Hard SI；它不是未经修改的 2.7.1 历史镜像。 |
-| **AstRedux** | 规划中，当前工作重点 | 从规则底层重新梳理 AstMod。目标是保留需要的 Versus 特性，同时评估哪些行为可以由插件在 Coop 下可靠重建。它不是简单的“去掉 Versus”。 |
+| **AstRedux** | Scaffold 已注册，当前工作重点 | 已建立与 AstMod 行为等价的并行容器，下一步从新 DAS/Profile Controller 开始重构规则底层。目标是保留需要的 Versus 特性，同时评估哪些行为可以由插件在 Coop 下可靠重建。 |
 | **AstFlex** | 暂停开发，保留实验配置 | 前期减压讨论留下的可用 preview，目前仍依赖 AstMod 的 Versus-backed 底层。等 AstRedux 或其他 Coop-native 方案可行后再重启，并作为该 ruleset 的减压 preset。 |
 
-运行时 namespace 已统一为 `astmod`：VPK、VScript、Stripper、插件目录、主配置和 L4D2 mutation 使用同一个名称。`astredux` 是下一阶段的独立实验 ruleset；`astflex` 暂时只保留已有 preview 配置。
+稳定 Baseline 的运行时 namespace 已统一为 `astmod`。AstRedux scaffold 使用独立的 `astredux` matchmode、mutation、cfg 和 VScript，同时暂时复用未修改的 AstMod 插件池与 Stripper；`astflex` 只保留已有 preview 配置。
 
 ## 当前 Baseline 已经改了什么
 
@@ -45,6 +45,8 @@ AstMod 自带的 ACS 和 `!vote` 仍使用 `addons/sourcemod/configs/cfgs.txt` �
 ## AstRedux：接下来的主线
 
 AstRedux 首先处理规则底层，而不是先做难度减法。当前 AstMod 通过 `versus_coop_mode.smx` 在章节过程中借用 Versus，在对抗回合结束时切回 Coop，从而同时取得部分对抗特感行为和战役推进能力。这套办法有效，但也带来回合逻辑、第三方地图兼容和自制机制方面的不确定性；部分第三方 VPK 未声明支持 Versus，另一些地图的剧情、Boss 或 Director/VScript 也可能被对抗底层和 AstMod 插件接管。Redux 将作为与 AstMod 并列的 Coop-native 实验 ruleset，而不是 AstMod 的少量增删版。
+
+当前已经完成第一层 scaffold：`!match` 中注册 `astredux`，VPK 提供同名 mutation，配置与 VScript 独立，但玩法仍从 AstMod Baseline 起步。这样后续 Profile Controller、Coop-native 底层和插件替换都能在 Redux 内单独验证，不影响可玩的 AstMod。
 
 Redux 的第一阶段会逐项回答：
 
@@ -71,10 +73,10 @@ Redux 的第一阶段会逐项回答：
 
 已完成：
 
-- 静态检查 206 条有效插件加载和 57 张官图 Stripper 哈希；
+- 静态检查 309 条有效插件加载和 57 张官图 Stripper 哈希；
 - Ubuntu 22.04 / L4D2 Dedicated Server 的核心插件加载；
 - `sm_forcematch astmod`、AstMod/AstFlex 核心 cvar 和插件状态；
-- 改名后的 `astmod` mutation、`astmod.nut`、Stripper 和插件 namespace 已在 WSL2 实际加载；当前 `gamemodes.txt` 与本机 App 222860 的 `update/pak01_dir.vpk` 版本相比，仅追加 `astmod` 与历史 `hunter` 两个模式；
+- 改名后的 `astmod` mutation、`astmod.nut`、Stripper 和插件 namespace 已在 WSL2 实际加载；`astredux` mutation、独立 VScript、Baseline Stripper 路径和旧 DAS 也已完成 WSL2 冷加载；当前 `gamemodes.txt` 在官方文件基础上追加 `astmod`、`astredux` 与历史 `hunter` 三个模式；
 - 有玩家连接时从 AstMod 直接切到 Zonemod，确认 `versus_coop_mode.smx`、ACS、AstMod AI 和投票插件被清理；
 - 与 Zonemod 同步后的微冲、单喷换弹和散布配置不再产生旧插件接口报错。
 
@@ -82,7 +84,7 @@ Redux 的第一阶段会逐项回答：
 
 - 游戏内完整走一遍 `!match`、`!vote`、`!mapvote`、`/tz` / `!settings`；
 - 正常完成章节和终章，验证 ACS 战役切换；
-- 多次 AstMod / AstRedux（实现后）/ AstFlex / Zonemod 往返切换；
+- 运行 AstRedux scaffold，并多次执行 AstMod / AstRedux / AstFlex / Zonemod 往返切换；
 - 游戏更新后重新比较官方 `gamemodes.txt`，并验证其他同样携带该文件的第三方 addon 是否存在加载顺序冲突；历史 `hunter` 条目后续也可评估是否删除；
 - 决定是否保留 `server.smx` 的空服换图和 `sv_crash` 管理命令；
 - 找回或明确替代上游配置提到、但运行包和源码包都缺失的 `wave_spawner.smx`。

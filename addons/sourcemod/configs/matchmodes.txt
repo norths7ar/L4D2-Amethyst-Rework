@@ -130,6 +130,10 @@
 		{
 			"name" "AstMod - 药役"
 		}
+		"astredux"
+		{
+			"name" "AstRedux - 实验药役"
+		}
 		"astflex"
 		{
 			"name" "AstFlex - 休闲药役"

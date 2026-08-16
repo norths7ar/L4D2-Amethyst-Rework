@@ -7,6 +7,7 @@
 - Competitive Rework matchmode ID：`astmod`
 - 面向玩家的名称：`AstMod - 药役`
 - L4D2 mutation 与共享资产 namespace：`astmod`
+- AstRedux scaffold matchmode / mutation / VScript ID：`astredux`
 
 运行时命名现已统一为 `astmod`：VPK、VScript、Stripper、插件目录和主配置不再使用旧 `amethyst` 。旧名称只保留在上游历史和版本来源说明中。
 
@@ -36,7 +37,9 @@ AstMod 是当前可用且持续维护的 Baseline。它保留原版的自定义�
 
 ### `astredux`
 
-AstRedux 是当前开发主线，将作为与 AstMod 并列的独立实验 ruleset，而不是在 AstMod 上追加少量开关。目标是建立可用于第三方战役的 Coop-native 底层，再逐项审计并重建真正需要的 Versus 特性；重点包括不支持 Versus 的第三方地图、自制剧情与 Boss、地图自己的 Director/VScript，以及章节和终章推进。AstRedux 尚未形成可玩配置，也未注册到 `!match` 菜单。
+AstRedux scaffold 已从当前 AstMod Baseline 初始化并注册为 `AstRedux - 实验药役`。它拥有独立的 `cfg/cfgogl/astredux/`、`astredux` mutation 和 `astredux.nut`，但初始行为仍以 AstMod 为准：未修改插件继续从 `optional/astmod/` 加载，Stripper 暂时复用 `cfg/stripper/astmod/`，旧 DAS 也仍在运行。这层 scaffold 只建立可对照的并行开发容器，不代表 Redux 的 Coop-native 规则已经实现。
+
+Redux 第一项大改是用明确的 player profile controller 替换旧 DAS 链路，然后再逐项审计并重建真正需要的 Versus 特性。目标仍是建立可用于第三方战役的 Coop-native 底层，重点包括不支持 Versus 的第三方地图、自制剧情与 Boss、地图自己的 Director/VScript，以及章节和终章推进。
 
 ### `astflex`
 
@@ -68,7 +71,7 @@ AstMod 自带的 SourceMod/MetaMod core files 和扩展没有复制，同名的 
 
 ### `astmod.vpk`
 
-`astmod.vpk` 在 `scripts/gamemodes.txt` 中提供 `astmod` 和历史 `hunter` 条目，当前模式设置 `mp_gamemode "astmod"`。VPK 已拆出可审阅源文件，并可通过 `tools/build_astmod_vpk.ps1` 重建。2026-08-16 从本机 App 222860 的 `update/pak01_dir.vpk` 提取现行官方文件后逐行比较，AstMod 副本仅在文件末尾追加上述两个模式，没有修改任何内置模式；改名后的 mutation、VScript 和插件 namespace 也已在 WSL2 实际加载。当前剩余风险不再是“旧版内置模式定义”，而是游戏未来更新后副本可能落后，以及其他同样携带 `scripts/gamemodes.txt` 的 addon 可能产生加载顺序冲突。历史 `hunter` 条目目前未使用，可在后续清理。
+`astmod.vpk` 在 `scripts/gamemodes.txt` 中提供 `astmod`、`astredux` 和历史 `hunter` 条目。VPK 已拆出可审阅源文件，并可通过 `tools/build_astmod_vpk.ps1` 重建。2026-08-16 从本机 App 222860 的 `update/pak01_dir.vpk` 提取现行官方文件后逐行比较，AstMod 副本只在文件末尾追加自定义模式，没有修改任何内置模式；`astmod` 与 `astredux` mutation 及各自 VScript 均已在 WSL2 实际加载。当前剩余风险包括游戏未来更新后副本可能落后，以及其他同样携带 `scripts/gamemodes.txt` 的 addon 可能产生加载顺序冲突。历史 `hunter` 条目目前未使用，可在后续清理。
 
 ### 缺失的 `wave_spawner.smx`
 
@@ -103,7 +106,7 @@ AstMod 的 100 多条插件加载命令被拆分到 `plugins_1.cfg`、`plugins_2
 1. [x] 在没有已激活 matchmode 的情况下冷启动。
 2. [ ] 通过游戏内 `!match` 菜单加载 AstMod。（WSL2 desktop 环境已验证控制台命令 `sm_forcematch astmod`。）
 3. [x] 检查 `sm plugins list`、SourceMod errors、missing natives 和 gamedata failures。
-4. [x] 检查 AstMod 与 AstFlex 的核心 cvar 和插件状态。
+4. [x] 检查 AstMod 与 AstFlex 的核心 cvar 和插件状态；AstRedux scaffold 已在 WSL2 冷加载，确认 `mp_gamemode astredux`、`astredux.nut`、Baseline Stripper 路径和旧 DAS。
 5. [ ] 正常完成一个章节和一个终章。
 6. [ ] 在有玩家连接的环境下验证 ACS `!mapvote`、`!vote`、`/tz` 和战役切换。
 7. [ ] 通过 `!rmatch` 退出，确认所有 AstMod 专属插件都已卸载。

@@ -7,7 +7,7 @@
 ## 范围与判定标准
 
 - 主清单范围：`addons/sourcemod/plugins/optional/astmod/*.smx`，共 122 个。
-- “当前加载”指 `astmod` 或 `astflex` 的插件加载配置中至少有一处启用；两个模式当前使用同一套 AstMod 插件集合。
+- “当前加载”指 `astmod`、`astredux` 或 `astflex` 的插件加载配置中至少有一处启用；AstRedux scaffold 目前与另外两个模式复用同一套 AstMod 插件集合。
 - “AstMod 2.7.1 一致”指当前 `.smx` 与归档原包中的同名二进制 SHA-256 完全一致，只确认二进制来源。
 - `repo:` 指本仓库 `addons/sourcemod/scripting/` 下的路径；`AstSrc:` 指工作区外部保存的 AstMod 公开源码快照 `../../references/L4D2-AstMod-Scriptings-main/`，该参考目录本身不属于本仓库。
 - “源码候选”仅表示按文件名、目录和已知别名找到候选，尚未通过可重复编译确认。
@@ -31,7 +31,7 @@
 
 四个本地修改插件的具体位置已并入后面的分层清单；“尚不可复现”不表示插件不能工作，只表示当前产物还不能通过已记录命令得到字节一致的二次构建。
 
-## Rework 提供、两个模式共同加载的插件
+## Rework 提供、三个模式共同加载的插件
 
 下面 5 个插件不使用 `optional/astmod/` 中的副本，而是加载 Competitive Rework 的共享版本。当前二进制均与本地保存的纯 Rework 上游副本 SHA-256 完全一致，并且仓库内有对应源码。
 
@@ -48,7 +48,7 @@
 ### 阅读方式
 
 - 外层先区分当前二进制是否与 AstMod 2.7.1 原包一致，或属于本仓库的本地修改产物。
-- 第二层区分插件当前是否由 `astmod` 或 `astflex` 加载。
+- 第二层区分插件当前是否由 `astmod`、`astredux` 或 `astflex` 加载。
 - 第三层区分源码状态。这里列出的 `.sp` 仍是源码候选；除非另有说明，并不代表已经完成可重复编译验证。
 
 ## 1. 二进制来源已确认：与 AstMod 2.7.1 原包一致（118）

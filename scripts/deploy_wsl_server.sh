@@ -6,7 +6,11 @@ integration_root='/home/l4d2/integration'
 game_root='/home/l4d2/server/left4dead2'
 
 install -d "$integration_root" "$game_root"
-cp -a "$source_root/." "$integration_root/"
+cp -a \
+    "$source_root/addons" \
+    "$source_root/cfg" \
+    "$source_root/scripts" \
+    "$integration_root/"
 cp -a \
     "$integration_root/addons" \
     "$integration_root/cfg" \
