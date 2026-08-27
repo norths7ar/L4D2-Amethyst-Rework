@@ -39,12 +39,7 @@ ModeData <-{
 
 // 特感刷新参数
 ::Waves <- {
-	Enabled				= true		// 新版特感刷新机制开关
-	MaxSILimit 			= 3			// 同场特感数量
-	SpawnTime 			= 3			// 复活间隔
-	SpawnedSICount 		= 0			// 用于脚本判断，不需要修改。当前波次刷出的特感数量
-	AliveSICount 		= 0			// 用于脚本判断，不需要修改。当前场上的特感数量
-	HasFirstDeath 		= false		// 用于脚本判断，不需要修改。当前波次是否有特感已经死亡
+	Enabled				= true		// 新版波次由 astredux/wave_spawner.smx 执行
 }
 
 HUDInfo <- {
@@ -65,20 +60,8 @@ function update_diff()
 // Function
 //-----------------------------------------------------------------------------------------------------------------------------
 
-::ResetWave <- function() {
-	// 记录存活的特感数量
-	Waves.SpawnedSICount = Waves.AliveSICount;
-	Waves.HasFirstDeath = false;
-	// 强制刷新
-	Director.ResetSpecialTimers();
-	// SendToServerConsole("say Time to GO!!! remains: " + Waves.SpawnedSICount);
-};
-
 function update_diff_new()
 {
-	local timer_new = Convars.GetStr("ast_sitimer_new").tofloat();
-	local limit_new = Convars.GetStr("ast_silimit_new").tointeger();
-
 	DirectorOptions.HunterLimit = Convars.GetStr("astredux_si_hunter_limit").tointeger();
 	DirectorOptions.SmokerLimit = Convars.GetStr("astredux_si_smoker_limit").tointeger();
 	DirectorOptions.BoomerLimit = Convars.GetStr("astredux_si_boomer_limit").tointeger();
@@ -92,8 +75,6 @@ function update_diff_new()
 	DirectorOptions.DominatorLimit 							= ModeData.g_nSI
 	DirectorOptions.cm_SpecialRespawnInterval 				= ModeData.g_nTime
 	DirectorOptions.cm_SpecialSlotCountdownTime 			= ModeData.g_nTime
-	Waves.MaxSILimit										= limit_new
-	Waves.SpawnTime											= timer_new
 }
 
 // 旧版本刷新机制
@@ -291,25 +272,10 @@ function OnGameEvent_player_first_spawn( params )
 	// AI 特感
 	if (team == 3 && isBot && zombieType < ZOMBIE_WITCH)
 	{
-		if ( Waves.SpawnedSICount >= Waves.MaxSILimit ) { // 超过一波数量
-			// 直接 Kill 掉会导致原地留下烟雾口水之类的特效，可能需要提早，不过影响不大
-			clientEnt.Kill();
-			// Say(clientEnt, "Blocked from spawning.", false);
-			return;
-		}
-		Waves.SpawnedSICount++;
-		Waves.AliveSICount++;
-		// Say(clientEnt, "SpawnedSICount: " + Waves.SpawnedSICount, false);
-
 		// HUD
 		local name = HUDInfo.si_names[zombieType];
 		HUDInfo.si_count[name]++;
 		UpdateHUD();
-	}
-	if (team == 3 && zombieType == ZOMBIE_TANK) // 克局特感 -1
-	{
-		if (Waves.MaxSILimit > 0)
-			Waves.MaxSILimit--;
 	}
 }
 
@@ -323,32 +289,16 @@ function OnGameEvent_player_death( params )
 
 	local victim = GetParamsItem(params, "userid");
 	local victimEnt = GetPlayerFromUserID(victim);
+	if (victimEnt == null) return;
 	local victimTeam = GetClientTeam(victimEnt);
 	local zombieType = victimEnt.GetZombieType();
 
 	if ( victimTeam == 3 && zombieType < ZOMBIE_WITCH )
 	{
-		Waves.AliveSICount--;
 		// HUD
 		local name = HUDInfo.si_names[zombieType];
 		HUDInfo.si_count[name]--;
 		UpdateHUD();
-
-		if (Waves.HasFirstDeath) return;
-		Waves.HasFirstDeath = true;
-		// 计时重置波次
-		if (Waves.SpawnTime > 0)
-		{
-			EntFire("worldspawn", "CallScriptFunction", "ResetWave", Waves.SpawnTime);
-		} else
-		{
-			ResetWave();
-		}
-	}
-
-	if (victimTeam == 3 && zombieType == ZOMBIE_TANK)
-	{
-		Waves.MaxSILimit++;
 	}
 }
 
@@ -356,13 +306,11 @@ function OnGameEvent_round_start( params )
 {
 	if (!Waves.Enabled) return;
 
-	local timer_new = Convars.GetStr("ast_sitimer_new").tofloat();
-	local limit_new = Convars.GetStr("ast_silimit_new").tointeger();
-
-	Waves.AliveSICount = 0;
-	Waves.SpawnTime = timer_new;
-	Waves.MaxSILimit = limit_new;
-	ResetWave();
+	foreach (name in HUDInfo.si_names)
+	{
+		HUDInfo.si_count[name] = 0;
+	}
+	UpdateHUD();
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------

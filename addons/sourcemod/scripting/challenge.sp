@@ -56,8 +56,10 @@ int tempMorePills = -1;
 int tempKillMapPills = -1;
 int tempWaveSpawnEnabled = -1;
 int tempHardSI = -1;
+#if !defined ASTREDUX_BUILD
 float tempSITimerNew = -1.0;
 int tempSILimitNew = -1;
+#endif
 
 bool bIsUsingAbility[MAXPLAYERS + 1];
 float fDmgPrint = 0.0;
@@ -73,8 +75,10 @@ ConVar hReammoSMG;
 ConVar hReammoSniper;
 
 ConVar hSITimer;
+#if !defined ASTREDUX_BUILD
 ConVar hSITimerNew;
 ConVar hSILimitNew;
+#endif
 Handle g_hVote;
 
 ConVar hDmgModifyEnable;
@@ -82,7 +86,9 @@ ConVar hDmgThreshold;
 ConVar hRatioDamage;
 ConVar hFastGetup;
 ConVar hFastUseAction;
+#if !defined ASTREDUX_BUILD
 ConVar hWaveSpawnEnabled;
+#endif
 
 public Plugin myinfo =
 {
@@ -126,9 +132,11 @@ public void OnPluginStart()
 	hReammoSniper = CreateConVar("ast_reammo_count_Sniper",		"15", "狙击枪回复备弹数量", FCVAR_NOTIFY, true, 1.0);
 
 	hSITimer = CreateConVar("ast_sitimer",						"1", "特感刷新速率（旧版）", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+#if !defined ASTREDUX_BUILD
 	hWaveSpawnEnabled = CreateConVar("ast_wave_spawn",			"1", "新版特感生成机制开关", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 	hSITimerNew = CreateConVar("ast_sitimer_new",				"8", "特感刷新时间（新版，直接刷新控制时间）", FCVAR_NOTIFY, true, 0.0, true, 100.0);
 	hSILimitNew = CreateConVar("ast_silimit_new",				"3", "特感刷新数量（新版，一波特感数量）", FCVAR_NOTIFY, true, 0.0, true, 32.0);
+#endif
 	
 	hDmgModifyEnable = CreateConVar("ast_dmgmodify",			"1", "伤害修改总开关", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 	hDmgThreshold = CreateConVar("ast_dma_dmg",					"12.0", "被控扣血数值", FCVAR_NOTIFY, true, 1.0, true, 100.0);
@@ -137,14 +145,16 @@ public void OnPluginStart()
 	hFastUseAction = CreateConVar("ast_fast_use_action",		"1", "快速机关读条", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 
 	RegConsoleCmd("sm_laser", laserCommand, "激光瞄准器开关");
+#if !defined ASTREDUX_BUILD
 	RegConsoleCmd("sm_si", NewSITimerCommand, "新版特感刷新速率调节，无极调节");
+#endif
 
 	HookConVarChange(hSITimer, ReloadVScript);
 #if !defined ASTREDUX_BUILD
 	HookConVarChange(hSITimerNew, ReloadVScript);
 	HookConVarChange(hSILimitNew, ReloadVScript);
-#endif
 	HookConVarChange(hWaveSpawnEnabled, ReloadVScript);
+#endif
 }
 
 public Action OnRoundStart(Handle event, const char[] name, bool dontBroadcast)
@@ -159,8 +169,8 @@ public Action OnRoundStart(Handle event, const char[] name, bool dontBroadcast)
 public Action L4D_OnFirstSurvivorLeftSafeArea(int client)
 {
 	// 出门输出特感刷新参数
-	float fTimerCurrent = GetConVarFloat(hSITimerNew);
-	int iLimitCurrent = GetConVarInt(hSILimitNew);
+	float fTimerCurrent = GetConVarFloat(FindConVar("ast_sitimer_new"));
+	int iLimitCurrent = GetConVarInt(FindConVar("ast_silimit_new"));
 	PrintToChatAll("\x04[AstMod] \x01当前刷新速率：\x03%.1f秒%i特\x01.", fTimerCurrent, iLimitCurrent);
 	return Plugin_Continue;
 }
@@ -469,10 +479,12 @@ public void TZ_CallVote(int client, int target, int value)
 				tempKillMapPills = value;
 				SetBuiltinVoteResultCallback(g_hVote, KillMapPillsVoteResultHandler);
 			}
-			case 9: { // 新版特感速率
+#if !defined ASTREDUX_BUILD
+			case 9: { // 新版特感速率；Redux 由 wave_spawner.smx 接管
 				Format(sBuffer, sizeof(sBuffer), "修改特感刷新速度为 [%.1f秒%i特]", tempSITimerNew, tempSILimitNew);
 				SetBuiltinVoteResultCallback(g_hVote, SITimerNewVoteResultHandler);
 			}
+#endif
 			case 10: { // 特感加智总开关
 				value ? Format(sBuffer, sizeof(sBuffer), "开启特感加智") : Format(sBuffer, sizeof(sBuffer), "关闭特感加智");
 				tempHardSI = value;
@@ -643,6 +655,7 @@ public void KillMapPillsVoteResultHandler(Handle vote, int num_votes, int num_cl
 	return;
 }
 
+#if !defined ASTREDUX_BUILD
 public void SITimerNewVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
 {
 	for (int i = 0; i < num_items; i++) {
@@ -653,9 +666,6 @@ public void SITimerNewVoteResultHandler(Handle vote, int num_votes, int num_clie
 				DisplayBuiltinVotePass(vote, sBuffer);
 				SetConVarFloat(hSITimerNew, tempSITimerNew);
 				SetConVarInt(hSILimitNew, tempSILimitNew);
-#if defined ASTREDUX_BUILD
-				ReloadVScript(null, "", "");
-#endif
 				return;
 			}
 		}
@@ -663,6 +673,7 @@ public void SITimerNewVoteResultHandler(Handle vote, int num_votes, int num_clie
 	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
 	return;
 }
+#endif
 
 public void HardSIVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
 {
@@ -710,11 +721,11 @@ static const char timerOptions[4][] = {
 public Action Menu_SITimer(int client, int args)
 {
 	Handle menu = CreateMenu(Menu_SITimerHandler);
-	bool bWaveSpawnEnabled = GetConVarBool(hWaveSpawnEnabled);
+	bool bWaveSpawnEnabled = GetConVarBool(FindConVar("ast_wave_spawn"));
 	
 	if (bWaveSpawnEnabled) {
-		float fTimerCurrent = GetConVarFloat(hSITimerNew);
-		int iLimitCurrent = GetConVarInt(hSILimitNew);
+		float fTimerCurrent = GetConVarFloat(FindConVar("ast_sitimer_new"));
+		int iLimitCurrent = GetConVarInt(FindConVar("ast_silimit_new"));
 		SetMenuTitle(menu, "当前刷新速率：%.1f秒%i特", fTimerCurrent, iLimitCurrent);
 	} else {
 		SetMenuTitle(menu, "修改特感刷新速度");
@@ -747,7 +758,7 @@ public int Menu_SITimerHandler(Handle menu, MenuAction action, int client, int p
 
 		// 处理刷新速度选项（仅在旧版刷特下可选）
 		if (param < sizeof(timerOptions)) {
-			if (!GetConVarBool(hWaveSpawnEnabled)) {
+			if (!GetConVarBool(FindConVar("ast_wave_spawn"))) {
 				tempSITimer = param;
 				Format(buffer, sizeof(buffer), "%s", timerOptions[param]);
 				TZ_CallVoteStr(client, 1, buffer);
@@ -828,7 +839,7 @@ public int WaveSpawnVoteResultHandler(Handle vote, int num_votes, int num_client
 		if (item_info[i][BUILTINVOTEINFO_ITEM_INDEX] == BUILTINVOTES_VOTE_YES) {
 			if (item_info[i][BUILTINVOTEINFO_ITEM_VOTES] > (num_votes / 2)) {
 				DisplayBuiltinVotePass(vote, "正在更改刷特机制...");
-				SetConVarInt(hWaveSpawnEnabled, tempWaveSpawnEnabled);
+				SetConVarInt(FindConVar("ast_wave_spawn"), tempWaveSpawnEnabled);
 				return 1;
 			}
 		}
@@ -837,6 +848,7 @@ public int WaveSpawnVoteResultHandler(Handle vote, int num_votes, int num_client
 	return 0;
 }
 
+#if !defined ASTREDUX_BUILD
 public Action NewSITimerCommand(int client, int args)
 {
 	if ( !GetConVarBool(hWaveSpawnEnabled) ) {
@@ -865,6 +877,7 @@ public Action NewSITimerCommand(int client, int args)
 
 	return Plugin_Handled;
 }
+#endif
 
 int SIDamageOptions[] = {8, 12, 24};
 
@@ -910,7 +923,7 @@ public void ResetSettings()
 	SIDamage(12.0);
 	SetConVarInt(FindConVar("vs_tank_damage"), 24);
 	SetConVarInt(hSITimer, 1);
-	SetConVarBool(hWaveSpawnEnabled, true);
+	SetConVarBool(FindConVar("ast_wave_spawn"), true);
 	SetConVarBool(hRehealth, false);
 	SetConVarBool(hReammo, false);
 

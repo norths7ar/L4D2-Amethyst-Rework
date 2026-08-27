@@ -76,7 +76,7 @@ Redux 的第一阶段会逐项回答：
 - 静态检查 310 条有效插件加载和 57 张官图 Stripper 哈希；
 - Ubuntu 22.04 / L4D2 Dedicated Server 的核心插件加载；
 - `sm_forcematch astmod`、AstMod/AstFlex 核心 cvar 和插件状态；
-- 改名后的 `astmod` mutation、`astmod.nut`、Stripper 和插件 namespace 已在 WSL2 实际加载；`astredux` mutation、独立 VScript、Baseline Stripper 路径和三份 Redux 专属插件也已完成 WSL2 冷加载，确认旧 DAS 未加载；当前 `gamemodes.txt` 在官方文件基础上追加 `astmod`、`astredux` 与历史 `hunter` 三个模式；
+- 改名后的 `astmod` mutation、`astmod.nut`、Stripper 和插件 namespace 已在 WSL2 实际加载；`astredux` mutation、独立 VScript、Baseline Stripper 路径和四份 Redux 专属插件也已完成 WSL2 冷加载，确认旧 DAS 未加载；当前 `gamemodes.txt` 在官方文件基础上追加 `astmod`、`astredux` 与历史 `hunter` 三个模式；
 - AstRedux 1P–4P profile 已在 WSL2 逐档强制应用，确认最终 Tank 语义血量 `1200/2550/4500/6750`、底层 `z_tank_health`、刷特波次、mob 数量、No-Witch 和 AutoWipe 开关与声明一致；
 - 有玩家连接时从 AstMod 直接切到 Zonemod，确认 `versus_coop_mode.smx`、ACS、AstMod AI 和投票插件被清理；
 - 与 Zonemod 同步后的微冲、单喷换弹和散布配置不再产生旧插件接口报错。
@@ -89,7 +89,7 @@ Redux 的第一阶段会逐项回答：
 - 多次执行 AstMod / AstRedux / AstFlex / Zonemod 往返切换；
 - 游戏更新后重新比较官方 `gamemodes.txt`，并验证其他同样携带该文件的第三方 addon 是否存在加载顺序冲突；历史 `hunter` 条目后续也可评估是否删除；
 - 决定是否保留 `server.smx` 的空服换图和 `sv_crash` 管理命令；
-- 找回或明确替代上游配置提到、但运行包和源码包都缺失的 `wave_spawner.smx`。
+- 用真人流程验证 AstRedux 新 `wave_spawner.smx` 的整波刷新、`!si` 投票和 1–4 人 profile 切换，并据实微调刷新时间；AstMod Baseline 继续保留原来的 2.7.1 VScript 刷特。
 
 ## 仓库关系
 
