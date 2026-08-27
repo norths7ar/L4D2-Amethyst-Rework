@@ -50,7 +50,7 @@ Redux 第一项大改已经落地：它不再加载旧 `difficulty_adjustment_sy
 
 Tank 血量在 profile 中写最终可读值，Controller 再把当前 mutation 的 1.5 倍引擎系数换算为 `z_tank_health`，并只在后续 `tank_spawn` 时校正实体最大/当前血量；人数变化不会追溯扣改场上已有 Tank。近战不枚举脚本武器名，而是在伤害 hook 中识别通用 `weapon_melee` 并固定为 300；电锯和不基于该实体类的自定义武器不在此范围。1P No-Witch 和 2P AutoWipe 也不再通过动态 load/unload 切换：Redux Controller 负责开关，常驻 adapter 执行行为。AutoWipe 只处罚拥有当前控制快照的玩家；在“部分倒地、其余被控”的混合状态中，直接被伤害打倒且没有控制快照的玩家保持倒地，全员倒地则继续交给游戏原生灭团机制。
 
-Redux 专用 `challenge.smx` 继续提供 `/tz`，读取 `astredux_profile_current` 而不是旧 `das_fakedifficulty`，VScript 的新旧刷特路径也都改读 Redux cvar；新版刷特的 `!si` 投票成功后会显式 reload 一次 VScript 并立即生效。当前尚未实现正式的“profile 基线 + `/tz` override layer”：投票修改会保持到下一次 profile 变化，恢复默认会重新应用当前 profile；这部分要在后续单独设计，避免 Controller 和投票互相覆盖。
+Redux 专用 `challenge.smx` 继续提供 `/tz`，读取 `astredux_profile_current` 而不是旧 `das_fakedifficulty`，VScript 的新旧刷特路径也都改读 Redux cvar；新版刷特的 `!si` 由 `wave_spawner.smx` 持有，投票成功后会显式 reload 一次 VScript 并立即生效。当前尚未实现正式的“profile 基线 + `/tz` override layer”：投票修改会保持到下一次 profile 变化，恢复默认会重新应用当前 profile；这部分要在后续单独设计，避免 Controller 和投票互相覆盖。
 
 下一阶段会继续逐项审计并重建真正需要的 Versus 特性。目标仍是建立可用于第三方战役的 Coop-native 底层，重点包括不支持 Versus 的第三方地图、自制剧情与 Boss、地图自己的 Director/VScript，以及章节和终章推进。
 
@@ -86,9 +86,11 @@ AstMod 自带的 SourceMod/MetaMod core files 和扩展没有复制，同名的 
 
 `astmod.vpk` 在 `scripts/gamemodes.txt` 中提供 `astmod`、`astredux` 和历史 `hunter` 条目。VPK 已拆出可审阅源文件，并可通过 `tools/build_astmod_vpk.ps1` 重建。2026-08-16 从本机 App 222860 的 `update/pak01_dir.vpk` 提取现行官方文件后逐行比较，AstMod 副本只在文件末尾追加自定义模式，没有修改任何内置模式；`astmod` 与 `astredux` mutation 及各自 VScript 均已在 WSL2 实际加载。当前剩余风险包括游戏未来更新后副本可能落后，以及其他同样携带 `scripts/gamemodes.txt` 的 addon 可能产生加载顺序冲突。历史 `hunter` 条目目前未使用，可在后续清理。
 
-### 缺失的 `wave_spawner.smx`
+### AstRedux 的 `wave_spawner.smx`
 
-AstMod 2.7.1 plugin 配置引用了 `optional/astmod/wave_spawner.smx`，但 runtime 包和提供的源码归档中都没有该文件。在找到缺失组件或确认预期替代品之前，对应加载行会以禁用注释的形式保留。
+AstMod 2.7.1 plugin 配置曾引用 `optional/astmod/wave_spawner.smx`，但 2.7.1 和 2.8.1 runtime 包都没有提供该二进制；AstMod Baseline 因此继续使用 2.7.1 VScript 波次实现，不补载来源不明的历史文件。AstRedux 则根据作者仓库 `c0d829f` 的 `wave_spawner.sp` 单独维护 `optional/astredux/wave_spawner.smx`，并同步采用 2.8.1 的职责拆分：Wave Spawner 独占 `ast_wave_spawn`、`ast_sitimer_new`、`ast_silimit_new` 和 `!si`，Redux Challenge 只保留 `/tz` 中的新旧刷特切换入口，`astredux.nut` 不再执行波次计数和拦截。Profile Controller 仍声明每档人数的波次大小与间隔，Wave Spawner 负责实际执行。
+
+这次迁移已完成 Baseline/Redux 双 build 编译、静态职责校验和 WSL2 冷加载：强制 4P/1P profile 分别得到 `17 秒 / 6 特` 与 `7 秒 / 3 特`，波次开关和 `sm_spawnwave` 管理员诊断正常，AstRedux → AstMod → AstRedux 往返后专属插件能完整卸载并再次加载，且没有产生新的 SourceMod error log。整波刷新节奏、`!si` 真人投票以及作者提醒的难度上升，仍必须通过玩家流程验证后再调参。
 
 ### 尚未完成的 runtime 验证
 
@@ -119,7 +121,7 @@ AstMod 的 100 多条插件加载命令被拆分到 `plugins_1.cfg`、`plugins_2
 1. [x] 在没有已激活 matchmode 的情况下冷启动。
 2. [ ] 通过游戏内 `!match` 菜单加载 AstMod。（WSL2 desktop 环境已验证控制台命令 `sm_forcematch astmod`。）
 3. [x] 检查 `sm plugins list`、SourceMod errors、missing natives 和 gamedata failures。
-4. [x] 检查 AstMod 与 AstFlex 的核心 cvar 和插件状态；AstRedux 已在 WSL2 冷加载，确认 `mp_gamemode astredux`、`astredux.nut`、Baseline Stripper 路径、三份 Redux 专属插件和旧 DAS 未加载，并逐档验证 1P–4P profile cvar。
+4. [x] 检查 AstMod 与 AstFlex 的核心 cvar 和插件状态；AstRedux 已在 WSL2 冷加载，确认 `mp_gamemode astredux`、`astredux.nut`、Baseline Stripper 路径、四份 Redux 专属插件和旧 DAS 未加载，并逐档验证 1P–4P profile cvar；plugin 版 Wave Spawner 另已验证 4P/1P 参数、开关、管理员强制刷新和 AstMod 往返卸载/重载。
 5. [ ] 正常完成一个章节和一个终章。
 6. [ ] 在有玩家连接的环境下验证 ACS `!mapvote`、`!vote`、`/tz` 和战役切换。
 7. [ ] 通过 `!rmatch` 退出，确认所有 AstMod 专属插件都已卸载。

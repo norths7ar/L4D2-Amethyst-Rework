@@ -133,6 +133,7 @@ $requiredPaths = @(
     "addons/sourcemod/plugins/optional/astmod/sceneprocessor.smx",
     "addons/sourcemod/plugins/optional/astredux/astredux_profile_controller.smx",
     "addons/sourcemod/plugins/optional/astredux/astredux_autowipe.smx",
+    "addons/sourcemod/plugins/optional/astredux/wave_spawner.smx",
     "addons/sourcemod/plugins/optional/astredux/challenge.smx",
     "addons/sourcemod/scripting/ACS.sp",
     "addons/sourcemod/scripting/AI_HardSI.sp",
@@ -140,6 +141,7 @@ $requiredPaths = @(
     "addons/sourcemod/scripting/astredux_challenge.sp",
     "addons/sourcemod/scripting/astredux_autowipe.sp",
     "addons/sourcemod/scripting/astredux_profile_controller.sp",
+    "addons/sourcemod/scripting/astredux_wave_spawner.sp",
     "addons/sourcemod/scripting/vote.sp",
     "cfg/cfgogl/astmod/astmod.cfg",
     "cfg/cfgogl/astmod/confogl.cfg",
@@ -323,8 +325,29 @@ Assert-Contains `
     "AstRedux does not load its profile-controlled AutoWipe adapter"
 Assert-Contains `
     "cfg/cfgogl/astredux/plugins_1.cfg" `
+    '^\s*sm plugins load optional/astredux/wave_spawner\.smx\s*$' `
+    "AstRedux does not load its plugin-owned wave spawner"
+Assert-Contains `
+    "cfg/cfgogl/astredux/plugins_1.cfg" `
     '^\s*sm plugins load optional/astredux/challenge\.smx\s*$' `
     "AstRedux does not load its profile-aware challenge build"
+Assert-RawContains `
+    "cfg/cfgogl/astredux/plugins_1.cfg" `
+    '(?s)sm plugins load optional/astredux/wave_spawner\.smx.*?sm plugins load optional/astredux/challenge\.smx' `
+    "AstRedux does not load wave_spawner before challenge"
+foreach ($baselinePluginConfig in @(
+    "cfg/cfgogl/astmod/plugins_1.cfg",
+    "cfg/cfgogl/astmod/plugins_2.cfg",
+    "cfg/cfgogl/astmod/plugins_3.cfg",
+    "cfg/cfgogl/astflex/plugins_1.cfg",
+    "cfg/cfgogl/astflex/plugins_2.cfg",
+    "cfg/cfgogl/astflex/plugins_3.cfg"
+)) {
+    Assert-NotContains `
+        $baselinePluginConfig `
+        'optional/astredux/wave_spawner\.smx' `
+        "A Baseline-derived mode unexpectedly loads the AstRedux wave spawner: $baselinePluginConfig"
+}
 Assert-NotContains `
     "cfg/cfgogl/astredux/plugins_3.cfg" `
     '^\s*sm plugins load optional/astmod/difficulty_adjustment_system\.smx\s*$' `
@@ -411,9 +434,27 @@ Assert-RawContains `
     '(?s)function update_diff_old\(\).*?astredux_si_hunter_limit.*?astredux_si_preferred_direction' `
     "The AstRedux old-wave path does not reuse the declarative SI composition"
 Assert-RawContains `
+    "addons/sourcemod/scripting/astredux_wave_spawner.sp" `
+    '(?s)RegConsoleCmd\("sm_si".*?public void SITimerVoteResultHandler\(.*?g_cvSITimer\.FloatValue = g_fPendingSITimer;.*?g_cvSILimit\.IntValue = g_iPendingSILimit;.*?ServerCommand\("sm_reloadscript"\);' `
+    "The AstRedux wave spawner does not own !si and reload the VScript after a successful vote"
+Assert-NotContains `
+    "addons/sourcemod/scripting/astredux_wave_spawner.sp" `
+    'das_fakedifficulty' `
+    "The AstRedux wave spawner still depends on legacy DAS persistence"
+Assert-RawContains `
     "addons/sourcemod/scripting/challenge.sp" `
-    '(?s)public void SITimerNewVoteResultHandler\(.*?SetConVarInt\(hSILimitNew, tempSILimitNew\);\s*#if defined ASTREDUX_BUILD\s*ReloadVScript\(null, "", ""\);\s*#endif' `
-    "The AstRedux SI vote result does not reload its VScript"
+    '(?s)#if !defined ASTREDUX_BUILD\s*hWaveSpawnEnabled = CreateConVar\("ast_wave_spawn".*?RegConsoleCmd\("sm_si"' `
+    "The Redux challenge build does not relinquish the new-wave cvars and !si command"
+foreach ($legacyWaveState in @(
+    'Waves\.SpawnedSICount',
+    'Waves\.AliveSICount',
+    'ResetWave'
+)) {
+    Assert-NotContains `
+        "scripts/vscripts/astredux.nut" `
+        $legacyWaveState `
+        "The AstRedux VScript still owns legacy plugin-wave runtime state: $legacyWaveState"
+}
 Assert-NotContains `
     "addons/sourcemod/scripting/astredux_profile_controller.sp" `
     'ast_humantankhp' `

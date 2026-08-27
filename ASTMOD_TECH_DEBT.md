@@ -12,19 +12,19 @@
 
 ## 当前优先级
 
-### P1. 将 AstRedux 的新版波次刷特从 VScript 迁移到 `wave_spawner.smx`
+### P1. 验证并调校 AstRedux 的 plugin 版波次刷特
 
-- 状态：待实现。
-- 现状：AstMod 2.7.1 风格的 `challenge.smx` 和 `astredux.nut` 共同拥有新版波次刷特；配置提到 `wave_spawner.smx`，但 2.7.1 与 2.8.1 runtime tar 包都没有该二进制。
+- 状态：职责迁移已实现，待真人 gameplay 验证与调参。
+- 现状：AstRedux 已根据作者仓库 `c0d829f` 引入独立 `wave_spawner.smx`；AstMod Baseline 继续保留 2.7.1 VScript 实现，因为 2.7.1 与 2.8.1 runtime tar 包都没有提供历史配置引用的二进制。
 - 作者信息：海洋明确建议使用 plugin 版，理由是 VScript 版性能差、容易出现特感逐只单上；plugin 版从第一只特感死亡开始计算下一波，计时结束后统一恢复波次。作者同时说明 plugin 版必须配合 2.8.1 VScript，且整体难度可能提高，刷新时间尚未细调。
 - 代码证据：AstMod scriptings 的 `c0d829f`（“新版刷特改为插件实现”）新增 `wave_spawner.sp`，并从 `challenge.sp` 移除新版波次 ConVar、`sm_si` 和投票结果处理；2.8.1 `amethyst.nut` 则停用原来的 VScript 波次执行逻辑。
-- 风险：不能只编译并加载 `wave_spawner.smx`。当前本仓库 `challenge.sp` 与 `wave_spawner.sp` 都会注册 `ast_wave_spawn`、`ast_sitimer_new`、`ast_silimit_new` 和 `sm_si`，直接双载会造成职责冲突；Redux 还需要保留 profile override 和 `/tz` 行为。
-- 处理边界：先只在 AstRedux 实验，保持 AstMod Baseline 不变。迁移应同时完成 Challenge 职责拆分、Redux VScript 调整、profile adapter 对接、编译与真人 runtime 验证。
+- 已完成：Redux build 的 Challenge 不再创建 `ast_wave_spawn`、`ast_sitimer_new`、`ast_silimit_new` 或注册 `sm_si`；Wave Spawner 独占这些接口，Redux VScript 移除波次执行状态，Profile Controller 继续写入声明式波次参数，`/tz` 仍保留新旧刷特切换。
+- 处理边界：迁移只进入 AstRedux，AstMod Baseline 不变。编译、静态职责校验、WSL2 冷加载、4P/1P 参数切换、波次开关、管理员强制刷新和 AstMod 往返卸载/重载均已完成；剩余工作是真人验证整波刷新、`!si` 投票和不同 profile 下的实际节奏。
 
 ### P2. 完成 AstRedux 的真人 gameplay 验证
 
 - 状态：待验证。
-- 已验证：三份 Redux 专属插件可编译、模式可在 WSL2 冷加载、1P–4P profile 可强制应用，`/tz` 与 `!si` 的 Redux reload 路径已静态校验并完成控制台 smoke test。
+- 已验证：四份 Redux 专属插件可编译、模式可在 WSL2 冷加载、1P–4P profile 可强制应用；`/tz` 与 `!si` 的 Redux reload 路径已静态校验，plugin 版波次开关、管理员强制刷新和模式往返已完成控制台 smoke test。
 - 仍缺：真人加入/退出后的自动切档、混合“被控 + 倒地”的 AutoWipe、全员倒地交还原版灭团、Tank 存量边界、完整章节与终章、游戏内投票菜单。
 - 判定标准：不能用冷加载和 cvar 查询替代玩家流程验证；详细 checklist 见 `ASTMOD_INTEGRATION.md`。
 
