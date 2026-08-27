@@ -9,8 +9,8 @@
 - 主清单范围：`addons/sourcemod/plugins/optional/astmod/*.smx`，共 122 个。
 - “当前加载”指 `astmod`、`astredux` 或 `astflex` 的插件加载配置中至少有一处启用；AstRedux 继续复用大部分 AstMod 插件，但已用自己的 Challenge、AutoWipe adapter 和 Profile Controller 替换旧 DAS 链路。
 - “AstMod 2.7.1 一致”指当前 `.smx` 与归档原包中的同名二进制 SHA-256 完全一致，只确认二进制来源。
-- `repo:` 指本仓库 `addons/sourcemod/scripting/` 下的路径；`AstSrc:` 指工作区外部保存的 AstMod 公开源码快照 `../../references/L4D2-AstMod-Scriptings-main/`，该参考目录本身不属于本仓库。
-- “源码候选”仅表示按文件名、目录和已知别名找到候选，尚未通过可重复编译确认。
+- `repo:` 指本仓库 `addons/sourcemod/scripting/` 下的路径；`AstSrc:` 指工作区外部保存的 AstMod 公开源码克隆 `../../repos/L4D2-AstMod-Scriptings-upstream/`，该参考仓库本身不属于本仓库。
+- “可能对应的源码线索”仅表示按文件名、目录和已知别名找到可供核对的文件，尚未通过可重复编译确认；它不是“已证明的构建源码”。
 - “本地修改，尚不可复现”表示源码和二进制都相对 AstMod 2.7.1 有改动，但用当前随仓库保存的编译器重新编译仍不能得到字节一致的 `.smx`。
 
 ## 总数
@@ -22,9 +22,9 @@
 | 当前停用 | 32 |
 | 与 AstMod 2.7.1 原包二进制完全一致 | 118 |
 | 本地修改、二进制来源不再等同原包 | 4 |
-| 没找到源码候选，仅有二进制 | 21 |
-| 找到一个源码候选 | 92 |
-| 找到多个源码候选，需人工确认 | 5 |
+| 没找到源码线索，仅有二进制 | 21 |
+| 找到单一源码线索 | 92 |
+| 找到多个源码线索，需人工确认 | 5 |
 | 本地修改且尚不能可重复编译 | 4 |
 
 21 个“仅二进制”插件中，13 个当前启用，8 个当前停用。现阶段不能声称仓库中所有 SMX 均有源码，也不能声称现有源码可以完整重建发布包。
@@ -59,7 +59,7 @@
 
 - 外层先区分当前二进制是否与 AstMod 2.7.1 原包一致，或属于本仓库的本地修改产物。
 - 第二层区分插件当前是否由 `astmod`、`astredux` 或 `astflex` 加载。
-- 第三层区分源码状态。这里列出的 `.sp` 仍是源码候选；除非另有说明，并不代表已经完成可重复编译验证。
+- 第三层区分源码状态。这里列出的 `.sp` 是待核对的源码线索；除非另有说明，并不代表已经完成可重复编译验证。
 
 ## 1. 二进制来源已确认：与 AstMod 2.7.1 原包一致（118）
 
@@ -67,7 +67,7 @@
 
 ### 已加载（86）
 
-#### 找到单一源码候选（69）
+#### 找到单一源码线索（69）
 
 - `all4dead2.smx` → `AstSrc:all4dead2.sp`
 - `blockheatseekingchargers.smx` → `repo:blockheatseekingchargers.sp`
@@ -139,32 +139,32 @@
 - `versus_coop_mode.smx` → `AstSrc:versus2coop.sp`（文件名别名，仍需确认）
 - `witch_and_tankifier.smx` → `repo:witch_and_tankifier.sp`
 
-#### 找到多个源码候选（4）
+#### 找到多个可能对应的源码线索（4）
 
-- `l4d_boss_percent.smx` → `repo:l4d_boss_percent.sp` / `AstSrc:l4d_boss_percent.sp`
-- `l4d2_hunter_no_deadstops.smx` → `repo:l4d2_hunter_no_deadstops.sp` / `AstSrc:l4d2_hunter_no_deadstops.sp`
-- `pause.smx` → `repo:pause.sp` / `AstSrc:pause.sp`
-- `survivor_mvp.smx` → `repo:survivor_mvp.sp` / `AstSrc:survivor_mvp.sp`
+- `l4d_boss_percent.smx` → `repo:l4d_boss_percent.sp` / `AstSrc:l4d_boss_percent.sp`（海洋已回复：今后维护优先以作者仓库版本为准；这不证明当前 SMX 由该版本构建）
+- `l4d2_hunter_no_deadstops.smx` → `repo:l4d2_hunter_no_deadstops.sp` / `AstSrc:l4d2_hunter_no_deadstops.sp`（海洋已回复：今后维护优先以作者仓库版本为准；这不证明当前 SMX 由该版本构建）
+- `pause.smx` → `repo:pause.sp` / `AstSrc:pause.sp`（海洋已回复：今后维护优先以作者仓库版本为准；这不证明当前 SMX 由该版本构建）
+- `survivor_mvp.smx` → `repo:survivor_mvp.sp` / `AstSrc:survivor_mvp.sp`（海洋已回复：今后维护优先以作者仓库版本为准；这不证明当前 SMX 由该版本构建）
 
 #### 仅有二进制（13）
 
-- `cannounce.smx`
-- `enhancedsprays.smx`
-- `healer_witch.smx`
-- `hostname.smx`
-- `l4d_swimming.smx`
-- `l4d2_si_ladder_booster.smx`
-- `l4d2_storm.smx`
-- `l4d2_tank_facts_announce.smx`
-- `sceneprocessor.smx`
-- `spawnstatefix.smx`
-- `tank_hud.smx`
-- `tls_restore_vocalize.smx`
-- `witch_glow.smx`
+- `cannounce.smx`（海洋说明【确定】：进服欢迎提示）
+- `enhancedsprays.smx`（海洋说明【确定】：无冷却喷漆、旁观喷漆）
+- `healer_witch.smx`（海洋说明【确定】：秒妹回血）
+- `hostname.smx`（海洋说明【确定】：服务器名称；与 Zonemod 冲突，不需要）
+- `l4d_swimming.smx`（海洋说明【确定】：出门前可以游泳）
+- `l4d2_si_ladder_booster.smx`（海洋说明【不确定】：大概是从 Anne 开源插件摸来的）
+- `l4d2_storm.smx`（海洋说明【确定用途、明确建议】：天气系统，图一乐功能，可删）
+- `l4d2_tank_facts_announce.smx`（海洋说明【不确定来源】：Zonemod 还是 MoYu 摸来的）
+- `sceneprocessor.smx`（海洋说明【确定】：`tls_restore_vocalize.smx` 的前置插件）
+- `spawnstatefix.smx`（海洋说明【不确定】：可能是 ProMod 或 Zonemod 的插件，可能已过时）
+- `tank_hud.smx`（海洋说明【确定来源/用途】：ProMod 插件，适合战役使用的精简化旁观 TankHUD）
+- `tls_restore_vocalize.smx`（海洋说明【确定】：允许手动发出笑声）
+- `witch_glow.smx`（海洋说明【确定用途】：Witch Party 插件）
 
 ### 未加载（32）
 
-#### 找到单一源码候选（23）
+#### 找到单一源码线索（23）
 
 - `autowipe.smx` → `AstSrc:autowipe.sp`
 - `checkpoint-rage-control.smx` → `repo:checkpoint-rage-control.sp`
@@ -190,20 +190,20 @@
 - `weapon_slowdown.smx` → `AstSrc:weapon_slowdown.sp`
 - `wingman.smx` → `AstSrc:wingman.sp`
 
-#### 找到多个源码候选（1）
+#### 找到多个可能对应的源码线索（1）
 
-- `confoglcompmod.smx` → `repo:confoglcompmod.sp` / `repo:archive/confoglcompmod.sp`（隔离副本，运行时未使用）
+- `confoglcompmod.smx` → `repo:confoglcompmod.sp` / `repo:archive/confoglcompmod.sp`（隔离副本，运行时未使用；当前海洋源码 clone 中没有同名文件，无法把作者回复机械映射到这一项）
 
 #### 仅有二进制（8）
 
-- `advertisements.smx`
-- `autoadmin.smx`
-- `clip_removal.smx`
-- `l4d_nowitch.smx`
-- `l4d_unscope.smx`
-- `l4d2_saferoom_gun_control.smx`
-- `l4d2_weapon_csgo_reload.smx`
-- `swamp_finale_fix.smx`
+- `advertisements.smx`（海洋说明【确定】：广告插件；配置文件为 `addons/sourcemod/configs/advertisement.cfg`）
+- `autoadmin.smx`（海洋说明【确定用途】：进服自动获取阉割版 admin 身份，可用基础指令，如 all4dead 菜单、处死玩家和特感；笔记中另提到 `fuck`，具体是否可用未确认）
+- `clip_removal.smx`（海洋未说明用途，仍待确认）
+- `l4d_nowitch.smx`（海洋说明【部分确定、需验证】：老 Zonemod 插件，用于人数变动时快速开关 Witch 生成；使用 Tankifier 时可能需要重新读取插件，需验证）
+- `l4d_unscope.smx`（海洋说明【确定用途/版本背景】：老 Wingman 使用；新版本因有 bug 去除。狙击枪开镜射击后关镜，不能开镜连发）
+- `l4d2_saferoom_gun_control.smx`（海洋说明【确定来源】：ProMod 插件）
+- `l4d2_weapon_csgo_reload.smx`（海洋说明【部分确定、不确定兼容性】：老 Wingman 使用；TLS 之后可能有 bug）
+- `swamp_finale_fix.smx`（海洋说明【确定状态、不确定用途】：ProMod 插件，似乎修复 c3m4 种植园；海洋不知道具体作用，因此没有加载）
 
 ## 2. 本地修改的当前二进制（4）
 
@@ -222,16 +222,26 @@
 
 无。
 
-## 目前最需要海洋确认的内容
+## 海洋已回复与仍待确认
 
-1. 21 个仅二进制插件是否还有可公开或可归档的源码，以及准确版本。
-2. 5 个存在多个候选的插件，2.7.1 实际使用的是哪一份源码。
-3. `versus_coop_mode.smx` 是否确定由 `versus2coop.sp` 构建，以及生成它时使用的 SourceMod、include 和编译参数。
-4. `ACS.smx`、`AI_HardSI.smx` 和 `vote.smx` 今后应以仓库源码为准，但仍需补齐准确构建链；`challenge.smx` 已能从仓库源码构建，仍需解释重复编译哈希不一致。若海洋保留了原先的编译链信息，会很有帮助。
-5. `jointeam.smx` 的候选源码已经找到；海洋建议加入的指令应先基于这份源码审查，再决定是否修改和重新编译。
+### 海洋已回复
+
+1. 21 个仅二进制插件：海洋建议基本不需要修改，必要时可尝试反编译；提到的反编译程序是 Lysis。上面的 21 个条目已并入其用途、去留和不确定性说明；这些说明不等于找到了源码，也不等于证明当前 SMX 可复现。
+2. 5 个存在多个可能对应源码线索的插件：海洋回复“以我的仓库为准”。其中 `l4d_boss_percent`、`l4d2_hunter_no_deadstops`、`pause` 和 `survivor_mvp` 能明确映射到作者源码 clone，今后维护优先采用 `AstSrc:` 版本；该维护优先级不证明当前 SMX 就是由这些版本构建的。第五项是未使用的隔离 `confoglcompmod.smx`，当前作者源码 clone 中没有同名文件，仍不能据此判定两个 `repo:` 线索哪份对应 2.7.1 二进制。
+3. `versus_coop_mode.smx`：海洋给出的上游线索是 [`umlka/l4d2/versus_coop_mode`](https://github.com/umlka/l4d2/tree/main/versus_coop_mode)。这只是来源线索，仍不能单独证明当前 `versus_coop_mode.smx` 的构建链。
+4. `ACS.smx`、`AI_HardSI.smx` 和 `vote.smx`：海洋说明“因为你使用的是 2.7.1”，但没有提供可核验的编译器、include 集合或参数；因此本清单仍只能把仓库源码作为今后维护参考，不能写成已证明的 SMX 构建来源。
+5. 关于 `jointeam.smx`：海洋未提供进一步的源码、版本或构建链确认；若要加入指令，仍应先审查现有源码线索，再决定是否修改和重编译。
+
+### 仍待确认
+
+- 21 个仅二进制插件是否存在可公开或可归档的原始源码，以及各自准确版本；Lysis 反编译结果只能作为分析线索，不能自动恢复原始源码或构建链。
+- 四个可映射到 `AstSrc:` 的多线索插件，其当前 SMX 的实际源码、SourceMod/include 版本、编译参数和字节可复现性；“今后维护优先以作者仓库版本为准”是维护决策，不是构建证明。
+- 未使用的隔离 `confoglcompmod.smx` 应对应 `repo:confoglcompmod.sp` 还是 `repo:archive/confoglcompmod.sp`；Ast 系模式运行时使用的是已由 Rework 来源确认的共享 `confoglcompmod.smx`，不会受该隔离副本影响。
+- `versus_coop_mode.smx` 是否确由 `versus2coop.sp` 或海洋给出的 `umlka/l4d2/versus_coop_mode` 上游版本构建，以及准确构建环境。
+- `challenge.smx` 重复编译哈希不一致的原因，以及四个本地修改插件完整、可重现的构建链。
 
 ## 构建与发布边界
 
-当前仓库的静态校验可以检查文件存在、加载路径和部分配置约束，但**不能**证明 `.sp` 与 `.smx` 一一对应。现有发布工作流也不能作为完整重建证明：仅二进制插件没有可编译输入，部分插件的候选源码位于归档或参考目录，而且编译器/include 版本尚未完全锁定。
+当前仓库的静态校验可以检查文件存在、加载路径和部分配置约束，但**不能**证明 `.sp` 与 `.smx` 一一对应。现有发布工作流也不能作为完整重建证明：仅二进制插件没有可编译输入，部分插件的源码线索位于归档或参考目录，而且编译器/include 版本尚未完全锁定。
 
-后续若要把“源码候选”升级为“已确认对应”，至少应记录：源码文件哈希、编译器版本、include 集合、编译参数，以及重建产物和当前 SMX 的哈希比较结果。
+后续若要把“源码线索”升级为“已确认对应”，至少应记录：源码文件哈希、编译器版本、include 集合、编译参数，以及重建产物和当前 SMX 的哈希比较结果。
