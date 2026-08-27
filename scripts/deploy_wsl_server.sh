@@ -23,11 +23,19 @@ legacy_paths=(
     "$integration_root/cfg/cfgogl/astmod/amethyst.cfg"
     "$integration_root/cfg/stripper/amethyst"
     "$integration_root/scripts/vscripts/amethyst.nut"
+    "$integration_root/host.txt"
+    "$integration_root/motd.txt"
+    "$integration_root/myhost.txt"
+    "$integration_root/mymotd.txt"
     "$game_root/addons/amethyst.vpk"
     "$game_root/addons/sourcemod/plugins/optional/amethyst"
     "$game_root/cfg/cfgogl/astmod/amethyst.cfg"
     "$game_root/cfg/stripper/amethyst"
     "$game_root/scripts/vscripts/amethyst.nut"
+    "$game_root/host.txt"
+    "$game_root/motd.txt"
+    "$game_root/myhost.txt"
+    "$game_root/mymotd.txt"
 )
 
 for legacy_path in "${legacy_paths[@]}"; do
@@ -35,12 +43,6 @@ for legacy_path in "${legacy_paths[@]}"; do
         "$integration_root"/*|"$game_root"/*) rm -rf -- "$legacy_path" ;;
         *) echo "Refusing to remove unexpected path: $legacy_path" >&2; exit 1 ;;
     esac
-done
-
-for file_name in host.txt motd.txt myhost.txt mymotd.txt; do
-    if [[ -f "$integration_root/$file_name" ]]; then
-        cp -a "$integration_root/$file_name" "$game_root/"
-    fi
 done
 
 test -x /home/l4d2/server/srcds_linux
