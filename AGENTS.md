@@ -3,18 +3,18 @@
 ## Project Identity
 
 - Maintain a complete L4D2 server configuration on top of L4D2 Competitive Rework, with the AstMod PVE family exposed as independent Confogl matchmodes.
-- Mode roles: `astmod` = maintained personal Baseline (not a byte-for-byte 2.7.1 archive); `astredux` = registered parallel scaffold and current development direction, initially behavior-equivalent to AstMod while its rules are replaced independently; `astflex` = paused low-pressure preview whose existing config is retained until Redux or another viable Coop-native base exists. Read `README.md` for current priorities rather than duplicating the roadmap here.
+- Mode roles: `astmod` = maintained personal Baseline, currently rebased on the 2.8.1 runtime rather than preserved as a byte-for-byte archive; `astredux` = registered parallel scaffold and current development direction, reusing the updated Baseline while its rules are replaced independently; `astflex` = paused low-pressure preview whose existing config is retained until Redux or another viable Coop-native base exists. Read `README.md` for current priorities rather than duplicating the roadmap here.
 - Non-goals: do not make this an untouched AstMod mirror; do not broadly rewrite Competitive Rework core without a concrete mode need and review; do not stand up or administer a public server as part of a config/docs task; do not treat bundled binaries as blocked on full source recompilation before useful maintenance can proceed.
 
 ## Sources of truth
 
-- `README.md`: project intent, mode positioning, status, roadmap.
-- `ASTMOD_INTEGRATION.md`: integration boundaries, copied assets, known issues, validation history — the single source for implementation facts.
+- `README.md`: project intent, mode positioning, AstMod → AstRedux differences, Redux status, and roadmap.
+- `ASTMOD_INTEGRATION.md`: how the AstMod Baseline is integrated into Competitive Rework, including copied assets, lifecycle boundaries, known issues, and AstMod validation history.
 - `addons/sourcemod/configs/matchmodes.txt`: registered matchmode IDs.
 - `cfg/cfgogl/<mode>/` and active plugin-load cfgs: actual runtime behavior.
 - `tools/validate_astmod_integration.ps1`: maintained static checks.
 
-Keep these in their own lane. Do not duplicate implementation facts in AGENTS; reference ASTMOD_INTEGRATION instead.
+Keep these in their own lane. Do not duplicate project or implementation facts in AGENTS; reference README for Redux decisions and ASTMOD_INTEGRATION for Baseline integration.
 
 ## Runtime and validation
 
@@ -34,6 +34,7 @@ Keep these in their own lane. Do not duplicate implementation facts in AGENTS; r
 ## Hard constraints
 
 - Naming boundary: the stable Baseline uses `astmod`; the parallel scaffold owns the `astredux` matchmode, mutation, cfg, and VScript names while temporarily reusing unchanged AstMod plugins and Stripper data. The old `amethyst` namespace may appear only in historical/upstream provenance. Keep Redux changes isolated until deliberately backported. AstFlex development is paused.
+- Shared-plugin boundary: `cfg/generalfixes.cfg` must remain mode-neutral. Human-PvP policy belongs in `cfg/competitive_shared.cfg`; Ast modes load `jointeam.smx` and must not also load `playermanagement.smx`.
 - Competitive Rework owns framework lifecycle. Never place `sm plugins load_unlock`, `unload_all`, `load_lock`, or `refresh` in custom mode cfgs. Custom modes must follow the current Rework lifecycle instead of managing plugin locking or full teardown themselves.
 - AstMod-only plugins stay under `addons/sourcemod/plugins/optional/astmod/`. Do not reintroduce `confogl_autoloader.smx`.
 - Do not overwrite same-name Competitive Rework core files with older AstMod copies. The plugin-load cfg split (`plugins_1/2/3.cfg`) preserves load order; change it only with runtime evidence.
