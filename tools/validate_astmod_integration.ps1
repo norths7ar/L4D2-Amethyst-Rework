@@ -126,22 +126,23 @@ $requiredPaths = @(
     "assets/astmod_vpk/scripts/gamemodes.txt",
     "addons/sourcemod/configs/cfgs.txt",
     "addons/sourcemod/configs/astredux_profiles.cfg",
-    "addons/sourcemod/configs/hostname/hostname.txt",
+    "addons/sourcemod/plugins/optional/pause.smx",
     "addons/sourcemod/plugins/optional/astmod/versus_coop_mode.smx",
+    "addons/sourcemod/plugins/optional/astmod/wave_spawner.smx",
     "addons/sourcemod/plugins/optional/astmod/ACS.smx",
     "addons/sourcemod/plugins/optional/astmod/vote.smx",
     "addons/sourcemod/plugins/optional/astmod/sceneprocessor.smx",
     "addons/sourcemod/plugins/optional/astredux/astredux_profile_controller.smx",
     "addons/sourcemod/plugins/optional/astredux/astredux_autowipe.smx",
-    "addons/sourcemod/plugins/optional/astredux/wave_spawner.smx",
     "addons/sourcemod/plugins/optional/astredux/challenge.smx",
     "addons/sourcemod/scripting/ACS.sp",
     "addons/sourcemod/scripting/AI_HardSI.sp",
     "addons/sourcemod/scripting/challenge.sp",
+    "addons/sourcemod/scripting/pause.sp",
+    "addons/sourcemod/scripting/wave_spawner.sp",
     "addons/sourcemod/scripting/astredux_challenge.sp",
     "addons/sourcemod/scripting/astredux_autowipe.sp",
     "addons/sourcemod/scripting/astredux_profile_controller.sp",
-    "addons/sourcemod/scripting/astredux_wave_spawner.sp",
     "addons/sourcemod/scripting/vote.sp",
     "cfg/cfgogl/astmod/astmod.cfg",
     "cfg/cfgogl/astmod/confogl.cfg",
@@ -170,6 +171,8 @@ $requiredPaths = @(
     "cfg/cfgogl/astflex/plugins_2.cfg",
     "cfg/cfgogl/astflex/plugins_3.cfg",
     "cfg/cfgogl/astflex/shared_cvars.cfg",
+    "cfg/competitive_shared.cfg",
+    "cfg/generalfixes.cfg",
     "cfg/astmod_test.cfg",
     "cfg/sourcemod/difficulty_adjustment_system",
     "cfg/sourcemod/difficulty_adjustment_system/easy_lite.cfg",
@@ -278,6 +281,51 @@ foreach ($match in $forbidden) {
     Add-Failure "Forbidden lifecycle command at $($match.Path):$($match.LineNumber)"
 }
 
+$competitiveOnlyPlugins = @(
+    "fixes/l4d_skip_intro.smx",
+    "optional/playermanagement.smx",
+    "optional/l4d2_tank_props_glow.smx",
+    "fixes/l4d2_shadow_removal.smx",
+    "optional/nodeathcamskip.smx",
+    "optional/l4d2_map_transitions.smx",
+    "fixes/l4d2_fix_firsthit.smx",
+    "fixes/annoyance_exploit_fixes.smx",
+    "fixes/l4d2_fix_team_shuffle.smx",
+    "fixes/l4d2_tank_spawn_antirock_protect.smx",
+    "optional/l4d2_block_autoaim.smx",
+    "anticheat/l4d2_noghostcheat.smx"
+)
+foreach ($plugin in $competitiveOnlyPlugins) {
+    $escaped = [regex]::Escape($plugin)
+    Assert-NotContains "cfg/generalfixes.cfg" $escaped "Competitive-only plugin remains in generalfixes: $plugin"
+    Assert-Contains "cfg/competitive_shared.cfg" ('^\s*sm plugins load ' + $escaped + '\s*$') "Competitive shared layer is missing: $plugin"
+}
+
+$competitiveModeConfigs = @(
+    "cfg/cfgogl/acemodrv/shared_plugins.cfg",
+    "cfg/cfgogl/apex/shared_plugins.cfg",
+    "cfg/cfgogl/eq/shared_plugins.cfg",
+    "cfg/cfgogl/neomod/shared_plugins.cfg",
+    "cfg/cfgogl/nextmod/shared_plugins.cfg",
+    "cfg/cfgogl/zonehunters/shared_plugins.cfg",
+    "cfg/cfgogl/zonemod/shared_plugins.cfg",
+    "cfg/cfgogl/zoneretro/shared_plugins.cfg",
+    "cfg/cfgogl/deadman/confogl_plugins.cfg",
+    "cfg/cfgogl/pmelite/confogl_plugins.cfg"
+)
+foreach ($config in $competitiveModeConfigs) {
+    Assert-Contains $config '^\s*exec competitive_shared\.cfg\s*$' "Competitive mode does not load competitive_shared.cfg"
+}
+
+foreach ($mode in @("astmod", "astredux", "astflex")) {
+    $pluginConfig = "cfg/cfgogl/$mode/plugins_1.cfg"
+    Assert-Contains $pluginConfig '^\s*sm plugins load optional/astmod/jointeam\.smx\s*$' "Ast mode does not load jointeam"
+    Assert-NotContains $pluginConfig 'playermanagement|hostname\.smx|l4d2_storm\.smx|optional/astmod/(pause|slots_vote|specrates|lerpmonitor|l4d_boss_vote)\.smx' "Ast mode loads a conflicting or obsolete private functional plugin"
+    foreach ($sharedPlugin in @("lerpmonitor", "slots_vote", "specrates", "pause", "l4d_boss_vote")) {
+        Assert-Contains $pluginConfig ('^\s*sm plugins load optional/' + $sharedPlugin + '\.smx\s*$') "Ast mode does not use the shared $sharedPlugin plugin"
+    }
+}
+
 Assert-Contains `
     "addons/sourcemod/configs/matchmodes.txt" `
     '^\s*"astmod"\s*$' `
@@ -325,28 +373,27 @@ Assert-Contains `
     "AstRedux does not load its profile-controlled AutoWipe adapter"
 Assert-Contains `
     "cfg/cfgogl/astredux/plugins_1.cfg" `
-    '^\s*sm plugins load optional/astredux/wave_spawner\.smx\s*$' `
-    "AstRedux does not load its plugin-owned wave spawner"
-Assert-Contains `
-    "cfg/cfgogl/astredux/plugins_1.cfg" `
     '^\s*sm plugins load optional/astredux/challenge\.smx\s*$' `
     "AstRedux does not load its profile-aware challenge build"
 Assert-RawContains `
     "cfg/cfgogl/astredux/plugins_1.cfg" `
-    '(?s)sm plugins load optional/astredux/wave_spawner\.smx.*?sm plugins load optional/astredux/challenge\.smx' `
+    '(?s)sm plugins load optional/astmod/wave_spawner\.smx.*?sm plugins load optional/astredux/challenge\.smx' `
     "AstRedux does not load wave_spawner before challenge"
-foreach ($baselinePluginConfig in @(
-    "cfg/cfgogl/astmod/plugins_1.cfg",
-    "cfg/cfgogl/astmod/plugins_2.cfg",
-    "cfg/cfgogl/astmod/plugins_3.cfg",
-    "cfg/cfgogl/astflex/plugins_1.cfg",
-    "cfg/cfgogl/astflex/plugins_2.cfg",
-    "cfg/cfgogl/astflex/plugins_3.cfg"
+foreach ($waveConfig in @(
+    @{ Path = "cfg/cfgogl/astmod/plugins_1.cfg"; Challenge = "optional/astmod/challenge.smx" },
+    @{ Path = "cfg/cfgogl/astredux/plugins_1.cfg"; Challenge = "optional/astredux/challenge.smx" },
+    @{ Path = "cfg/cfgogl/astflex/plugins_1.cfg"; Challenge = "optional/astmod/challenge.smx" }
 )) {
-    Assert-NotContains `
-        $baselinePluginConfig `
-        'optional/astredux/wave_spawner\.smx' `
-        "A Baseline-derived mode unexpectedly loads the AstRedux wave spawner: $baselinePluginConfig"
+    Assert-RawContains `
+        $waveConfig.Path `
+        ('(?s)sm plugins load optional/astmod/wave_spawner\.smx.*?sm plugins load ' + [regex]::Escape($waveConfig.Challenge)) `
+        "Ast mode does not load the common Wave Spawner before Challenge"
+}
+if (Test-Path -LiteralPath (Join-Path $Root "addons/sourcemod/scripting/astredux_wave_spawner.sp")) {
+    Add-Failure "Obsolete AstRedux-specific Wave Spawner source still exists"
+}
+if (Test-Path -LiteralPath (Join-Path $Root "addons/sourcemod/plugins/optional/astredux/wave_spawner.smx")) {
+    Add-Failure "Obsolete AstRedux-specific Wave Spawner binary still exists"
 }
 Assert-NotContains `
     "cfg/cfgogl/astredux/plugins_3.cfg" `
@@ -412,7 +459,15 @@ Assert-Contains `
 Assert-Contains `
     "addons/sourcemod/scripting/challenge.sp" `
     'FindConVar\("ai_hardsi_enable"\)' `
-    "The /tz menu does not expose the Hard SI AI vote"
+    "The Ast gameplay menu does not expose the Hard SI AI vote"
+Assert-Contains `
+    "addons/sourcemod/configs/cfgs.txt" `
+    '^\s*"sm_ast"\s*$' `
+    "The !vote menu does not route to !ast"
+Assert-RawContains `
+    "addons/sourcemod/scripting/pause.sp" `
+    '(?s)version = "6\.9\.0".*?RegConsoleCmd\("sm_p".*?RegConsoleCmd\("sm_pausepanel".*?CreateTimer\(0\.1, Pause_Timer' `
+    "The shared Pause source does not contain the agreed Rework 6.9 and AstMod command merge"
 Assert-Contains `
     "scripts/vscripts/astmod.nut" `
     'if \("update_diff" in g_ModeScript\)' `
@@ -433,18 +488,34 @@ Assert-RawContains `
     "scripts/vscripts/astredux.nut" `
     '(?s)function update_diff_old\(\).*?astredux_si_hunter_limit.*?astredux_si_preferred_direction' `
     "The AstRedux old-wave path does not reuse the declarative SI composition"
-Assert-RawContains `
-    "addons/sourcemod/scripting/astredux_wave_spawner.sp" `
-    '(?s)RegConsoleCmd\("sm_si".*?public void SITimerVoteResultHandler\(.*?g_cvSITimer\.FloatValue = g_fPendingSITimer;.*?g_cvSILimit\.IntValue = g_iPendingSILimit;.*?ServerCommand\("sm_reloadscript"\);' `
-    "The AstRedux wave spawner does not own !si and reload the VScript after a successful vote"
+Assert-Contains "addons/sourcemod/scripting/wave_spawner.sp" 'CreateConVar\("ast_wave_override_active"' "The common Wave Spawner does not expose temporary override state"
+Assert-Contains "addons/sourcemod/scripting/wave_spawner.sp" 'RegConsoleCmd\("sm_si"' "The common Wave Spawner does not own !si"
+Assert-Contains "addons/sourcemod/scripting/wave_spawner.sp" 'SITimerNewVoteResultHandler' "The common Wave Spawner does not own the wave vote result"
 Assert-NotContains `
-    "addons/sourcemod/scripting/astredux_wave_spawner.sp" `
-    'das_fakedifficulty' `
-    "The AstRedux wave spawner still depends on legacy DAS persistence"
+    "addons/sourcemod/scripting/challenge.sp" `
+    'CreateConVar\("ast_(wave_spawn|sitimer_new|silimit_new)"|RegConsoleCmd\("sm_si"' `
+    "Challenge still duplicates Wave Spawner cvars or the !si command"
+Assert-Contains `
+    "addons/sourcemod/scripting/challenge.sp" `
+    'RegConsoleCmd\("sm_ast"' `
+    "Challenge does not expose the !ast gameplay entry"
+Assert-Contains `
+    "addons/sourcemod/scripting/challenge.sp" `
+    'RegAdminCmd\("sm_astreset"' `
+    "Challenge does not expose the admin reset command"
 Assert-RawContains `
     "addons/sourcemod/scripting/challenge.sp" `
-    '(?s)#if !defined ASTREDUX_BUILD\s*hWaveSpawnEnabled = CreateConVar\("ast_wave_spawn".*?RegConsoleCmd\("sm_si"' `
-    "The Redux challenge build does not relinquish the new-wave cvars and !si command"
+    '(?s)public void OnConfigsExecuted\(\).*?Timer_ReapplyGameplayOverrides.*?public Action Timer_EmptyServerReset.*?ResetSettings\(false\)' `
+    "Challenge does not preserve overrides across maps and reset them after the server empties"
+Assert-RawContains `
+    "addons/sourcemod/scripting/wave_spawner.sp" `
+    '(?s)public void OnConfigsExecuted\(\).*?Timer_RewriteCfgConVar' `
+    "Wave Spawner does not preserve its temporary override state across maps"
+Assert-Contains "addons/sourcemod/scripting/wave_spawner.sp" 'RegServerCmd\("sm_ast_wave_reset_override"' "Wave Spawner does not expose its reset adapter"
+Assert-NotContains `
+    "addons/sourcemod/scripting/challenge.sp" `
+    'sm_weather|sm_laser|Menu_Laser' `
+    "Removed weather or laser controls remain in Challenge"
 foreach ($legacyWaveState in @(
     'Waves\.SpawnedSICount',
     'Waves\.AliveSICount',
@@ -452,7 +523,7 @@ foreach ($legacyWaveState in @(
 )) {
     Assert-NotContains `
         "scripts/vscripts/astredux.nut" `
-        $legacyWaveState `
+        ('^(?!\s*//).*' + $legacyWaveState) `
         "The AstRedux VScript still owns legacy plugin-wave runtime state: $legacyWaveState"
 }
 Assert-NotContains `
@@ -517,16 +588,27 @@ Assert-KeyValuesBraceBalance "addons/sourcemod/configs/cfgs.txt"
 Assert-KeyValuesBraceBalance "addons/sourcemod/configs/astredux_profiles.cfg"
 
 foreach ($profile in @(
-    @{ Players = 1; Health = 1200; WaveSize = 3; WaveInterval = "7.0" },
-    @{ Players = 2; Health = 2550; WaveSize = 4; WaveInterval = "12.0" },
-    @{ Players = 3; Health = 4500; WaveSize = 6; WaveInterval = "22.0" },
-    @{ Players = 4; Health = 6750; WaveSize = 6; WaveInterval = "17.0" }
+    @{ Players = 1; Health = 1200; WaveSize = 3; WaveInterval = "10.0" },
+    @{ Players = 2; Health = 2550; WaveSize = 3; WaveInterval = "15.0" },
+    @{ Players = 3; Health = 4500; WaveSize = 5; WaveInterval = "26.0" },
+    @{ Players = 4; Health = 6750; WaveSize = 6; WaveInterval = "22.0" }
 )) {
     $profileText = Get-KeyValuesSectionContent "addons/sourcemod/configs/astredux_profiles.cfg" "players_$($profile.Players)"
     $valuePattern = '(?s)"spawn_health"\s*"' + $profile.Health + '".*?"melee_damage"\s*"300".*?"wave_size"\s*"' + $profile.WaveSize + '".*?"wave_interval"\s*"' + [regex]::Escape($profile.WaveInterval) + '"'
     if ($null -eq $profileText -or $profileText -notmatch $valuePattern) {
         Add-Failure "AstRedux players_$($profile.Players) profile does not expose the expected Tank and SI values"
     }
+}
+
+foreach ($difficulty in @(
+    @{ Name = "easy"; Timer = "10"; Limit = "3" },
+    @{ Name = "normal"; Timer = "15"; Limit = "3" },
+    @{ Name = "hard"; Timer = "26"; Limit = "5" },
+    @{ Name = "impossible"; Timer = "22"; Limit = "6" }
+)) {
+    $config = "cfg/sourcemod/difficulty_adjustment_system/$($difficulty.Name).cfg"
+    Assert-Contains $config ('^\s*sm_cvar ast_sitimer_new ' + $difficulty.Timer + '\s*$') "AstMod DAS does not use the 2.8.1 wave interval"
+    Assert-Contains $config ('^\s*sm_cvar ast_silimit_new ' + $difficulty.Limit + '\s*$') "AstMod DAS does not use the 2.8.1 wave size"
 }
 
 if ($failures.Count -gt 0) {
@@ -543,4 +625,4 @@ $activeLoads = (
 Write-Host "AstMod integration validation passed." -ForegroundColor Green
 Write-Host "Active plugin loads checked: $activeLoads"
 Write-Host "Official Stripper maps checked: $($zoneOfficialMaps.Count)"
-Write-Host "Core dedicated-server runtime validation passed; interactive menus and campaign completion remain pending."
+Write-Host "Static validation passed; dedicated-server runtime, interactive menus, and campaign completion remain pending."

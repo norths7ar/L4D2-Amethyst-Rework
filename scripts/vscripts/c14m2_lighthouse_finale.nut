@@ -204,6 +204,20 @@ switch( difficulty )
 		break;
 }
 
+if ( Convars.GetStr("survivor_limit") == "1" )
+{
+	NumCansNeeded <- 3
+} else if ( Convars.GetStr("survivor_limit") == "2" )
+{
+	NumCansNeeded <- 5
+} else if ( Convars.GetStr("survivor_limit") == "3" )
+{
+	NumCansNeeded <- 7
+} else if ( Convars.GetStr("survivor_limit") == "4" )
+{
+	NumCansNeeded <- 8
+}
+
 EntFire( "progress_display", "SetTotalItems", NumCansNeeded );
 EntFire( "radio", "AddOutput", "FinaleEscapeStarted director:RunScriptCode:DirectorScript.MapScript.LocalScript.DirectorOptions.TankLimit <- 3:0:-1" );
 

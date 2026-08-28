@@ -4,7 +4,7 @@
 
 ## 判定标准
 
-- 主清单范围是 `addons/sourcemod/plugins/optional/astmod/*.smx`，共 122 个；“当前加载”表示 `astmod`、`astredux` 或 `astflex` 至少有一个模式启用该插件。
+- 主清单范围是 `addons/sourcemod/plugins/optional/astmod/*.smx`，共 123 个；“当前加载”表示 `astmod`、`astredux` 或 `astflex` 至少有一个模式启用该插件。
 - “AstMod 2.7.1 一致”只表示当前 SMX 与原包同名二进制哈希一致。
 - `repo:` 指本仓库 `addons/sourcemod/scripting/`；`AstSrc:` 指外部参考克隆 `../../repos/L4D2-AstMod-Scriptings-upstream/`。
 - “源码线索”表示值得核对的文件；只有记录了源码、编译器、include、参数和产物比较，才能升级为可重建关系。
@@ -13,21 +13,17 @@
 
 | 项目 | 数量 |
 | --- | ---: |
-| AstMod 隔离目录内的 SMX | 122 |
-| 当前加载 | 90 |
-| 当前停用 | 32 |
+| AstMod 隔离目录内的 SMX | 123 |
+| 当前加载 | 84 |
+| 当前停用 | 39 |
 | 与 AstMod 2.7.1 原包二进制完全一致 | 118 |
-| 本地修改、二进制来源不再等同原包 | 4 |
-| 没找到源码线索，仅有二进制 | 21 |
-| 找到单一源码线索 | 92 |
-| 找到多个源码线索，需人工确认 | 5 |
-| 本地修改且尚不能可重复编译 | 4 |
+| 本地修改或新增、二进制来源不再等同原包 | 5 |
 
-21 个“仅二进制”插件中，13 个当前启用，8 个当前停用。四个本地修改插件可以运行，但当前构建链仍不能生成字节一致的二次产物。
+“与 2.7.1 一致”继续作为历史二进制来源判定，不代表当前 Baseline 仍停留在 2.7.1。2.8.1 配置升级没有替历史插件补出源码；新增 Wave Spawner 和本轮重建插件则由仓库直接维护构建关系。
 
-## Rework 提供、三个模式共同加载的插件
+## 仓库统一提供、三个模式共同加载的插件
 
-下面 5 个插件不使用 `optional/astmod/` 中的副本，而是加载 Competitive Rework 的共享版本。当前二进制均与本地保存的纯 Rework 上游副本 SHA-256 完全一致，并且仓库内有对应源码。
+下面插件由三个 Ast 模式共同加载。Rework 已有功能优先使用共享版本；Wave Spawner 则保存在 AstMod 隔离目录，但由三个模式复用同一份作者源码构建产物。
 
 | 加载路径 | 源码 |
 | --- | --- |
@@ -36,21 +32,26 @@
 | `optional/l4d2_weapon_attributes.smx` | `addons/sourcemod/scripting/l4d2_weapon_attributes.sp` |
 | `optional/l4d2_static_shotgun_spread.smx` | `addons/sourcemod/scripting/l4d2_static_shotgun_spread.sp` |
 | `optional/l4d2_skill_detect.smx` | `addons/sourcemod/scripting/l4d2_skill_detect.sp` |
+| `optional/lerpmonitor.smx` | `addons/sourcemod/scripting/lerpmonitor.sp` |
+| `optional/slots_vote.smx` | `addons/sourcemod/scripting/slots_vote.sp` |
+| `optional/specrates.smx` | `addons/sourcemod/scripting/specrates.sp` |
+| `optional/l4d_boss_vote.smx` | `addons/sourcemod/scripting/l4d_boss_vote.sp` |
+| `optional/pause.smx` | `addons/sourcemod/scripting/pause.sp`（Rework 6.9 主体，合入海洋版短命令、面板命令和延迟暂停） |
+| `optional/astmod/wave_spawner.smx` | `addons/sourcemod/scripting/wave_spawner.sp`（作者仓库提交 `c0d829f` 为基线；2.8.1 包缺少成品） |
 
 ## AstRedux 专属、可从仓库源码重建的插件
 
-下面 4 个插件位于 `optional/astredux/`，不计入后文 `optional/astmod/` 的 122 个历史二进制。它们已经用仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 编译通过；构建产物的来源关系由本仓库直接维护，不是按同名猜测。
+下面 3 个插件位于 `optional/astredux/`，不计入后文 `optional/astmod/` 的 123 个二进制。它们已经用仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 编译通过；构建产物的来源关系由本仓库直接维护，不是按同名猜测。
 
 | 加载路径 | 源码 | 职责 |
 | --- | --- | --- |
 | `optional/astredux/astredux_profile_controller.smx` | `addons/sourcemod/scripting/astredux_profile_controller.sp` | 读取并应用 1–4 人声明式 profile，协调 Tank、刷特、No-Witch 和 adapter 开关 |
 | `optional/astredux/astredux_autowipe.smx` | `addons/sourcemod/scripting/astredux_autowipe.sp` | 常驻 AutoWipe adapter，由 profile cvar 控制是否生效 |
-| `optional/astredux/wave_spawner.smx` | `addons/sourcemod/scripting/astredux_wave_spawner.sp` | 根据作者 `c0d829f` 版迁移的 Redux 波次执行器，独占新版刷特 CVar、`!si` 与 Director 波次计时 |
-| `optional/astredux/challenge.smx` | `addons/sourcemod/scripting/astredux_challenge.sp` + `challenge.sp` | Redux 专用 `/tz` build，读取当前 Redux profile 并与旧 DAS 解耦 |
+| `optional/astredux/challenge.smx` | `addons/sourcemod/scripting/astredux_challenge.sp` + `challenge.sp` | Redux 专用 `!ast` build，读取当前 Redux profile 并与旧 DAS 解耦 |
 
 ## 维护来源补充
 
-- 对存在多个源码线索的 `l4d_boss_percent`、`l4d2_hunter_no_deadstops`、`pause` 和 `survivor_mvp`，海洋建议今后维护以 `AstSrc:` 为准；这不证明当前二进制由该版本构建。
+- 对存在多个源码线索的 `l4d_boss_percent`、`l4d2_hunter_no_deadstops` 和 `survivor_mvp`，海洋建议今后维护以 `AstSrc:` 为准；这不证明当前二进制由该版本构建。运行中的共享 `pause.smx` 已改为本仓库可重建版本，隔离目录内的历史副本仍不据此建立来源关系。
 - `versus_coop_mode.smx` 的上游线索是 [`umlka/l4d2/versus_coop_mode`](https://github.com/umlka/l4d2/tree/main/versus_coop_mode)，当前二进制与该源码的准确关系仍未确认。
 - Lysis 反编译只能用于分析仅二进制插件，不能恢复原始源码或证明构建链。
 
@@ -60,9 +61,9 @@
 
 这里的“已确认”只表示当前 SMX 与 2.7.1 运行包中的二进制哈希完全一致，不表示源码对应关系已经确认。
 
-### 已加载（86）
+### 已加载（79）
 
-#### 找到单一源码线索（69）
+#### 找到单一源码线索（65）
 
 - `all4dead2.smx` → `AstSrc:all4dead2.sp`
 - `blockheatseekingchargers.smx` → `repo:blockheatseekingchargers.sp`
@@ -74,7 +75,6 @@
 - `HunterSkeetSound.smx` → `AstSrc:HunterSkeetSound.sp`
 - `jointeam.smx` → `AstSrc:jointeam.sp`
 - `l4d_bash_kills.smx` → `repo:l4d_bash_kills.sp`
-- `l4d_boss_vote.smx` → `repo:l4d_boss_vote.sp`
 - `l4d_common_ragdolls_be_gone.smx` → `repo:l4d_common_ragdolls_be_gone.sp`
 - `l4d_pounceprotect.smx` → `repo:l4d_pounceprotect.sp`
 - `l4d_reload_fix.smx` → `repo:l4d2_reload_fix.sp`（文件名别名，仍需确认）
@@ -115,7 +115,6 @@
 - `l4d2_unsilent_jockey.smx` → `repo:l4d2_unsilent_jockey.sp`
 - `l4d2_votetospec.smx` → `AstSrc:l4d2_votetospec.sp`
 - `l4d2_weaponrules.smx` → `repo:l4d2_weaponrules.sp`
-- `lerpmonitor.smx` → `repo:lerpmonitor.sp`
 - `MeleeInTheSafeRoom.smx` → `repo:MeleeInTheSafeRoom.sp`
 - `mob_interval_limit.smx` → `AstSrc:mob_interval_limit.sp`
 - `musical_jockeys_coop.smx` → `repo:archive/musical_jockeys.sp`（文件名别名，仍需确认）
@@ -126,30 +125,25 @@
 - `rock_stumble_block.smx` → `repo:rock_stumble_block.sp`
 - `script_reloader.smx` → `AstSrc:script_reloader.sp`
 - `server.smx` → `AstSrc:server.sp`
-- `slots_vote.smx` → `repo:slots_vote.sp`
-- `specrates.smx` → `repo:specrates.sp`
 - `staggersolver.smx` → `repo:staggersolver.sp`
 - `tankdoorfix.smx` → `repo:archive/tankdoorfix.sp`
 - `temphealthfix.smx` → `repo:temphealthfix.sp`
 - `versus_coop_mode.smx` → `AstSrc:versus2coop.sp`（文件名别名，仍需确认）
 - `witch_and_tankifier.smx` → `repo:witch_and_tankifier.sp`
 
-#### 找到多个可能对应的源码线索（4）
+#### 找到多个可能对应的源码线索（3）
 
 - `l4d_boss_percent.smx` → `repo:l4d_boss_percent.sp` / `AstSrc:l4d_boss_percent.sp`（海洋已回复：今后维护优先以作者仓库版本为准；这不证明当前 SMX 由该版本构建）
 - `l4d2_hunter_no_deadstops.smx` → `repo:l4d2_hunter_no_deadstops.sp` / `AstSrc:l4d2_hunter_no_deadstops.sp`（海洋已回复：今后维护优先以作者仓库版本为准；这不证明当前 SMX 由该版本构建）
-- `pause.smx` → `repo:pause.sp` / `AstSrc:pause.sp`（海洋已回复：今后维护优先以作者仓库版本为准；这不证明当前 SMX 由该版本构建）
 - `survivor_mvp.smx` → `repo:survivor_mvp.sp` / `AstSrc:survivor_mvp.sp`（海洋已回复：今后维护优先以作者仓库版本为准；这不证明当前 SMX 由该版本构建）
 
-#### 仅有二进制（13）
+#### 仅有二进制（11）
 
 - `cannounce.smx`（海洋说明【确定】：进服欢迎提示）
 - `enhancedsprays.smx`（海洋说明【确定】：无冷却喷漆、旁观喷漆）
 - `healer_witch.smx`（海洋说明【确定】：秒妹回血）
-- `hostname.smx`（海洋说明【确定】：服务器名称；与 Zonemod 冲突，不需要）
 - `l4d_swimming.smx`（海洋说明【确定】：出门前可以游泳）
 - `l4d2_si_ladder_booster.smx`（海洋说明【不确定】：大概是从 Anne 开源插件摸来的）
-- `l4d2_storm.smx`（海洋说明【确定用途、明确建议】：天气系统，图一乐功能，可删）
 - `l4d2_tank_facts_announce.smx`（海洋说明【不确定来源】：Zonemod 还是 MoYu 摸来的）
 - `sceneprocessor.smx`（海洋说明【确定】：`tls_restore_vocalize.smx` 的前置插件）
 - `spawnstatefix.smx`（海洋说明【不确定】：可能是 ProMod 或 Zonemod 的插件，可能已过时）
@@ -157,9 +151,9 @@
 - `tls_restore_vocalize.smx`（海洋说明【确定】：允许手动发出笑声）
 - `witch_glow.smx`（海洋说明【确定用途】：Witch Party 插件）
 
-### 未加载（32）
+### 未加载（39）
 
-#### 找到单一源码线索（23）
+#### 找到单一源码线索（27）
 
 - `autowipe.smx` → `AstSrc:autowipe.sp`
 - `checkpoint-rage-control.smx` → `repo:checkpoint-rage-control.sp`
@@ -167,6 +161,7 @@
 - `double_getup.smx` → `repo:archive/double_getup.sp`
 - `finale_tank_blocker.smx` → `repo:finale_tank_blocker.sp`
 - `l4d_ci_ffblock.smx` → `repo:l4d_ci_ffblock.sp`
+- `l4d_boss_vote.smx` → `repo:l4d_boss_vote.sp`（运行时使用 Rework 共享副本）
 - `l4d_equalise_alarm_cars.smx` → `repo:l4d_equalise_alarm_cars.sp`
 - `l4d_tankpunchstuckfix.smx` → `repo:l4d_tankpunchstuckfix.sp`
 - `l4d_weapon_limits.smx` → `repo:l4d_weapon_limits.sp`
@@ -180,38 +175,45 @@
 - `l4d2_sniper_stats.smx` → `AstSrc:l4d2_sniper_stats.sp`
 - `l4d2_static_shotgun_spread.smx` → `repo:l4d2_static_shotgun_spread.sp`（隔离副本，运行时未使用）
 - `l4d2_weapon_attributes.smx` → `repo:l4d2_weapon_attributes.sp`（隔离副本，运行时未使用）
+- `lerpmonitor.smx` → `repo:lerpmonitor.sp`（运行时使用 Rework 共享副本）
 - `nm3_ladder_damage.smx` → `repo:nm3_ladder_damage.sp`
+- `slots_vote.smx` → `repo:slots_vote.sp`（运行时使用 Rework 共享副本）
+- `specrates.smx` → `repo:specrates.sp`（运行时使用 Rework 共享副本）
 - `versus2coop.smx` → `AstSrc:versus2coop.sp`
 - `weapon_slowdown.smx` → `AstSrc:weapon_slowdown.sp`
 - `wingman.smx` → `AstSrc:wingman.sp`
 
-#### 找到多个可能对应的源码线索（1）
+#### 找到多个可能对应的源码线索（2）
 
 - `confoglcompmod.smx` → `repo:confoglcompmod.sp` / `repo:archive/confoglcompmod.sp`（隔离副本，运行时未使用；当前海洋源码 clone 中没有同名文件，无法把作者回复机械映射到这一项）
+- `pause.smx` → `repo:pause.sp` / `AstSrc:pause.sp`（隔离历史副本；运行时使用仓库根共享版本）
 
-#### 仅有二进制（8）
+#### 仅有二进制（10）
 
 - `advertisements.smx`（海洋说明【确定】：广告插件；配置文件为 `addons/sourcemod/configs/advertisement.cfg`）
 - `autoadmin.smx`（海洋说明【确定用途】：进服自动获取阉割版 admin 身份，可用基础指令，如 all4dead 菜单、处死玩家和特感；笔记中另提到 `fuck`，具体是否可用未确认）
 - `clip_removal.smx`（海洋未说明用途，仍待确认）
+- `hostname.smx`（海洋说明【确定】：服务器名称；当前不加载）
 - `l4d_nowitch.smx`（海洋说明【部分确定、需验证】：老 Zonemod 插件，用于人数变动时快速开关 Witch 生成；使用 Tankifier 时可能需要重新读取插件，需验证）
 - `l4d_unscope.smx`（海洋说明【确定用途/版本背景】：老 Wingman 使用；新版本因有 bug 去除。狙击枪开镜射击后关镜，不能开镜连发）
+- `l4d2_storm.smx`（海洋说明【确定用途、明确建议】：天气系统；当前不加载）
 - `l4d2_saferoom_gun_control.smx`（海洋说明【确定来源】：ProMod 插件）
 - `l4d2_weapon_csgo_reload.smx`（海洋说明【部分确定、不确定兼容性】：老 Wingman 使用；TLS 之后可能有 bug）
 - `swamp_finale_fix.smx`（海洋说明【确定状态、不确定用途】：ProMod 插件，似乎修复 c3m4 种植园；海洋不知道具体作用，因此没有加载）
 
-## 2. 本地修改的当前二进制（4）
+## 2. 本地修改或新增的当前二进制（5）
 
-这四个插件均为本仓库正在使用的修改版，当前 SMX 与 AstMod 2.7.1 原包不同。`challenge.smx` 在本次 namespace 迁移中已由 `repo:challenge.sp` 和随仓库保存的 SourceMod 1.12.0.7230 compiler 重建，但重复编译仍不能得到字节一致产物；其余三个插件继续沿用迁移前的本地修改二进制，准确构建链尚未锁定。
+这五个插件均由本仓库修改或新增，当前 SMX 不再等同 AstMod 2.7.1 原包。`challenge.smx` 与 `wave_spawner.smx` 已用随仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 重建；ACS、AI_HardSI 与 vote 继续沿用此前的本地修改二进制，准确构建链尚未锁定。
 
-### 已加载（4）
+### 已加载（5）
 
-#### 有本仓库修改源码，但构建链尚未锁定（4）
+#### 有本仓库维护源码（5）
 
 - `ACS.smx` → `repo:ACS.sp` / `AstSrc:ACS.sp`
 - `AI_HardSI.smx` → `repo:AI_HardSI.sp` / `AstSrc:AI_HardSI.sp`
 - `challenge.smx` → `repo:challenge.sp`（本次重建使用） / `AstSrc:challenge.sp`（上游参考）
 - `vote.smx` → `repo:vote.sp` / `AstSrc:vote.sp`
+- `wave_spawner.smx` → `repo:wave_spawner.sp` / `AstSrc:wave_spawner.sp`（以作者仓库提交 `c0d829f` 为基线，本次重建使用）
 
 ### 未加载（0）
 
@@ -219,4 +221,4 @@
 
 ## 构建边界
 
-静态校验可以确认文件、加载路径和部分配置约束，但不能证明 `.sp` 与 `.smx` 一一对应。仅二进制插件没有可编译输入，部分源码位于外部参考目录，四个本地修改插件的完整编译器/include/参数也尚未锁定，因此当前仓库不能完整重建全部发布二进制。
+静态校验可以确认文件、加载路径和部分配置约束，但不能证明所有历史 `.sp` 与 `.smx` 一一对应。仅二进制插件没有可编译输入，部分源码位于外部参考目录，ACS、AI_HardSI 与 vote 的完整编译器/include/参数仍未锁定，因此当前仓库不能完整重建全部发布二进制。

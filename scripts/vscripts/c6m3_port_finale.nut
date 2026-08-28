@@ -1,6 +1,6 @@
 
 
-Msg("----------------------FINALE SCRIPT REWORK------------------\n")
+Msg("----------------------FINALE SCRIPT------------------\n")
 //-----------------------------------------------------
 PANIC <- 0
 TANK <- 1
@@ -10,7 +10,7 @@ ONSLAUGHT <- 3
 
 SharedOptions <-
 {
- 	A_CustomFinale1 = ONSLAUGHT
+	A_CustomFinale1 = ONSLAUGHT
 	A_CustomFinaleValue1 = ""
 
 	A_CustomFinale2 = PANIC
@@ -18,7 +18,7 @@ SharedOptions <-
 
 	A_CustomFinale3 = ONSLAUGHT
 	A_CustomFinaleValue3 = "c1m4_delay"
-	
+
 	A_CustomFinale4 = PANIC
 	A_CustomFinaleValue4 = 1
 
@@ -30,14 +30,14 @@ SharedOptions <-
 
 	A_CustomFinale7 = ONSLAUGHT
 	A_CustomFinaleValue7 = "c1m4_delay"
- 
- 	A_CustomFinale8 = PANIC
+
+	A_CustomFinale8 = PANIC
 	A_CustomFinaleValue8 = 1
 
 	A_CustomFinale9 = ONSLAUGHT
 	A_CustomFinaleValue9 = "c1m4_delay"
- 
- 	A_CustomFinale10 = PANIC
+
+	A_CustomFinale10 = PANIC
 	A_CustomFinaleValue10 = 1
 
 	A_CustomFinale11 = ONSLAUGHT
@@ -45,69 +45,129 @@ SharedOptions <-
 
 	A_CustomFinale12 = PANIC
 	A_CustomFinaleValue12 = 1
-	
- 	A_CustomFinale13 = ONSLAUGHT
+
+	A_CustomFinale13 = ONSLAUGHT
 	A_CustomFinaleValue13 = "c1m4_delay"
-	
+
 	A_CustomFinale14 = TANK
-	A_CustomFinaleValue14 = 1   
-	
- 	A_CustomFinale15 = ONSLAUGHT
+	A_CustomFinaleValue14 = 2
+
+	A_CustomFinale15 = ONSLAUGHT
 	A_CustomFinaleValue15 = "c1m4_delay"
-	
+
 	A_CustomFinale16 = PANIC
-	A_CustomFinaleValue16 = 1  
-	
- 	A_CustomFinale17 = ONSLAUGHT
-	A_CustomFinaleValue17 = "c1m4_delay"    
-	
- 	A_CustomFinale18 = PANIC
-	A_CustomFinaleValue18 = 1  
-	
- 	A_CustomFinale19 = ONSLAUGHT
+	A_CustomFinaleValue16 = 1
+
+	A_CustomFinale17 = ONSLAUGHT
+	A_CustomFinaleValue17 = "c1m4_delay"
+
+	A_CustomFinale18 = PANIC
+	A_CustomFinaleValue18 = 1
+
+	A_CustomFinale19 = ONSLAUGHT
 	A_CustomFinaleValue19 = "c1m4_delay"
-	
+
 	A_CustomFinale20 = PANIC
-	A_CustomFinaleValue20 = 1   
-	
- 	A_CustomFinale21 = ONSLAUGHT
+	A_CustomFinaleValue20 = 1
+
+	A_CustomFinale21 = ONSLAUGHT
 	A_CustomFinaleValue21 = "c1m4_delay"
-	
+
 	A_CustomFinale22 = TANK
-	A_CustomFinaleValue22 = 1  
-	
- 	A_CustomFinale23 = ONSLAUGHT
-	A_CustomFinaleValue23 = "c1m4_delay"    
-	
- 	A_CustomFinale24 = PANIC
+	A_CustomFinaleValue22 = 1
+
+	A_CustomFinale23 = ONSLAUGHT
+	A_CustomFinaleValue23 = "c1m4_delay"
+
+	A_CustomFinale24 = PANIC
 	A_CustomFinaleValue24 = 1
-	
- 	A_CustomFinale25 = ONSLAUGHT
+
+	A_CustomFinale25 = ONSLAUGHT
 	A_CustomFinaleValue25 = "c1m4_delay"
-	
+
 	A_CustomFinale26 = PANIC
-	A_CustomFinaleValue26 = 1   
-	
- 	A_CustomFinale27 = ONSLAUGHT
+	A_CustomFinaleValue26 = 1
+
+	A_CustomFinale27 = ONSLAUGHT
 	A_CustomFinaleValue27 = "c1m4_delay"
-	
+
 	A_CustomFinale28 = PANIC
-	A_CustomFinaleValue28 = 1  
-	
- 	A_CustomFinale29 = ONSLAUGHT
-	A_CustomFinaleValue29 = "c1m4_delay"    
-	
- 	A_CustomFinale30 = PANIC
+	A_CustomFinaleValue28 = 1
+
+	A_CustomFinale29 = ONSLAUGHT
+	A_CustomFinaleValue29 = "c1m4_delay"
+
+	A_CustomFinale30 = PANIC
 	A_CustomFinaleValue30 = 1
 
- 	A_CustomFinale31 = ONSLAUGHT
-	A_CustomFinaleValue31 = "c1m4_delay"   
-	
+	A_CustomFinale31 = ONSLAUGHT
+	A_CustomFinaleValue31 = "c1m4_delay"
+
+	A_CustomFinale32 = TANK
+	A_CustomFinaleValue32 = 2
+
+	A_CustomFinale33 = ONSLAUGHT
+	A_CustomFinaleValue33 = "c1m4_delay"
+
+	A_CustomFinale34 = PANIC
+	A_CustomFinaleValue34 = 1
+
+	A_CustomFinale35 = ONSLAUGHT
+	A_CustomFinaleValue35 = "c1m4_delay"
+
+	A_CustomFinale36 = PANIC
+	A_CustomFinaleValue36 = 1
+
+	A_CustomFinale37 = ONSLAUGHT
+	A_CustomFinaleValue37 = "c1m4_delay"
+
+	A_CustomFinale38 = PANIC
+	A_CustomFinaleValue38 = 1
+
+	A_CustomFinale39 = ONSLAUGHT
+	A_CustomFinaleValue39 = "c1m4_delay"
+
+	A_CustomFinale40 = PANIC
+	A_CustomFinaleValue40 = 1
+
+	A_CustomFinale41 = ONSLAUGHT
+	A_CustomFinaleValue41 = "c1m4_delay"
+
+	A_CustomFinale42 = TANK
+	A_CustomFinaleValue42 = 1
+
+	A_CustomFinale43 = ONSLAUGHT
+	A_CustomFinaleValue43 = "c1m4_delay"
+
+	A_CustomFinale44 = PANIC
+	A_CustomFinaleValue44 = 1
+
+	A_CustomFinale45 = ONSLAUGHT
+	A_CustomFinaleValue45 = "c1m4_delay"
+
+	A_CustomFinale46 = PANIC
+	A_CustomFinaleValue46 = 1
+
+	A_CustomFinale47 = ONSLAUGHT
+	A_CustomFinaleValue47 = "c1m4_delay"
+
+	A_CustomFinale48 = PANIC
+	A_CustomFinaleValue48 = 1
+
+	A_CustomFinale49 = ONSLAUGHT
+	A_CustomFinaleValue49 = "c1m4_delay"
+
+	A_CustomFinale50 = PANIC
+	A_CustomFinaleValue50 = 1
+
+	A_CustomFinale51 = ONSLAUGHT
+	A_CustomFinaleValue51 = "c1m4_delay"
+
 	//-----------------------------------------------------
 
 	PreferredMobDirection = SPAWN_LARGE_VOLUME
 	PreferredSpecialDirection = SPAWN_LARGE_VOLUME
-	
+
 //	BoomerLimit = 0
 //	SmokerLimit = 2
 //	HunterLimit = 1
@@ -120,11 +180,12 @@ SharedOptions <-
 	MobRechargeRate = 0.5
 	HordeEscapeCommonLimit = 15
 	BileMobSize = 15
-	
+	SpecialRespawnInterval = 20
+
 	MusicDynamicMobSpawnSize = 8
 	MusicDynamicMobStopSize = 2
 	MusicDynamicMobScanStopSize = 1
-} 
+}
 
 InitialOnslaughtOptions <-
 {
@@ -134,13 +195,13 @@ InitialOnslaughtOptions <-
 	RelaxMaxInterval = 4
 	SustainPeakMinTime = 25
 	SustainPeakMaxTime = 30
-	
+
 	MobSpawnMinTime = 4
 	MobSpawnMaxTime = 8
 	MobMinSize = 2
 	MobMaxSize = 6
 	CommonLimit = 5
-	
+
 	SpecialRespawnInterval = 100
 }
 
@@ -149,10 +210,16 @@ PanicOptions <-
 	MegaMobSize = 0 // randomized in OnBeginCustomFinaleStage
 	MegaMobMinSize = 20
 	MegaMobMaxSize = 40
-	
-	CommonLimit = 15
-	
-	SpecialRespawnInterval = 40
+	MaxSpecials = 5
+	BoomerLimit = 1
+	SmokerLimit = 2
+	HunterLimit = 2
+	SpitterLimit = 1
+	JockeyLimit = 1
+	ChargerLimit = 1
+	CommonLimit = 25
+
+	SpecialRespawnInterval = 25
 }
 
 TankOptions <-
@@ -160,14 +227,14 @@ TankOptions <-
 	ShouldAllowMobsWithTank = true
 	ShouldAllowSpecialsWithTank = true
 
-	MobSpawnMinTime = 10
-	MobSpawnMaxTime = 20
+	MobSpawnMinTime = 20
+	MobSpawnMaxTime = 40
 	MobMinSize = 3
 	MobMaxSize = 5
+	MaxSpecials = 3
+	CommonLimit = 5
 
-	CommonLimit = 7
-	
-	SpecialRespawnInterval = 60
+	SpecialRespawnInterval = 50
 }
 
 
@@ -179,26 +246,26 @@ DirectorOptions <- clone SharedOptions
 //-----------------------------------------------------
 
 // number of cans needed to escape.
-NumCansNeeded <- 13
+NumCansNeeded <- 16
 
 // fewer cans in single player since bots don't help much
 if ( Director.IsSinglePlayerGame() )
 {
-	NumCansNeeded <- 8
+	NumCansNeeded <- 10
 }
 
 if ( Convars.GetStr("survivor_limit") == "1" )
 {
-	NumCansNeeded <- 5
+	NumCansNeeded <- 6
 } else if ( Convars.GetStr("survivor_limit") == "2" )
 {
-	NumCansNeeded <- 7
+	NumCansNeeded <- 10
 } else if ( Convars.GetStr("survivor_limit") == "3" )
 {
-	NumCansNeeded <- 11
+	NumCansNeeded <- 14
 } else if ( Convars.GetStr("survivor_limit") == "4" )
 {
-	NumCansNeeded <- 13
+	NumCansNeeded <- 16
 }
 
 // duration of delay stage.
@@ -223,11 +290,11 @@ if ( Director.IsPlayingOnConsole() )
 {
 	DelayMin <- 20
 	DelayMax <- 30
-	
+
 	// Number of touches and/or pours allowed before a delay is aborted.
 	DelayPourThreshold <- 2
 	DelayTouchedOrPouredThreshold <- 4
-	
+
 	TankOptions.ShouldAllowSpecialsWithTank = false
 }
 //-----------------------------------------------------
@@ -257,8 +324,8 @@ NavMesh.UnblockRescueVehicleNav()
 function GasCanTouched()
 {
     GasCansTouched++
-    Msg(" Touched: " + GasCansTouched + "\n")   
-     
+    Msg(" Touched: " + GasCansTouched + "\n")
+
     EvalGasCansPouredOrTouched()
 }
 
@@ -266,11 +333,11 @@ function GasCanPoured()
 {
     GasCansPoured++
     DelayPoured++
-    Msg(" Poured: " + GasCansPoured + "\n")   
+    Msg(" Poured: " + GasCansPoured + "\n")
 
     if ( GasCansPoured == NumCansNeeded )
     {
-        Msg(" needed: " + NumCansNeeded + "\n") 
+        Msg(" needed: " + NumCansNeeded + "\n")
         EntFire( "relay_car_ready", "trigger" )
     }
 
@@ -285,12 +352,12 @@ function EvalGasCansPouredOrTouched()
     DelayTouchedOrPoured++
     Msg(" DelayTouchedOrPoured: " + DelayTouchedOrPoured + "\n")
     Msg(" DelayPoured: " + DelayPoured + "\n")
-    
+
     if (( DelayTouchedOrPoured >= DelayTouchedOrPouredThreshold ) || ( DelayPoured >= DelayPourThreshold ))
     {
         AbortDelay()
     }
-    
+
     switch( TouchedOrPoured )
     {
         case GimmeThreshold:
@@ -311,7 +378,7 @@ function AddTableToTable( dest, src )
 function OnBeginCustomFinaleStage( num, type )
 {
 	printl( "Beginning custom finale stage " + num + " of type " + type );
-	
+
 	local waveOptions = null
 	if ( num == 1 )
 	{
@@ -320,29 +387,28 @@ function OnBeginCustomFinaleStage( num, type )
 	else if ( type == PANIC )
 	{
 		waveOptions = PanicOptions
-		//Rework
-		if ( Director.GetGameModeBase() == "versus" )
-		{
-			waveOptions.MegaMobSize = PanicOptions.MegaMobMinSize
-		}
-		else
-		{
-			waveOptions.MegaMobSize = PanicOptions.MegaMobMinSize + rand()%( PanicOptions.MegaMobMaxSize - PanicOptions.MegaMobMinSize )
-		}
-		
-		Msg("************************* Rework: " + waveOptions.MegaMobSize + "\n")
-		
+		waveOptions.MegaMobSize = PanicOptions.MegaMobMinSize + rand()%( PanicOptions.MegaMobMaxSize - PanicOptions.MegaMobMinSize )
+
+		Msg("*************************" + waveOptions.MegaMobSize + "\n")
+
 	}
 	else if ( type == TANK )
 	{
 		waveOptions = TankOptions
+		EntFire( "bonus_relay", "Trigger", 0 )
 	}
-	
+
+	// give out items at certain stages
+	if ( num == 3 || num == 7 || num == 15 || num == 23 )
+	{
+		Director.L4D1SurvivorGiveItem()
+	}
+
 	//---------------------------------
 
 
 	MapScript.DirectorOptions.clear()
-	
+
 
 	AddTableToTable( MapScript.DirectorOptions, SharedOptions );
 
@@ -350,10 +416,10 @@ function OnBeginCustomFinaleStage( num, type )
 	{
 		AddTableToTable( MapScript.DirectorOptions, waveOptions );
 	}
-	
-	
+
+
 	Director.ResetMobTimer()
-	
+
 	if ( developer() > 0 )
 	{
 		Msg( "\n*****\nMapScript.DirectorOptions:\n" );
@@ -380,4 +446,3 @@ if ( Director.GetGameModeBase() == "versus" )
 {
 	SharedOptions.ProhibitBosses = false
 }
-

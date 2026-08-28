@@ -22,10 +22,10 @@
 			"type" "panel"
 			"message" "Boss Vote(!bossvote)"
 		}
-		"sm_tz"
+		"sm_ast"
 		{
 			"type" "panel"
-			"message" "玩法与难度设置(!tz / !settings)"
+			"message" "Ast 玩法调整(!ast / !tz)"
 		}
 	}
 	"官方地图"
