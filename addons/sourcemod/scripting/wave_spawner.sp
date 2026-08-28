@@ -41,7 +41,7 @@ Handle g_hVote = INVALID_HANDLE;
 public Plugin myinfo =
 {
     name            = "Wave Spawner",
-    author          = "海洋空氣, norths7ar",
+    author          = "海洋空氣",
     description     = "Force Director to spawn Special Infected in waves.",
     version         = "1.0-integration",
     url             = "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
@@ -127,6 +127,7 @@ public void Event_PlayerDeath(Handle event, const char[] name, bool dontBroadcas
             g_fFirstDeathTime = time;
 
             // 计时重置波次
+            // 轨迹注：CreateTimer 的第三参数是 data，TIMER_FLAG_NO_MAPCHANGE 应放在第四参数。
             CreateTimer(g_fSISpawnTime, Timer_ResetWave, _, TIMER_FLAG_NO_MAPCHANGE);
         } else { // 后面死的
             // 减去第一只死的时间，计算还有多久下一波
@@ -226,6 +227,7 @@ public Action NewSITimerCommand(int client, int args)
     tempSITimerNew = StringToFloat(sSITimerNew);
     tempSILimitNew = StringToInt(sSILimitNew);
 
+    // 轨迹注：单人生还者直接应用调整；多人时保留海洋原有的投票流程。
     if (CountHumanSurvivors() <= 1) {
         ApplyWaveOverride(tempSITimerNew, tempSILimitNew);
         PrintToChatAll("\x04[AstMod] \x01已将特感刷新速度调整为 \x03%.1f秒%i特\x01。", tempSITimerNew, tempSILimitNew);
@@ -300,6 +302,7 @@ public Action OnChangeTeam(Handle event, const char[] name, bool dontBroadcast)
     int client = GetClientOfUserId(GetEventInt(event, "userid"));
     int newteam = GetEventInt(event, "team");
     int oldteam = GetEventInt(event, "oldteam");
+    // 轨迹注：人类加入或离开生还者队伍也可能改变 DAS/profile，不能只监听 BOT 换队。
     if (client > 0 && IsClientInGame(client)
     && (newteam == TEAM_SURVIVORS || oldteam == TEAM_SURVIVORS)) {
         CreateTimer(1.0, Timer_RewriteCfgConVar, _, TIMER_FLAG_NO_MAPCHANGE);
@@ -312,6 +315,7 @@ public Action Timer_RewriteCfgConVar(Handle timer)
     if (!g_hOverrideActive.BoolValue) return Plugin_Handled;
 
     // 对比投票成功时的人数，如果相同则恢复投票时的设定，缺点是只保存一次记录
+    // 轨迹注：难度标记变化后清除临时覆盖，避免把旧人数档位的参数带入新档位。
     int curDifficulty = GetCurrentDifficultyMarker();
     if (curDifficulty != preDifficulty) {
         ClearWaveOverride();
@@ -329,6 +333,7 @@ public Action Timer_RewriteCfgConVar(Handle timer)
 
 public void OnConfigsExecuted()
 {
+    // 轨迹注：换图重新执行 cfg 后，仅在人数档位未变化时恢复玩家本次会话的临时设置。
     if (g_hOverrideActive.BoolValue) {
         CreateTimer(0.5, Timer_RewriteCfgConVar, _, TIMER_FLAG_NO_MAPCHANGE);
     }
@@ -336,6 +341,7 @@ public void OnConfigsExecuted()
 
 public Action ResetWaveOverrideCommand(int args)
 {
+    // 轨迹注：供空服重置流程清除前一批玩家留下的临时波次参数。
     ClearWaveOverride();
     return Plugin_Handled;
 }
@@ -360,6 +366,7 @@ void ClearWaveOverride()
 
 int GetCurrentDifficultyMarker()
 {
+    // 轨迹注：Baseline 使用 DAS 难度，Redux scaffold 使用独立 profile；两者共用覆盖生命周期。
     ConVar difficulty = FindConVar("das_fakedifficulty");
     if (difficulty == null) {
         difficulty = FindConVar("astredux_profile_current");
