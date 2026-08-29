@@ -24,6 +24,16 @@ ConVar
 
 bool gameStarted;
 
+GlobalForward g_hOnReadyUpInitiatePre;
+GlobalForward g_hOnReadyUpInitiate;
+GlobalForward g_hOnRoundLiveCountdownPre;
+GlobalForward g_hOnRoundLiveCountdown;
+GlobalForward g_hOnRoundIsLivePre;
+GlobalForward g_hOnRoundIsLive;
+GlobalForward g_hOnReadyCountdownCancelled;
+GlobalForward g_hOnPlayerReady;
+GlobalForward g_hOnPlayerUnready;
+
 int clientTimeout[MAXPLAYERS + 1] = {0, ...}; // 加载超时时间
 int countDown; // 倒计时
 bool isClientLoading[MAXPLAYERS + 1] = {false, ...};
@@ -37,12 +47,53 @@ public Plugin myinfo =
 	name 			= "Jointeam",
 	author 			= "海洋空氣",
 	description 	= "加入生还者 + 等待玩家读图加载 + 出门发药 + 过关重置生还状态 + 自杀",
-	version 		= "1.8",
+	version 		= "1.9",
 	url 			= "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
+}
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+	CreateNative("GetFooterStringAtIndex", Native_GetFooterStringAtIndex);
+	CreateNative("FindIndexOfFooterString", Native_FindIndexOfFooterString);
+	CreateNative("EditFooterStringAtIndex", Native_EditFooterStringAtIndex);
+	CreateNative("AddStringToReadyFooter", Native_AddStringToReadyFooter);
+	CreateNative("IsInReady", Native_IsInReady);
+	CreateNative("IsReady", Native_IsReady);
+	CreateNative("ToggleReadyPanel", Native_ToggleReadyPanel);
+	RegPluginLibrary("readyup");
+	return APLRes_Success;
+}
+
+public SharedPlugin __pl_readyup =
+{
+	name = "readyup",
+	file = "jointeam.smx",
+	required = 0,
+};
+
+public void __pl_readyup_SetNTVOptional()
+{
+	MarkNativeAsOptional("GetFooterStringAtIndex");
+	MarkNativeAsOptional("FindIndexOfFooterString");
+	MarkNativeAsOptional("EditFooterStringAtIndex");
+	MarkNativeAsOptional("AddStringToReadyFooter");
+	MarkNativeAsOptional("IsInReady");
+	MarkNativeAsOptional("IsReady");
+	MarkNativeAsOptional("ToggleReadyPanel");
 }
 
 public void OnPluginStart()
 {
+	g_hOnReadyUpInitiatePre = CreateGlobalForward("OnReadyUpInitiatePre", ET_Ignore);
+	g_hOnReadyUpInitiate = CreateGlobalForward("OnReadyUpInitiate", ET_Ignore);
+	g_hOnRoundLiveCountdownPre = CreateGlobalForward("OnRoundLiveCountdownPre", ET_Ignore);
+	g_hOnRoundLiveCountdown = CreateGlobalForward("OnRoundLiveCountdown", ET_Ignore);
+	g_hOnRoundIsLivePre = CreateGlobalForward("OnRoundIsLivePre", ET_Ignore);
+	g_hOnRoundIsLive = CreateGlobalForward("OnRoundIsLive", ET_Ignore);
+	g_hOnReadyCountdownCancelled = CreateGlobalForward("OnReadyCountdownCancelled", ET_Ignore, Param_Cell, Param_String);
+	g_hOnPlayerReady = CreateGlobalForward("OnPlayerReady", ET_Ignore, Param_Cell);
+	g_hOnPlayerUnready = CreateGlobalForward("OnPlayerUnready", ET_Ignore, Param_Cell);
+
 	hMaxSurvivors = CreateConVar("ast_maxsurvivors", "4", "最大生还者数量");
 	hMaxInfected = CreateConVar("ast_maxinfected", "0", "最大玩家特感数量");
 	hAllowHumanTank = CreateConVar("ast_allowhumantank", "0", "是否允许特感玩家扮演 Tank");
@@ -80,6 +131,10 @@ public void OnMapStart()
 	gameStarted = false;
 	countDown = -1;
 	isCountDownEnd = false;
+	Call_StartForward(g_hOnReadyUpInitiatePre);
+	Call_Finish();
+	Call_StartForward(g_hOnReadyUpInitiate);
+	Call_Finish();
 	setGodMode(true);
 
 	for (int i = 1; i <= MaxClients; ++i)
@@ -147,8 +202,12 @@ public Action L4D_OnFirstSurvivorLeftSafeArea(int client)
 
 public void L4D_OnFirstSurvivorLeftSafeArea_Post(int client)
 {
+	Call_StartForward(g_hOnRoundIsLivePre);
+	Call_Finish();
 	gameStarted = true;
 	setGodMode(false);
+	Call_StartForward(g_hOnRoundIsLive);
+	Call_Finish();
 
 	/****** JoinTeam ******/
 	if (!GetConVarBool(hAllowBotSurvivors)) {
@@ -387,6 +446,46 @@ public void EndRound(int client)
 {
 	SetConVarInt(FindConVar("director_no_survivor_bots"), 0);
 	CreateTimer(GetConVarFloat(hSlayBotTime), Timer_SlayBot);
+}
+
+public any Native_GetFooterStringAtIndex(Handle plugin, int numParams)
+{
+	char buffer[256];
+	GetNativeString(2, buffer, sizeof(buffer));
+	return 0;
+}
+
+public any Native_FindIndexOfFooterString(Handle plugin, int numParams)
+{
+	return -1;
+}
+
+public any Native_EditFooterStringAtIndex(Handle plugin, int numParams)
+{
+	return false;
+}
+
+public any Native_AddStringToReadyFooter(Handle plugin, int numParams)
+{
+	return -1;
+}
+
+public any Native_IsInReady(Handle plugin, int numParams)
+{
+	return !gameStarted;
+}
+
+public any Native_IsReady(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	if (client < 1 || client > MaxClients || !IsClientInGame(client))
+		return false;
+	return !isClientLoading[client] && GetClientTeam(client) != TEAM_SPECTATORS;
+}
+
+public any Native_ToggleReadyPanel(Handle plugin, int numParams)
+{
+	return false;
 }
 
 public Action Timer_SlayBot(Handle timer)
