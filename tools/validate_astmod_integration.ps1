@@ -374,6 +374,25 @@ Assert-Contains `
     '^\s*sm plugins load optional/astredux/astredux_profile_controller\.smx\s*$' `
     "AstRedux does not load its declarative profile controller"
 Assert-Contains `
+    "cfg/cfgogl/astredux/plugins_2.cfg" `
+    '^\s*sm plugins load optional/l4d_weapon_limits\.smx\s*$' `
+    "AstRedux does not load the shared weapon-limits plugin"
+Assert-Contains `
+    "cfg/cfgogl/astredux/astredux.cfg" `
+    '^\s*l4d_wlimits_add 1 1 weapon_hunting_rifle weapon_sniper_military weapon_sniper_scout weapon_sniper_awp\s*$' `
+    "AstRedux does not enforce one shared team-wide sniper slot"
+foreach ($defaultWeaponSetting in @(
+    '^\s*sm_weapon\s+hunting_rifle\s+',
+    '^\s*sm_weapon\s+sniper_military\s+',
+    '^\s*sm_weapon\s+pistol\s+clipsize\s+15\s*$',
+    '^\s*sm_weapon\s+pistol_magnum\s+'
+)) {
+    Assert-NotContains `
+        "cfg/cfgogl/astredux/astredux.cfg" `
+        $defaultWeaponSetting `
+        "AstRedux still repeats a default or normally replaced weapon attribute: $defaultWeaponSetting"
+}
+Assert-Contains `
     "cfg/cfgogl/astredux/plugins_1.cfg" `
     '^\s*sm plugins load optional/astredux/astredux_autowipe\.smx\s*$' `
     "AstRedux does not load its profile-controlled AutoWipe adapter"
@@ -545,6 +564,10 @@ Assert-NotContains `
     'ast_humantankhp' `
     "The AstRedux profile controller still depends on dormant human-Tank health"
 Assert-RawContains `
+    "addons/sourcemod/scripting/astredux_profile_controller.sp" `
+    '(?s)ApplyWeaponAttributes\(profile\).*?sm_weapon smg reloadduration.*?sm_weapon smg_silenced reloadduration' `
+    "The AstRedux profile controller does not apply both profile-owned SMG reload durations"
+Assert-RawContains `
     "addons/sourcemod/scripting/astredux_autowipe.sp" `
     '(?s)if \(!g_bHasHealthSnapshot\[client\]\)\s*\{\s*continue;' `
     "AstRedux AutoWipe does not preserve directly incapacitated survivors without a control snapshot"
@@ -602,15 +625,15 @@ Assert-KeyValuesBraceBalance "addons/sourcemod/configs/cfgs.txt"
 Assert-KeyValuesBraceBalance "addons/sourcemod/configs/astredux_profiles.cfg"
 
 foreach ($profile in @(
-    @{ Players = 1; Health = 1200; WaveSize = 3; WaveInterval = "10.0" },
-    @{ Players = 2; Health = 2550; WaveSize = 3; WaveInterval = "15.0" },
-    @{ Players = 3; Health = 4500; WaveSize = 5; WaveInterval = "26.0" },
-    @{ Players = 4; Health = 6750; WaveSize = 6; WaveInterval = "22.0" }
+    @{ Players = 1; Health = 1200; SmgReload = "1.4"; SilencedReload = "1.5"; WaveSize = 3; WaveInterval = "10.0" },
+    @{ Players = 2; Health = 2550; SmgReload = "1.74"; SilencedReload = "1.85"; WaveSize = 3; WaveInterval = "15.0" },
+    @{ Players = 3; Health = 4500; SmgReload = "1.9"; SilencedReload = "2.235291"; WaveSize = 5; WaveInterval = "26.0" },
+    @{ Players = 4; Health = 6750; SmgReload = "1.9"; SilencedReload = "2.235291"; WaveSize = 6; WaveInterval = "22.0" }
 )) {
     $profileText = Get-KeyValuesSectionContent "addons/sourcemod/configs/astredux_profiles.cfg" "players_$($profile.Players)"
-    $valuePattern = '(?s)"spawn_health"\s*"' + $profile.Health + '".*?"melee_damage"\s*"300".*?"wave_size"\s*"' + $profile.WaveSize + '".*?"wave_interval"\s*"' + [regex]::Escape($profile.WaveInterval) + '"'
+    $valuePattern = '(?s)"spawn_health"\s*"' + $profile.Health + '".*?"melee_damage"\s*"300".*?"smg_reload_duration"\s*"' + [regex]::Escape($profile.SmgReload) + '".*?"smg_silenced_reload_duration"\s*"' + [regex]::Escape($profile.SilencedReload) + '".*?"wave_size"\s*"' + $profile.WaveSize + '".*?"wave_interval"\s*"' + [regex]::Escape($profile.WaveInterval) + '"'
     if ($null -eq $profileText -or $profileText -notmatch $valuePattern) {
-        Add-Failure "AstRedux players_$($profile.Players) profile does not expose the expected Tank and SI values"
+        Add-Failure "AstRedux players_$($profile.Players) profile does not expose the expected Tank, weapon, and SI values"
     }
 }
 

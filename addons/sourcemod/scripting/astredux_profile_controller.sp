@@ -17,6 +17,8 @@ enum struct ProfileData
     float tankMeleeDamage;
     bool noWitch;
     bool autowipe;
+    float smgReloadDuration;
+    float silencedSmgReloadDuration;
     int waveSize;
     float waveInterval;
     int hunterLimit;
@@ -33,7 +35,7 @@ public Plugin myinfo =
     name = "AstRedux Profile Controller",
     author = "norths7ar",
     description = "Applies declarative AstRedux player-count profiles.",
-    version = "0.1.0"
+    version = "0.2.0"
 };
 
 ConVar g_cvCurrentProfile;
@@ -59,7 +61,7 @@ bool g_bNoWitch = true;
 
 public void OnPluginStart()
 {
-    CreateConVar("astredux_profile_version", "0.1.0", "AstRedux profile controller version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
+    CreateConVar("astredux_profile_version", "0.2.0", "AstRedux profile controller version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
     g_cvCurrentProfile = CreateConVar("astredux_profile_current", "1", "Currently applied AstRedux player profile.", FCVAR_NOTIFY, true, 1.0, true, 4.0);
     g_cvForcedProfile = CreateConVar("astredux_profile_forced", "0", "Force an AstRedux profile; 0 follows human survivor count.", FCVAR_NOTIFY, true, 0.0, true, 4.0);
     g_cvTankHealth = CreateConVar("astredux_tank_spawn_health", "1200", "Final health assigned to newly spawned Tanks.", FCVAR_NOTIFY, true, 1.0);
@@ -326,6 +328,7 @@ bool ApplyProfile(int players, const char[] reason)
 
     SetExistingConVarFloat("ast_sitimer_new", profile.waveInterval);
     SetExistingConVarInt("ast_silimit_new", profile.waveSize);
+    ApplyWeaponAttributes(profile);
 
     float engineScale = g_cvTankEngineScale.FloatValue;
     int engineTankHealth = RoundToNearest(float(profile.tankHealth) / engineScale);
@@ -395,6 +398,16 @@ bool LoadProfile(int players, ProfileData profile, ArrayList cvarNames, ArrayLis
     profile.autowipe = profiles.GetNum("autowipe", -1) == 1;
     profiles.GoBack();
 
+    if (!profiles.JumpToKey("weapons"))
+    {
+        delete profiles;
+        LogError("[AstRedux] Missing weapons block in %s.", section);
+        return false;
+    }
+    profile.smgReloadDuration = profiles.GetFloat("smg_reload_duration", -1.0);
+    profile.silencedSmgReloadDuration = profiles.GetFloat("smg_silenced_reload_duration", -1.0);
+    profiles.GoBack();
+
     if (!profiles.JumpToKey("special_infected"))
     {
         delete profiles;
@@ -442,7 +455,7 @@ bool LoadProfile(int players, ProfileData profile, ArrayList cvarNames, ArrayLis
 
 bool ValidateProfileData(ProfileData profile, const char[] section)
 {
-    if (profile.label[0] == '\0' || profile.tankHealth <= 0 || profile.tankMeleeDamage <= 0.0 || profile.waveSize < 0 || profile.waveInterval < 0.0)
+    if (profile.label[0] == '\0' || profile.tankHealth <= 0 || profile.tankMeleeDamage <= 0.0 || profile.smgReloadDuration <= 0.0 || profile.silencedSmgReloadDuration <= 0.0 || profile.waveSize < 0 || profile.waveInterval < 0.0)
     {
         LogError("[AstRedux] Invalid core values in %s.", section);
         return false;
@@ -473,6 +486,12 @@ bool ValidateCvars(ArrayList cvarNames)
 
 bool ValidateRuntimeCvars()
 {
+    if (GetCommandFlags("sm_weapon") == INVALID_FCVAR_FLAGS)
+    {
+        LogError("[AstRedux] Required server command does not exist: sm_weapon.");
+        return false;
+    }
+
     static const char requiredCvars[][] =
     {
         "ast_sitimer_new",
@@ -489,6 +508,12 @@ bool ValidateRuntimeCvars()
         }
     }
     return true;
+}
+
+void ApplyWeaponAttributes(ProfileData profile)
+{
+    ServerCommand("sm_weapon smg reloadduration %.6f", profile.smgReloadDuration);
+    ServerCommand("sm_weapon smg_silenced reloadduration %.6f", profile.silencedSmgReloadDuration);
 }
 
 void ApplyCvar(const char[] cvarName, const char[] cvarValue)
