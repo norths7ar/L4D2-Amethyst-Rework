@@ -4,7 +4,7 @@
 
 ## 判定标准
 
-- 主清单范围是 `addons/sourcemod/plugins/optional/astmod/*.smx`，共 122 个；“当前加载”表示 `astmod`、`astredux` 或 `astflex` 至少有一个模式启用该插件。
+- 主清单范围是 `addons/sourcemod/plugins/optional/astmod/*.smx`，共 121 个；“当前加载”表示 `astmod`、`astredux` 或 `astflex` 至少有一个模式启用该插件。
 - “AstMod 2.7.1 一致”只表示当前 SMX 与原包同名二进制哈希一致。
 - `repo:` 指本仓库 `addons/sourcemod/scripting/`；`AstSrc:` 指外部参考克隆 `../../repos/L4D2-AstMod-Scriptings-upstream/`。
 - “源码线索”表示值得核对的文件；只有记录了源码、编译器、include、参数和产物比较，才能升级为可重建关系。
@@ -13,10 +13,10 @@
 
 | 项目 | 数量 |
 | --- | ---: |
-| AstMod 隔离目录内的 SMX | 122 |
+| AstMod 隔离目录内的 SMX | 121 |
 | 当前加载 | 82 |
-| 当前停用 | 40 |
-| 与 AstMod 2.7.1 原包二进制完全一致 | 116 |
+| 当前停用 | 39 |
+| 与 AstMod 2.7.1 原包二进制完全一致 | 115 |
 | 本地修改或新增、二进制来源不再等同原包 | 6 |
 
 “与 2.7.1 一致”继续作为历史二进制来源判定，不代表当前 Baseline 仍停留在 2.7.1。2.8.1 配置升级没有替历史插件补出源码；新增 Wave Spawner 和本轮重建插件则由仓库直接维护构建关系。
@@ -57,7 +57,7 @@
 
 ## 按状态分类的插件清单
 
-## 1. 二进制来源已确认：与 AstMod 2.7.1 原包一致（116）
+## 1. 二进制来源已确认：与 AstMod 2.7.1 原包一致（115）
 
 这里的“已确认”只表示当前 SMX 与 2.7.1 运行包中的二进制哈希完全一致，不表示源码对应关系已经确认。
 
@@ -148,7 +148,7 @@
 - `tank_hud.smx`（海洋说明【确定来源/用途】：ProMod 插件，适合战役使用的精简化旁观 TankHUD）
 - `witch_glow.smx`（海洋说明【确定用途】：Witch Party 插件）
 
-### 未加载（40）
+### 未加载（39）
 
 #### 找到单一源码线索（27）
 
@@ -185,12 +185,11 @@
 - `confoglcompmod.smx` → `repo:confoglcompmod.sp` / `repo:archive/confoglcompmod.sp`（隔离副本，运行时未使用；当前海洋源码 clone 中没有同名文件，无法把作者回复机械映射到这一项）
 - `pause.smx` → `repo:pause.sp` / `AstSrc:pause.sp`（隔离历史副本；运行时使用仓库根共享版本）
 
-#### 仅有二进制（11）
+#### 仅有二进制（10）
 
 - `advertisements.smx`（海洋说明【确定】：广告插件；配置文件为 `addons/sourcemod/configs/advertisement.cfg`）
 - `sceneprocessor.smx`（旧版 `tls_restore_vocalize.smx` 的前置插件；新版不再加载，二进制暂留）
 - `autoadmin.smx`（海洋说明【确定用途】：进服自动获取阉割版 admin 身份，可用基础指令，如 all4dead 菜单、处死玩家和特感；笔记中另提到 `fuck`，具体是否可用未确认）
-- `clip_removal.smx`（海洋未说明用途，仍待确认）
 - `hostname.smx`（海洋说明【确定】：服务器名称；当前不加载）
 - `l4d_nowitch.smx`（海洋说明【部分确定、需验证】：老 Zonemod 插件，用于人数变动时快速开关 Witch 生成；使用 Tankifier 时可能需要重新读取插件，需验证）
 - `l4d_unscope.smx`（海洋说明【确定用途/版本背景】：老 Wingman 使用；新版本因有 bug 去除。狙击枪开镜射击后关镜，不能开镜连发）

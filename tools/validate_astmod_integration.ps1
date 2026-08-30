@@ -211,6 +211,10 @@ foreach ($match in Select-String -LiteralPath $pluginLoadConfigs -Pattern $loadP
     }
 }
 
+if (Test-Path -LiteralPath (Join-Path $Root "addons/sourcemod/plugins/optional/astmod/clip_removal.smx")) {
+    Add-Failure "Retired clip_removal.smx binary still exists"
+}
+
 foreach ($pluginConfig in @(
     "cfg/cfgogl/astmod/plugins_2.cfg",
     "cfg/cfgogl/astredux/plugins_2.cfg",
@@ -218,8 +222,8 @@ foreach ($pluginConfig in @(
 )) {
     Assert-NotContains `
         $pluginConfig `
-        '^\s*sm plugins load\s+optional/astmod/clip_removal\.smx\s*$' `
-        "Unverified clip_removal plugin is still active"
+        'clip_removal\.smx' `
+        "Retired clip_removal.smx reference still exists"
     Assert-NotContains `
         $pluginConfig `
         '^\s*sm plugins load\s+optional/astmod/l4d2_smg_reload_tweak\.smx\s*$' `

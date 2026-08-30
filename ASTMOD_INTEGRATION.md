@@ -33,7 +33,7 @@ AstMod 是持续维护的 Baseline。它已同步到 2.8.1 的配置、VScript �
 - 通用功能插件采用 Rework 共享版本；`pause.smx` 以 Rework 6.9 为主体，合入海洋版 `!p`、`!pausepanel` 和 0.1 秒延迟暂停。
 - Uzi、消音微冲、木喷、铁喷及确定性霰弹散布已与 Zonemod 同步。旧 weapon-attributes binary 不支持 `reloadduration`，`l4d2_smg_reload_tweak.smx` 会覆盖同步后的换弹参数，因此二者不再使用。
 - 旧 `sm_melee ... damageflags` 接口已停用；DAS 的近战对 Tank 倍率继续使用 `sm_weapon melee tankdamagemult`。
-- `clip_removal.smx` 仅作为上游文件保留，不加载。它没有源码、用途无法确认，Zonemod 也不使用。
+- `clip_removal.smx` 已删除。历史源码与当前二进制可追溯到 Rework 2020 年移除前的同一版本；该插件会整图禁用 `env_player_blocker`，上游因破坏地图边界和两队一致性而停用并删除。
 - `astmod.nut` 对模式初始化时的第二次 `update_diff` 增加保护，避免直接切换 matchmode 时出现瞬时 Squirrel 异常。
 
 ## 资产与来源边界
