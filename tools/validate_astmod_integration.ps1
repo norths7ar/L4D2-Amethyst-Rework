@@ -570,7 +570,7 @@ Assert-RawContains `
 Assert-NotContains `
     "addons/sourcemod/configs/astredux_profiles.cfg" `
     '2\.235291' `
-    "The obsolete silenced-SMG animation timing is still used as a weapon attribute"
+    "The over-precise legacy silenced-SMG animation timing is still used as a profile value"
 Assert-RawContains `
     "addons/sourcemod/scripting/astredux_autowipe.sp" `
     '(?s)if \(!g_bHasHealthSnapshot\[client\]\)\s*\{\s*continue;' `
@@ -631,8 +631,8 @@ Assert-KeyValuesBraceBalance "addons/sourcemod/configs/astredux_profiles.cfg"
 foreach ($profile in @(
     @{ Players = 1; Health = 1200; SmgReload = "1.4"; SilencedReload = "1.5"; WaveSize = 3; WaveInterval = "10.0" },
     @{ Players = 2; Health = 2550; SmgReload = "1.74"; SilencedReload = "1.85"; WaveSize = 3; WaveInterval = "15.0" },
-    @{ Players = 3; Health = 4500; SmgReload = "1.9"; SilencedReload = "2.0"; WaveSize = 5; WaveInterval = "26.0" },
-    @{ Players = 4; Health = 6750; SmgReload = "1.9"; SilencedReload = "2.0"; WaveSize = 6; WaveInterval = "22.0" }
+    @{ Players = 3; Health = 4500; SmgReload = "1.9"; SilencedReload = "2.24"; WaveSize = 5; WaveInterval = "26.0" },
+    @{ Players = 4; Health = 6750; SmgReload = "1.9"; SilencedReload = "2.24"; WaveSize = 6; WaveInterval = "22.0" }
 )) {
     $profileText = Get-KeyValuesSectionContent "addons/sourcemod/configs/astredux_profiles.cfg" "players_$($profile.Players)"
     $valuePattern = '(?s)"spawn_health"\s*"' + $profile.Health + '".*?"melee_damage"\s*"300".*?"smg_reload_duration"\s*"' + [regex]::Escape($profile.SmgReload) + '".*?"smg_silenced_reload_duration"\s*"' + [regex]::Escape($profile.SilencedReload) + '".*?"wave_size"\s*"' + $profile.WaveSize + '".*?"wave_interval"\s*"' + [regex]::Escape($profile.WaveInterval) + '"'
