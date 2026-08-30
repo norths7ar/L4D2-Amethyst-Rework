@@ -530,6 +530,18 @@ Assert-Contains `
     "Challenge does not expose the admin reset command"
 Assert-RawContains `
     "addons/sourcemod/scripting/challenge.sp" `
+    'public void L4D_OnFirstSurvivorLeftSafeArea_Post\(int client\)' `
+    "Challenge does not announce wave settings from the post safe-area forward"
+Assert-NotContains `
+    "addons/sourcemod/scripting/challenge.sp" `
+    'public Action L4D_OnFirstSurvivorLeftSafeArea\(int client\)' `
+    "Challenge still uses the repeatedly triggered pre safe-area forward"
+Assert-NotContains `
+    "addons/sourcemod/scripting/challenge.sp" `
+    '\[AstMod\]|\[\{olive\}AstMod\{default\}\]' `
+    "Challenge still exposes the legacy AstMod chat prefix"
+Assert-RawContains `
+    "addons/sourcemod/scripting/challenge.sp" `
     '(?s)public Action OnInfectedDeath.*?isSurvivor\(attacker\).*?iKillCI\[attacker\]\+\+.*?iKillCI\[attacker\] % GetConVarInt\(hReammoCI\)' `
     "Challenge does not count common-infected kills for a survivor attacker"
 Assert-NotContains `
