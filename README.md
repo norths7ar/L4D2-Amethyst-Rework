@@ -37,14 +37,14 @@ AstMod 是可玩的维护基线，接入 Competitive Rework 所必需的兼容�
 - `tankdamagemult` 依赖武器属性插件的具体接口和二进制行为；更换插件版本后，即使 cfg 没变，伤害链路也可能失效或改变。插件动态 load/unload 与 Rework 负责的模式生命周期也存在职责重叠。
 - 一份 cfg 同时承担“数值表”和“执行脚本”，难以区分哪些是人数基线、哪些是运行时开关，也不利于以后让 `/tz` 投票作为临时 override 覆盖 profile。
 
-Redux 因此把人数档改为声明式 profile：配置直接写最终 Tank 血量、固定近战伤害、微冲换弹时长、刷特参数和各项 CVar。当前 Controller 负责选择 profile、下发 CVar 和武器属性，以及执行 Tank 与 No-Witch 规则；AutoWipe 等独立 adapter 常驻加载并由 profile CVar 控制。1P/2P 分别沿用 2.8.1 的 1.4/1.5 秒和 1.74/1.85 秒 Uzi/消音微冲换弹补偿；3P/4P 保留共享基准的 1.9 秒 Uzi，并把消音微冲恢复为 `ReloadDuration` 的引擎默认值 2.0 秒。完整配置以 [`addons/sourcemod/configs/astredux_profiles.cfg`](addons/sourcemod/configs/astredux_profiles.cfg) 为准。
+Redux 因此把人数档改为声明式 profile：配置直接写最终 Tank 血量、固定近战伤害、微冲换弹时长、刷特参数和各项 CVar。当前 Controller 负责选择 profile、下发 CVar 和武器属性，以及执行 Tank 与 No-Witch 规则；AutoWipe 等独立 adapter 常驻加载并由 profile CVar 控制。1P/2P 分别沿用 2.8.1 的 1.4/1.5 秒和 1.74/1.85 秒 Uzi/消音微冲换弹补偿；3P/4P 采用 ZoneMod 2.9 的 1.9 秒 Uzi，并把消音微冲恢复到约 2.24 秒的原版换弹时长。完整配置以 [`addons/sourcemod/configs/astredux_profiles.cfg`](addons/sourcemod/configs/astredux_profiles.cfg) 为准。
 
 | Profile | Tank 最终血量 | 固定近战伤害 | Uzi / 消音微冲换弹 | 当前波次参数 |
 | --- | ---: | ---: | ---: | --- |
 | 1P | 1200 | 300 | 1.4 / 1.5 秒 | 3 特 / 10 秒 |
 | 2P | 2550 | 300 | 1.74 / 1.85 秒 | 3 特 / 15 秒 |
-| 3P | 4500 | 300 | 1.9 / 2.0 秒 | 5 特 / 26 秒 |
-| 4P | 6750 | 300 | 1.9 / 2.0 秒 | 6 特 / 22 秒 |
+| 3P | 4500 | 300 | 1.9 / 2.24 秒 | 5 特 / 26 秒 |
+| 4P | 6750 | 300 | 1.9 / 2.24 秒 | 6 特 / 22 秒 |
 
 Profile Controller 每秒检查人数，并在 `player_team` 后补做一次检查；管理员可用 `sm_astredux_profile_force 1..4` 强制诊断，使用 `0` 恢复自动选择。AstRedux 已形成“profile 基线 + 临时 override”分层：玩家死亡不降档，玩家退出后新 profile 立即成为后续规则来源，但不追溯修改场上已经生成的 Tank。临时玩法调整会跨地图保留；最后一名真人离开后延迟恢复当前人数档默认值，管理员也可用 `!astreset` 立即恢复。
 
