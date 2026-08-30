@@ -383,7 +383,7 @@ public void TZ_CallVote(int client, int target, int value)
 		int iNumPlayers;
 		int iPlayers[MAXPLAYERS];
 		for (int i = 1; i <= MaxClients; i++) {
-			if (!IsClientInGame(i) || IsFakeClient(i) || (GetClientTeam(i) != TEAM_SURVIVORS)) {
+			if (!IsClientInGame(i) || IsFakeClient(i) || !isSurvivor(i)) {
 				continue;
 			}
 			iPlayers[iNumPlayers++] = i;
@@ -894,7 +894,7 @@ public void TZ_CallVoteStr(int client, int target, char[] param1)
 		int iPlayers[MAXPLAYERS];
 		for (int i = 1; i <= MaxClients; i++)
 		{
-			if (!IsClientInGame(i) || IsFakeClient(i) || (GetClientTeam(i) != TEAM_SURVIVORS))
+			if (!IsClientInGame(i) || IsFakeClient(i) || !isSurvivor(i))
 			{
 				continue;
 			}
@@ -1284,17 +1284,20 @@ public Action OnPlayerDeath(Handle event, const char[] name, bool dontBroadcast)
 {
 	int victim = GetClientOfUserId(GetEventInt(event, "userid"));
 	int attacker = GetClientOfUserId(GetEventInt(event, "attacker"));
-	if (attacker == 0 || victim == 0 || GetClientTeam(attacker) == TEAM_SPECTATORS) return Plugin_Handled;
-	int zombie = GetZombieClass(victim);
+	if (attacker == 0 || victim == 0) return Plugin_Handled;
+	if (!isInfected(victim)) return Plugin_Handled;
+	int zombie_class = GetZombieClass(victim);
+
 	// 击杀回血
-	if (GetConVarBool(hRehealth)) {
+	if (GetConVarBool(hRehealth) && isSurvivor(attacker) && GetEntProp(attacker, Prop_Send, "m_isIncapacitated") == 0) {
 		bool headshot = GetEventBool(event, "headshot");
 		char weapon[64];
 		GetEventString(event, "weapon", weapon, sizeof(weapon));
 		int HP = GetEntProp(attacker, Prop_Data, "m_iHealth");
 		int tHP = GetClientHealth(attacker);
 		int addHP = 0;
-		switch (zombie) {
+
+		switch (zombie_class) {
 			case 1: {
 				addHP++;
 			} 		// Smoker
@@ -1323,59 +1326,58 @@ public Action OnPlayerDeath(Handle event, const char[] name, bool dontBroadcast)
 			}
 			case 7: {} 		// Witch
 			case 8: {} 		// Tank
-		} // switch
+		} // switch end
 		// 额外加血，降低难度
-		if (zombie > 0 && headshot) addHP++; // 爆头额外加血
-		if (40 < HP < 70)
+		if (zombie_class > 0 && headshot) addHP++; // 爆头额外加血
+		if (HP > 40 && HP < 70)
 			addHP += 2;
 		else if (HP > 20)
 			addHP += 3;
 		else if (HP <= 10 && tHP < 40)
 			addHP += 7;
 		SetEntProp(attacker, Prop_Data, "m_iHealth", HP + addHP);
-		//PrintToChat(attacker, "击杀 %i, 获得 addHP 点血量.");
+		//PrintToChat(attacker, "击杀 %i, 获得 %i 点血量.", zombie_class, addHP);
 
 		if (HP + addHP > 100) // 血量上限 100
 			SetEntProp(attacker, Prop_Data, "m_iHealth", 100);
 	}
 
 	// 击杀回复备弹，打开开关才开始计数
-	if (GetConVarBool(hReammo)) {
+	if (GetConVarBool(hReammo) && isSurvivor(attacker)) {
 		int iPrimaryWeaponId = GetPlayerWeaponSlot(attacker, 0);
 		if (iPrimaryWeaponId == -1) return Plugin_Handled; // 无主武器
 		char sPrimaryWeapon[32];
 		GetEdictClassname(iPrimaryWeaponId, sPrimaryWeapon, sizeof(sPrimaryWeapon));
 
 		int ammoOffset = FindSendPropInfo("CCSPlayer", "m_iAmmo");
-		if (zombie < ZC_WITCH) {
+		if (zombie_class < ZC_WITCH) {
 			iKillSI[attacker]++;
 		}
-		if (zombie == ZC_WITCH || iKillSI[attacker] % GetConVarInt(hReammoSI) == 0) {
+		if (zombie_class == ZC_WITCH || iKillSI[attacker] % GetConVarInt(hReammoSI) == 0) {
 			giveAmmo(attacker, sPrimaryWeapon, ammoOffset);
 		}
-		if (zombie == ZC_TANK) {
+		if (zombie_class == ZC_TANK) {
 			for (int client = 1; client <= MaxClients; ++client) {
-				if (!IsClientInGame(client) || IsFakeClient(client) || (GetClientTeam(client) != TEAM_SURVIVORS))  continue;
+				if (!IsClientInGame(client) || IsFakeClient(client) || !isSurvivor(client))  continue;
 				giveAmmo(client, sPrimaryWeapon, ammoOffset);
 			}
 		}
 	}
 
 	// Unhook OnTakeDamage
-	if ( isInfected(victim) ) {
-		bIsUsingAbility[victim] = false;
-		SDKUnhook(victim, SDKHook_OnTakeDamage, OnTakeDamage);
-	}
+	bIsUsingAbility[victim] = false;
+	SDKUnhook(victim, SDKHook_OnTakeDamage, OnTakeDamage);
+	
 	return Plugin_Continue;
 }
 
 public Action OnInfectedDeath(Handle event, const char[] name, bool dontBroadcast)
 {
-	int victim = GetClientOfUserId(GetEventInt(event, "infected_id"));
 	int attacker = GetClientOfUserId(GetEventInt(event, "attacker"));
-	if (attacker == 0 || victim == 0 || GetClientTeam(attacker) == TEAM_SPECTATORS) return Plugin_Handled;
+	if (!isSurvivor(attacker)) return Plugin_Handled;
 
 	if (GetConVarBool(hReammo)) {
+		iKillCI[attacker]++;
 		int iPrimaryWeaponId = GetPlayerWeaponSlot(attacker, 0);
 		if (iPrimaryWeaponId == -1) return Plugin_Handled; // 无主武器
 		char sPrimaryWeapon[32];
@@ -1501,7 +1503,7 @@ stock bool IsClientAndInGame(int index) {
 
 public bool IsClientSurvivor(int client, bool isMenu) {
 	if ( !IsClientAndInGame(client) ) return false;
-	if (GetClientTeam(client) != TEAM_SURVIVORS) {
+	if (!isSurvivor(client)) {
 		if (isMenu) {
 			PrintToChat(client, "\x04[AstMod] \x01仅限生还者选择!");
 		}
@@ -1553,7 +1555,7 @@ int CountHumanSurvivors()
 {
 	int count;
 	for (int i = 1; i <= MaxClients; i++) {
-		if (IsClientInGame(i) && !IsFakeClient(i) && GetClientTeam(i) == TEAM_SURVIVORS) count++;
+		if (IsClientInGame(i) && !IsFakeClient(i) && isSurvivor(i)) count++;
 	}
 	return count;
 }
@@ -1677,40 +1679,40 @@ public Action OnTakeDamage(int victim, int& attacker, int& inflictor, float& dam
 
 	if ( !IsClientAndInGame(victim) || !IsClientAndInGame(attacker) ) return Plugin_Continue;
 
-	if (GetClientTeam(victim) == TEAM_INFECTED && GetZombieClass(victim) == ZC_SMOKER && bIsUsingAbility[victim]) { // 秒舌头
+	if (isInfected(victim) && GetZombieClass(victim) == ZC_SMOKER && bIsUsingAbility[victim]) { // 秒舌头
 		damage = GetConVarFloat(FindConVar("z_gas_health"));
 		return Plugin_Changed;
 	}
-	if ( GetClientTeam(attacker) == TEAM_INFECTED &&
-		( GetZombieClass(attacker) == ZC_SMOKER ||
-		GetZombieClass(attacker) == ZC_HUNTER ||
-		GetZombieClass(attacker) == ZC_JOCKEY ||
-		GetZombieClass(attacker) == ZC_CHARGER ) ) { // 舌ht猴牛
-		float fdamage = GetConVarFloat(hDmgThreshold);
-		if ( GetConVarBool(hRatioDamage) ) { // 按特感比例扣血
-			int iHP = GetEntProp(attacker, Prop_Data, "m_iHealth"); // 获取特感血量
-			int iHPmax = GetEntProp(attacker, Prop_Data, "m_iMaxHealth"); // 获取特感满血血量
-			float fiHP = float(iHP); // 转成浮点型
-			float fiHPmax = float(iHPmax);
-			float ratio = fiHP / fiHPmax;
-			fdamage = GetConVarFloat(hDmgThreshold) * ratio;
-			if (fdamage < 1.0) { // 避免无伤害不处死特感
-				fdamage = 1.0;
-			}
-		}
-		fDmgPrint = fdamage;
-		damage = fdamage;
+	if ( !isInfected(attacker) ) return Plugin_Continue;
 
-		if (GetZombieClass(attacker) == ZC_HUNTER && GetEntityMoveType(victim) & MOVETYPE_LADDER) { // 在梯子上被扑
-			damage = 0.0;
-		}
+	int zombie_class = GetZombieClass(attacker);
+	if ( zombie_class != ZC_SMOKER && zombie_class != ZC_HUNTER && zombie_class != ZC_JOCKEY && zombie_class != ZC_CHARGER ) return Plugin_Continue;
 
-		if (GetZombieClass(attacker) == ZC_CHARGER && bIsUsingAbility[attacker]) { // 牛撞停不造成伤害，防止过早处死导致pummel end事件不触发，进而导致起身没有无敌。
-			damage = 0.0;
+	float fdamage = GetConVarFloat(hDmgThreshold);
+	if ( GetConVarBool(hRatioDamage) ) { // 按特感比例扣血
+		int iHP = GetEntProp(attacker, Prop_Data, "m_iHealth"); // 获取特感血量
+		int iHPmax = GetEntProp(attacker, Prop_Data, "m_iMaxHealth"); // 获取特感满血血量
+		float fiHP = float(iHP); // 转成浮点型
+		float fiHPmax = float(iHPmax);
+		float ratio = fiHP / fiHPmax;
+		fdamage = GetConVarFloat(hDmgThreshold) * ratio;
+		if (fdamage < 1.0) { // 避免无伤害不处死特感
+			fdamage = 1.0;
 		}
-		return Plugin_Changed;
 	}
-	else return Plugin_Continue;
+	fDmgPrint = fdamage;
+	damage = fdamage;
+
+	// 在梯子上被扑不造成伤害，防止生还卡在梯子上无法起身。
+	if (zombie_class == ZC_HUNTER && GetEntityMoveType(victim) & MOVETYPE_LADDER) {
+		damage = 0.0;
+	}
+
+	// 牛撞停不造成伤害，防止过早处死导致pummel end事件不触发，进而导致起身没有无敌。
+	if (zombie_class == ZC_CHARGER && bIsUsingAbility[attacker]) {
+		damage = 0.0;
+	}
+	return Plugin_Changed;
 }
 
 public Action OnPlayerHurt(Handle event, const char[] name, bool dontBroadcast)
@@ -1724,7 +1726,7 @@ public Action OnPlayerHurt(Handle event, const char[] name, bool dontBroadcast)
 	int damage = GetEventInt(event, "dmg_health");
 	int zombie_class = GetZombieClass(attacker);
 
-	if (GetClientTeam(attacker) == TEAM_INFECTED && GetClientTeam(victim) == TEAM_SURVIVORS && zombie_class != ZC_TANK && damage > 0)
+	if (isInfected(attacker) && isSurvivor(victim) && zombie_class != ZC_TANK && damage > 0)
 	{
 		int remaining_health = GetClientHealth(attacker);
 		ForcePlayerSuicide(attacker);
@@ -1738,6 +1740,10 @@ public Action OnPlayerHurt(Handle event, const char[] name, bool dontBroadcast)
 
 stock bool isInfected(int client) {
 	return IsClientAndInGame(client) && GetClientTeam(client) == TEAM_INFECTED;
+}
+
+stock bool isSurvivor(int client) {
+	return IsClientAndInGame(client) && GetClientTeam(client) == TEAM_SURVIVORS;
 }
 
 // Gets players out of pending animations, i.e. sets their current frame in the animation to 1000.
