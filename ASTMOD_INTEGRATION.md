@@ -30,6 +30,9 @@ AstMod 是持续维护的 Baseline。它已同步到 2.8.1 的配置、VScript �
 - `!vote` 通过 `!ast` 打开玩法调整；`!tz` 作为兼容短命令保留，`!settings` 也继续可用。单人生还者直接调整，多人生还者发起投票；天气和激光不再属于菜单选项。
 - 临时玩法调整跨地图保留，最后一名真人离开后延迟恢复当前 DAS/profile 默认值；管理员可用 `!astreset` 立即走同一恢复路径。只有存在非默认调整时才周期播报，新玩家进入时会收到当前人数档和波次状态。
 - 新版刷特由作者仓库提交 `c0d829f` 的 `wave_spawner.sp` 编译；2.8.1 运行包只有加载行而缺少成品 SMX。Challenge 仍负责新旧机制投票，旧版实际刷新仍由 VScript 执行，不再在 Challenge 中重复维护新版波次 CVar 和 `!si`。
+- Challenge 已修正濒死生还者击杀特感仍回血、普通感染者事件误读 `infected_id`、小僵尸击杀不累加以及生命值链式比较问题；AstMod 与 AstRedux 两份 SMX 均由同一修正源码重建，仍待实机复测回血与备弹。
+- `versus_coop_mode.smx` 已将 Director 中相邻的一字节回合状态字段由四字节写改为 `NumberType_Int8`，避免回合重开时覆盖后续指针；海洋按原崩溃路径复测后未再出现问题。
+- `jointeam.smx` 已恢复仓库源码，补充 ReadyUp 兼容 Forward。其管理员命令 `sm_fuck <名称|all>` 使用 ban flag，只按 Bot 名称处死 AI 特感，不会处死人类感染者。
 - 通用功能插件采用 Rework 共享版本；`pause.smx` 以 Rework 6.9 为主体，合入海洋版 `!p`、`!pausepanel` 和 0.1 秒延迟暂停。
 - Uzi、消音微冲、木喷、铁喷及确定性霰弹散布已与 Zonemod 同步。旧 weapon-attributes binary 不支持 `reloadduration`，`l4d2_smg_reload_tweak.smx` 会覆盖同步后的换弹参数，因此二者不再使用。
 - 旧 `sm_melee ... damageflags` 接口已停用；DAS 的近战对 Tank 倍率继续使用 `sm_weapon melee tankdamagemult`。
@@ -42,9 +45,13 @@ AstMod 是持续维护的 Baseline。它已同步到 2.8.1 的配置、VScript �
 - `addons/astmod.vpk` 提供 `astmod`、`astredux` 和历史 `hunter` mutation。可审阅源文件位于 `assets/astmod_vpk/`，可用 `tools/build_astmod_vpk.ps1` 重建。
 - 2026-08-16 与当时 App 222860 的官方 `gamemodes.txt` 比较，当前副本只在末尾追加自定义模式。游戏更新后仍需重新比较，其他携带同名文件的 addon 也可能产生加载顺序冲突。
 - AstMod 运行包引入内容主要包括模式 cfg、VScript、Stripper、VPK、`optional/astmod/` 插件池、`cfgs.txt` 及所需 data/gamedata/translations；没有用旧版 SourceMod/MetaMod core 覆盖 Rework。当前 Baseline 以 2.8.1 为更新基准，历史文件不因升级而自动获得源码对应关系。
-- 本项目修改并维护 ACS、vote、Challenge 和 AI_HardSI；其余历史二进制的源码覆盖与重建能力以 `PLUGIN_SOURCE_INVENTORY.md` 为准。
+- 本项目修改并维护 ACS、vote、Challenge、AI_HardSI、jointeam 和 versus_coop_mode，并直接维护 Wave Spawner 的构建关系；其余历史二进制的源码覆盖与重建能力以 `PLUGIN_SOURCE_INVENTORY.md` 为准。
 - `server.smx` 已移除；空服换图不是必需行为，服务器进程重启应交给 systemd 等宿主服务管理，而不是依赖插件触发 `sv_crash`。
 - `tls_restore_vocalize.smx` 已更新为不再需要 `sceneprocessor.smx` 的版本；后者保留在插件池中但不加载，仍需实机确认笑声等 vocalize 功能。
+
+## 已知问题
+
+- `AI_HardSI.smx` 的循环 Timer 使用 `TIMER_FLAG_NO_MAPCHANGE`，换图时 Handle 会由 SourceMod 自动关闭，但全局引用没有在 `OnMapEnd` 清空；下一次 `round_start` 再次 `delete` 该旧引用时可能报告 `Handle is invalid`。该问题已定位但尚未修复。
 
 ## 校验与测试
 
