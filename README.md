@@ -22,7 +22,7 @@ AstMod 是可玩的维护基线，接入 Competitive Rework 所必需的兼容�
 | --- | --- | --- |
 | 人数规则 | `difficulty_adjustment_system.smx` 按人数选择 Easy / Normal / Hard / Impossible cfg | Profile Controller 读取 `astredux_profiles.cfg`，直接选择 1P–4P profile |
 | 人数语义 | 以仍在生还者队伍中的真人数量为准 | 保留同一语义：玩家退出会降档，玩家死亡但没有退出不会降档 |
-| 规则表达 | 每个难度 cfg 同时修改 Tank、特感、尸潮、互动时长、药品和插件状态 | 每个 profile 声明该人数档的最终规则，由常驻 Controller 和 adapter 执行 |
+| 规则表达 | 每个难度 cfg 同时修改 Tank、特感、尸潮、互动时长、药品和插件状态 | 每个 profile 声明该人数档的最终规则，包括少人档的微冲换弹补偿，由常驻 Controller 和 adapter 执行 |
 | Tank 与近战 | Tank 基础血量、mutation 倍率、引擎百分比伤害和 `tankdamagemult` 共同决定结果 | Profile 直接声明 Tank 最终血量和固定近战伤害；当前均为每刀 300，电锯除外 |
 | 已生成的 Tank | 沿用旧 DAS 行为 | 人数变化立即覆盖新规则，但不追溯修改场上已经生成的 Tank |
 | 刷特 | 使用海洋源码仓库提交 `c0d829f` 的 `wave_spawner.sp`，保留 Challenge 中的新旧机制投票；旧机制仍由 VScript 执行 | 复用同一 Wave Spawner，由声明式 profile 提供当前人数档的波次数量与间隔 |
@@ -37,14 +37,14 @@ AstMod 是可玩的维护基线，接入 Competitive Rework 所必需的兼容�
 - `tankdamagemult` 依赖武器属性插件的具体接口和二进制行为；更换插件版本后，即使 cfg 没变，伤害链路也可能失效或改变。插件动态 load/unload 与 Rework 负责的模式生命周期也存在职责重叠。
 - 一份 cfg 同时承担“数值表”和“执行脚本”，难以区分哪些是人数基线、哪些是运行时开关，也不利于以后让 `/tz` 投票作为临时 override 覆盖 profile。
 
-Redux 因此把人数档改为声明式 profile：配置直接写最终 Tank 血量、固定近战伤害、刷特参数和各项 CVar。当前 Controller 负责选择 profile、下发 CVar以及执行 Tank 与 No-Witch 规则，AutoWipe 等独立 adapter 常驻加载并由 profile CVar 控制。当前数值如下，完整配置以 [`addons/sourcemod/configs/astredux_profiles.cfg`](addons/sourcemod/configs/astredux_profiles.cfg) 为准。
+Redux 因此把人数档改为声明式 profile：配置直接写最终 Tank 血量、固定近战伤害、微冲换弹时长、刷特参数和各项 CVar。当前 Controller 负责选择 profile、下发 CVar 和武器属性，以及执行 Tank 与 No-Witch 规则；AutoWipe 等独立 adapter 常驻加载并由 profile CVar 控制。1P/2P 分别沿用 2.8.1 的 1.4/1.5 秒和 1.74/1.85 秒 Uzi/消音微冲换弹补偿，3P/4P 回到 1.9 秒 Uzi 与原始消音微冲时长。完整配置以 [`addons/sourcemod/configs/astredux_profiles.cfg`](addons/sourcemod/configs/astredux_profiles.cfg) 为准。
 
-| Profile | Tank 最终血量 | 固定近战伤害 | 当前波次参数 |
-| --- | ---: | ---: | --- |
-| 1P | 1200 | 300 | 3 特 / 10 秒 |
-| 2P | 2550 | 300 | 3 特 / 15 秒 |
-| 3P | 4500 | 300 | 5 特 / 26 秒 |
-| 4P | 6750 | 300 | 6 特 / 22 秒 |
+| Profile | Tank 最终血量 | 固定近战伤害 | Uzi / 消音微冲换弹 | 当前波次参数 |
+| --- | ---: | ---: | ---: | --- |
+| 1P | 1200 | 300 | 1.4 / 1.5 秒 | 3 特 / 10 秒 |
+| 2P | 2550 | 300 | 1.74 / 1.85 秒 | 3 特 / 15 秒 |
+| 3P | 4500 | 300 | 1.9 / 2.235291 秒 | 5 特 / 26 秒 |
+| 4P | 6750 | 300 | 1.9 / 2.235291 秒 | 6 特 / 22 秒 |
 
 Profile Controller 每秒检查人数，并在 `player_team` 后补做一次检查；管理员可用 `sm_astredux_profile_force 1..4` 强制诊断，使用 `0` 恢复自动选择。AstRedux 已形成“profile 基线 + 临时 override”分层：玩家死亡不降档，玩家退出后新 profile 立即成为后续规则来源，但不追溯修改场上已经生成的 Tank。临时玩法调整会跨地图保留；最后一名真人离开后延迟恢复当前人数档默认值，管理员也可用 `!astreset` 立即恢复。
 
@@ -54,6 +54,7 @@ Profile Controller 每秒检查人数，并在 `player_team` 后补做一次检�
 - `cfg/generalfixes.cfg` 保留所有模式都适用的修复与通用体验调整；竞技规则位于 `cfg/competitive_shared.cfg`，Ast 系列只加载 `jointeam.smx`，不会同时加载 `playermanagement.smx`。
 - `pause.smx` 以 Competitive Rework 6.9 为主体，合入 `!p`、`!pausepanel` 和 0.1 秒延迟暂停；换位、插值、旁观速率、开位和 Boss 投票统一使用 Rework 的共享版本。
 - AstMod 的 Uzi、消音微冲、木喷、铁喷和确定性霰弹散布已与当前 Zonemod 同步；57 张官图 Stripper 配置也从 Zonemod 同步，未覆盖第三方地图文件和 global filters。
+- AstRedux 在共享武器基准之上为 1P/2P 恢复微冲换弹补偿，并把猎枪、军狙、Scout 和 AWP 作为同一组限制为全队最多一把；只写主动改变的武器属性，不重复马格南、手枪或通常会被替换掉的原版狙击属性。
 - ACS 与 `!vote` 继续读取人工维护的 `cfgs.txt`，但会隐藏首图尚未安装的战役条目。
 - `!vote` 中的 Ast 玩法入口改为 `!ast`；`!tz` 保留为短兼容命令，`!settings` 继续可用。天气和激光已从玩法菜单移除；单人生还者直接调整并广播，多人生还者必须投票。
 - AstRedux 与 Baseline 的差异、旧 DAS 的问题和当前 profile 记录在上节；AstMod Baseline 仍保留 DAS，但已同步 2.8.1 的波次参数和功能更新。
