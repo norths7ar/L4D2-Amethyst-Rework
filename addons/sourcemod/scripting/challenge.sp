@@ -150,13 +150,12 @@ public Action OnRoundStart(Handle event, const char[] name, bool dontBroadcast)
 	return Plugin_Handled;
 }
 
-public Action L4D_OnFirstSurvivorLeftSafeArea(int client)
+public void L4D_OnFirstSurvivorLeftSafeArea_Post(int client)
 {
 	// 出门输出特感刷新参数
 	float fTimerCurrent = GetConVarFloat(FindConVar("ast_sitimer_new"));
 	int iLimitCurrent = GetConVarInt(FindConVar("ast_silimit_new"));
-	PrintToChatAll("\x04[AstMod] \x01当前刷新速率：\x03%.1f秒%i特\x01.", fTimerCurrent, iLimitCurrent);
-	return Plugin_Continue;
+	PrintToChatAll("\x04[Ast] \x01当前刷新速率：\x03%.1f秒%i特\x01.", fTimerCurrent, iLimitCurrent);
 }
 
 public Action challengeRequest(int client, int args)
@@ -230,7 +229,7 @@ public Action drawPanel(int client, int first_item)
 
 	// 清除已选未投票状态
 	if (FindConVar("weapon_allow_m2_hunter") == null) {
-		PrintToChat(client, "\x04[AstMod] \x05l4d2_hunter_no_deadstops.smx \x01插件未安装，请联系管理员.");
+		PrintToChat(client, "\x04[Ast] \x05l4d2_hunter_no_deadstops.smx \x01插件未安装，请联系管理员.");
 		return Plugin_Handled;
 	}
 	ConVar hM2HunterWeapon = FindConVar("weapon_allow_m2_hunter");
@@ -273,7 +272,7 @@ public int MenuHandler(Handle menu, MenuAction action, int client, int param)
 				if (GetDifficulty() == 1)
 					Menu_SIDamage(client, false);
 				else {
-					PrintToChat(client, "\x04[AstMod] \x01当前模式不支持调整特感伤害.");
+					PrintToChat(client, "\x04[Ast] \x01当前模式不支持调整特感伤害.");
 					drawPanel(client, 0);
 				}
 			}
@@ -314,7 +313,7 @@ public int MenuHandler(Handle menu, MenuAction action, int client, int param)
 				ConVar hHardSIEnable = FindConVar("ai_hardsi_enable");
 				if (hHardSIEnable == null)
 				{
-					PrintToChat(client, "\x04[AstMod] \x05AI_HardSI.smx \x01插件未安装，请联系管理员.");
+					PrintToChat(client, "\x04[Ast] \x05AI_HardSI.smx \x01插件未安装，请联系管理员.");
 					drawPanel(client, 7);
 					return 1;
 				}
@@ -855,7 +854,7 @@ public int Menu_SITimerHandler(Handle menu, MenuAction action, int client, int p
 				Format(buffer, sizeof(buffer), "%s", timerOptions[param]);
 				TZ_CallVoteStr(client, 1, buffer);
 			} else {
-				PrintToChat(client, "\x04[AstMod] \x01此选项仅支持旧版刷特机制！请使用 !si 指令.");
+				PrintToChat(client, "\x04[Ast] \x01此选项仅支持旧版刷特机制！请使用 !si 指令.");
 			}
 		}
 		// 处理模式切换（新版 / 旧版 刷特）
@@ -1038,7 +1037,7 @@ public void ResetSettings(bool announce)
 public Action Menu_MorePills(int client, int args)
 {
 	if (FindConVar("ast_pills_map_kill") == null) {
-		PrintToChat(client, "\x04[AstMod] \x05pills_giver.smx \x01插件未安装，请联系管理员.");
+		PrintToChat(client, "\x04[Ast] \x05pills_giver.smx \x01插件未安装，请联系管理员.");
 		drawPanel(client, 0);
 		return Plugin_Handled;
 	}
@@ -1078,7 +1077,7 @@ public int Menu_MorePillsHandler(Handle menu, MenuAction action, int client, int
 public Action Menu_Tank(int client, int args)
 {
 	if (FindConVar("ai_tank_bhop") == null) {
-		PrintToChat(client, "\x04[AstMod] \x05AI_HardSI.smx \x01插件未安装，请联系管理员.");
+		PrintToChat(client, "\x04[Ast] \x05AI_HardSI.smx \x01插件未安装，请联系管理员.");
 		drawPanel(client, 0);
 		return Plugin_Handled;
 	}
@@ -1160,7 +1159,7 @@ public Action Menu_PlayerInfected(int client, int args)
 	ConVar hAllowHumanTank = FindConVar("ast_allowhumantank");
 
 	if (hMaxInfected == null) {
-		PrintToChat(client, "\x04[AstMod] \x05jointeam.smx \x01插件未安装，请联系管理员.");
+		PrintToChat(client, "\x04[Ast] \x05jointeam.smx \x01插件未安装，请联系管理员.");
 		drawPanel(client, 0);
 		return Plugin_Handled;
 	}
@@ -1505,7 +1504,7 @@ public bool IsClientSurvivor(int client, bool isMenu) {
 	if ( !IsClientAndInGame(client) ) return false;
 	if (!isSurvivor(client)) {
 		if (isMenu) {
-			PrintToChat(client, "\x04[AstMod] \x01仅限生还者选择!");
+			PrintToChat(client, "\x04[Ast] \x01仅限生还者选择!");
 		}
 		return false;
 	}
@@ -1730,7 +1729,7 @@ public Action OnPlayerHurt(Handle event, const char[] name, bool dontBroadcast)
 	{
 		int remaining_health = GetClientHealth(attacker);
 		ForcePlayerSuicide(attacker);
-		CPrintToChatAll("[{olive}AstMod{default}] {red}%N{default}({green}%s{default}) 还剩下 {olive}%d{default} 血! 造成了 {olive}%2.1f{default} 点伤害!", attacker, SI_Names[zombie_class], remaining_health, fDmgPrint);
+		CPrintToChatAll("[{olive}Ast{default}] {red}%N{default}({green}%s{default}) 还剩下 {olive}%d{default} 血! 造成了 {olive}%2.1f{default} 点伤害!", attacker, SI_Names[zombie_class], remaining_health, fDmgPrint);
 		if ( GetConVarBool(hFastGetup) && (GetZombieClass(attacker) == ZC_HUNTER || GetZombieClass(attacker) == ZC_CHARGER) ) {
             _CancelGetup(victim);
         }
