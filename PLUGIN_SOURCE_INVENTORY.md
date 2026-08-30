@@ -16,8 +16,8 @@
 | AstMod 隔离目录内的 SMX | 121 |
 | 当前加载 | 82 |
 | 当前停用 | 39 |
-| 与 AstMod 2.7.1 原包二进制完全一致 | 115 |
-| 本地修改或新增、二进制来源不再等同原包 | 6 |
+| 与 AstMod 2.7.1 原包二进制完全一致 | 113 |
+| 本地修改或新增、二进制来源不再等同原包 | 8 |
 
 “与 2.7.1 一致”继续作为历史二进制来源判定，不代表当前 Baseline 仍停留在 2.7.1。2.8.1 配置升级没有替历史插件补出源码；新增 Wave Spawner 和本轮重建插件则由仓库直接维护构建关系。
 
@@ -41,7 +41,7 @@
 
 ## AstRedux 专属、可从仓库源码重建的插件
 
-下面 3 个插件位于 `optional/astredux/`，不计入后文 `optional/astmod/` 的 123 个二进制。它们已经用仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 编译通过；构建产物的来源关系由本仓库直接维护，不是按同名猜测。
+下面 3 个插件位于 `optional/astredux/`，不计入后文 `optional/astmod/` 的 121 个二进制。它们已经用仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 编译通过；构建产物的来源关系由本仓库直接维护，不是按同名猜测。
 
 | 加载路径 | 源码 | 职责 |
 | --- | --- | --- |
@@ -52,18 +52,18 @@
 ## 维护来源补充
 
 - 对存在多个源码线索的 `l4d_boss_percent`、`l4d2_hunter_no_deadstops` 和 `survivor_mvp`，海洋建议今后维护以 `AstSrc:` 为准；这不证明当前二进制由该版本构建。运行中的共享 `pause.smx` 已改为本仓库可重建版本，隔离目录内的历史副本仍不据此建立来源关系。
-- `versus_coop_mode.smx` 的上游线索是 [`umlka/l4d2/versus_coop_mode`](https://github.com/umlka/l4d2/tree/main/versus_coop_mode)，当前二进制与该源码的准确关系仍未确认。
+- `versus_coop_mode.smx` 现由仓库内 `versus_coop_mode.sp` 维护；上游线索是 [`umlka/l4d2/versus_coop_mode`](https://github.com/umlka/l4d2/tree/main/versus_coop_mode)。当前版本将相邻的一字节 Director 回合字段改为 `NumberType_Int8` 写入，避免旧版四字节写破坏后续指针。
 - Lysis 反编译只能用于分析仅二进制插件，不能恢复原始源码或证明构建链。
 
 ## 按状态分类的插件清单
 
-## 1. 二进制来源已确认：与 AstMod 2.7.1 原包一致（115）
+## 1. 二进制来源已确认：与 AstMod 2.7.1 原包一致（113）
 
 这里的“已确认”只表示当前 SMX 与 2.7.1 运行包中的二进制哈希完全一致，不表示源码对应关系已经确认。
 
-### 已加载（76）
+### 已加载（74）
 
-#### 找到单一源码线索（64）
+#### 找到单一源码线索（62）
 
 - `all4dead2.smx` → `AstSrc:all4dead2.sp`
 - `blockheatseekingchargers.smx` → `repo:blockheatseekingchargers.sp`
@@ -73,7 +73,6 @@
 - `eq_finale_tanks.smx` → `repo:eq_finale_tanks.sp`
 - `fix_engine.smx` → `repo:fix_engine.sp`
 - `HunterSkeetSound.smx` → `AstSrc:HunterSkeetSound.sp`
-- `jointeam.smx` → `AstSrc:jointeam.sp`
 - `l4d_bash_kills.smx` → `repo:l4d_bash_kills.sp`
 - `l4d_common_ragdolls_be_gone.smx` → `repo:l4d_common_ragdolls_be_gone.sp`
 - `l4d_pounceprotect.smx` → `repo:l4d_pounceprotect.sp`
@@ -127,7 +126,6 @@
 - `staggersolver.smx` → `repo:staggersolver.sp`
 - `tankdoorfix.smx` → `repo:archive/tankdoorfix.sp`
 - `temphealthfix.smx` → `repo:temphealthfix.sp`
-- `versus_coop_mode.smx` → `AstSrc:versus2coop.sp`（文件名别名，仍需确认）
 - `witch_and_tankifier.smx` → `repo:witch_and_tankifier.sp`
 
 #### 找到多个可能对应的源码线索（3）
@@ -198,18 +196,20 @@
 - `l4d2_weapon_csgo_reload.smx`（海洋说明【部分确定、不确定兼容性】：老 Wingman 使用；TLS 之后可能有 bug）
 - `swamp_finale_fix.smx`（海洋说明【确定状态、不确定用途】：ProMod 插件，似乎修复 c3m4 种植园；海洋不知道具体作用，因此没有加载）
 
-## 2. 本地修改或新增的当前二进制（6）
+## 2. 本地修改或新增的当前二进制（8）
 
-这六个插件均由本仓库修改、新增或更新，当前 SMX 不再等同 AstMod 2.7.1 原包。`challenge.smx` 与 `wave_spawner.smx` 已用随仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 重建；ACS、AI_HardSI 与 vote 继续沿用此前的本地修改二进制，准确构建链尚未锁定；`tls_restore_vocalize.smx` 是海洋提供的更新二进制，没有对应源码。
+这八个插件均由本仓库修改、新增或更新，当前 SMX 不再等同 AstMod 2.7.1 原包。`challenge.smx` 与 `wave_spawner.smx` 已用随仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 重建；`jointeam.smx` 与 `versus_coop_mode.smx` 随对应仓库源码一同更新，但尚未独立复现构建；ACS、AI_HardSI 与 vote 继续沿用此前的本地修改二进制，准确构建链尚未锁定；`tls_restore_vocalize.smx` 是海洋提供的更新二进制，没有对应源码。
 
-### 已加载（6）
+### 已加载（8）
 
-#### 有本仓库维护源码（5）
+#### 有本仓库维护源码（7）
 
 - `ACS.smx` → `repo:ACS.sp` / `AstSrc:ACS.sp`
 - `AI_HardSI.smx` → `repo:AI_HardSI.sp` / `AstSrc:AI_HardSI.sp`
 - `challenge.smx` → `repo:challenge.sp`（本次重建使用） / `AstSrc:challenge.sp`（上游参考）
+- `jointeam.smx` → `repo:jointeam.sp` / `AstSrc:jointeam.sp`（增加 ReadyUp 兼容 Forward；`sm_fuck` 使用 ban flag，只按名称处死 AI 特感）
 - `vote.smx` → `repo:vote.sp` / `AstSrc:vote.sp`
+- `versus_coop_mode.smx` → `repo:versus_coop_mode.sp` / [`umlka/l4d2`](https://github.com/umlka/l4d2/tree/main/versus_coop_mode)（修复 Director 一字节字段的越界写）
 - `wave_spawner.smx` → `repo:wave_spawner.sp` / `AstSrc:wave_spawner.sp`（以作者仓库提交 `c0d829f` 为基线，本次重建使用）
 
 #### 仅有更新二进制（1）
@@ -222,4 +222,4 @@
 
 ## 构建边界
 
-静态校验可以确认文件、加载路径和部分配置约束，但不能证明所有历史 `.sp` 与 `.smx` 一一对应。仅二进制插件没有可编译输入，部分源码位于外部参考目录，ACS、AI_HardSI 与 vote 的完整编译器/include/参数仍未锁定，因此当前仓库不能完整重建全部发布二进制。
+静态校验可以确认文件、加载路径和部分配置约束，但不能证明所有历史 `.sp` 与 `.smx` 一一对应。仅二进制插件没有可编译输入，部分源码位于外部参考目录；ACS、AI_HardSI 与 vote 的完整编译器/include/参数仍未锁定，`jointeam` 与 `versus_coop_mode` 也尚未独立复现提交者的构建，因此当前仓库不能完整重建全部发布二进制。
