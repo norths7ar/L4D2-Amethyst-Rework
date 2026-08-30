@@ -4,7 +4,7 @@
 
 ## 判定标准
 
-- 主清单范围是 `addons/sourcemod/plugins/optional/astmod/*.smx`，共 123 个；“当前加载”表示 `astmod`、`astredux` 或 `astflex` 至少有一个模式启用该插件。
+- 主清单范围是 `addons/sourcemod/plugins/optional/astmod/*.smx`，共 122 个；“当前加载”表示 `astmod`、`astredux` 或 `astflex` 至少有一个模式启用该插件。
 - “AstMod 2.7.1 一致”只表示当前 SMX 与原包同名二进制哈希一致。
 - `repo:` 指本仓库 `addons/sourcemod/scripting/`；`AstSrc:` 指外部参考克隆 `../../repos/L4D2-AstMod-Scriptings-upstream/`。
 - “源码线索”表示值得核对的文件；只有记录了源码、编译器、include、参数和产物比较，才能升级为可重建关系。
@@ -13,11 +13,11 @@
 
 | 项目 | 数量 |
 | --- | ---: |
-| AstMod 隔离目录内的 SMX | 123 |
-| 当前加载 | 84 |
-| 当前停用 | 39 |
-| 与 AstMod 2.7.1 原包二进制完全一致 | 118 |
-| 本地修改或新增、二进制来源不再等同原包 | 5 |
+| AstMod 隔离目录内的 SMX | 122 |
+| 当前加载 | 82 |
+| 当前停用 | 40 |
+| 与 AstMod 2.7.1 原包二进制完全一致 | 116 |
+| 本地修改或新增、二进制来源不再等同原包 | 6 |
 
 “与 2.7.1 一致”继续作为历史二进制来源判定，不代表当前 Baseline 仍停留在 2.7.1。2.8.1 配置升级没有替历史插件补出源码；新增 Wave Spawner 和本轮重建插件则由仓库直接维护构建关系。
 
@@ -57,13 +57,13 @@
 
 ## 按状态分类的插件清单
 
-## 1. 二进制来源已确认：与 AstMod 2.7.1 原包一致（118）
+## 1. 二进制来源已确认：与 AstMod 2.7.1 原包一致（116）
 
 这里的“已确认”只表示当前 SMX 与 2.7.1 运行包中的二进制哈希完全一致，不表示源码对应关系已经确认。
 
-### 已加载（79）
+### 已加载（76）
 
-#### 找到单一源码线索（65）
+#### 找到单一源码线索（64）
 
 - `all4dead2.smx` → `AstSrc:all4dead2.sp`
 - `blockheatseekingchargers.smx` → `repo:blockheatseekingchargers.sp`
@@ -124,7 +124,6 @@
 - `pills_giver.smx` → `AstSrc:pills_giver.sp`
 - `rock_stumble_block.smx` → `repo:rock_stumble_block.sp`
 - `script_reloader.smx` → `AstSrc:script_reloader.sp`
-- `server.smx` → `AstSrc:server.sp`
 - `staggersolver.smx` → `repo:staggersolver.sp`
 - `tankdoorfix.smx` → `repo:archive/tankdoorfix.sp`
 - `temphealthfix.smx` → `repo:temphealthfix.sp`
@@ -137,7 +136,7 @@
 - `l4d2_hunter_no_deadstops.smx` → `repo:l4d2_hunter_no_deadstops.sp` / `AstSrc:l4d2_hunter_no_deadstops.sp`（海洋已回复：今后维护优先以作者仓库版本为准；这不证明当前 SMX 由该版本构建）
 - `survivor_mvp.smx` → `repo:survivor_mvp.sp` / `AstSrc:survivor_mvp.sp`（海洋已回复：今后维护优先以作者仓库版本为准；这不证明当前 SMX 由该版本构建）
 
-#### 仅有二进制（11）
+#### 仅有二进制（9）
 
 - `cannounce.smx`（海洋说明【确定】：进服欢迎提示）
 - `enhancedsprays.smx`（海洋说明【确定】：无冷却喷漆、旁观喷漆）
@@ -145,13 +144,11 @@
 - `l4d_swimming.smx`（海洋说明【确定】：出门前可以游泳）
 - `l4d2_si_ladder_booster.smx`（海洋说明【不确定】：大概是从 Anne 开源插件摸来的）
 - `l4d2_tank_facts_announce.smx`（海洋说明【不确定来源】：Zonemod 还是 MoYu 摸来的）
-- `sceneprocessor.smx`（海洋说明【确定】：`tls_restore_vocalize.smx` 的前置插件）
 - `spawnstatefix.smx`（海洋说明【不确定】：可能是 ProMod 或 Zonemod 的插件，可能已过时）
 - `tank_hud.smx`（海洋说明【确定来源/用途】：ProMod 插件，适合战役使用的精简化旁观 TankHUD）
-- `tls_restore_vocalize.smx`（海洋说明【确定】：允许手动发出笑声）
 - `witch_glow.smx`（海洋说明【确定用途】：Witch Party 插件）
 
-### 未加载（39）
+### 未加载（40）
 
 #### 找到单一源码线索（27）
 
@@ -188,9 +185,10 @@
 - `confoglcompmod.smx` → `repo:confoglcompmod.sp` / `repo:archive/confoglcompmod.sp`（隔离副本，运行时未使用；当前海洋源码 clone 中没有同名文件，无法把作者回复机械映射到这一项）
 - `pause.smx` → `repo:pause.sp` / `AstSrc:pause.sp`（隔离历史副本；运行时使用仓库根共享版本）
 
-#### 仅有二进制（10）
+#### 仅有二进制（11）
 
 - `advertisements.smx`（海洋说明【确定】：广告插件；配置文件为 `addons/sourcemod/configs/advertisement.cfg`）
+- `sceneprocessor.smx`（旧版 `tls_restore_vocalize.smx` 的前置插件；新版不再加载，二进制暂留）
 - `autoadmin.smx`（海洋说明【确定用途】：进服自动获取阉割版 admin 身份，可用基础指令，如 all4dead 菜单、处死玩家和特感；笔记中另提到 `fuck`，具体是否可用未确认）
 - `clip_removal.smx`（海洋未说明用途，仍待确认）
 - `hostname.smx`（海洋说明【确定】：服务器名称；当前不加载）
@@ -201,11 +199,11 @@
 - `l4d2_weapon_csgo_reload.smx`（海洋说明【部分确定、不确定兼容性】：老 Wingman 使用；TLS 之后可能有 bug）
 - `swamp_finale_fix.smx`（海洋说明【确定状态、不确定用途】：ProMod 插件，似乎修复 c3m4 种植园；海洋不知道具体作用，因此没有加载）
 
-## 2. 本地修改或新增的当前二进制（5）
+## 2. 本地修改或新增的当前二进制（6）
 
-这五个插件均由本仓库修改或新增，当前 SMX 不再等同 AstMod 2.7.1 原包。`challenge.smx` 与 `wave_spawner.smx` 已用随仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 重建；ACS、AI_HardSI 与 vote 继续沿用此前的本地修改二进制，准确构建链尚未锁定。
+这六个插件均由本仓库修改、新增或更新，当前 SMX 不再等同 AstMod 2.7.1 原包。`challenge.smx` 与 `wave_spawner.smx` 已用随仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 重建；ACS、AI_HardSI 与 vote 继续沿用此前的本地修改二进制，准确构建链尚未锁定；`tls_restore_vocalize.smx` 是海洋提供的更新二进制，没有对应源码。
 
-### 已加载（5）
+### 已加载（6）
 
 #### 有本仓库维护源码（5）
 
@@ -214,6 +212,10 @@
 - `challenge.smx` → `repo:challenge.sp`（本次重建使用） / `AstSrc:challenge.sp`（上游参考）
 - `vote.smx` → `repo:vote.sp` / `AstSrc:vote.sp`
 - `wave_spawner.smx` → `repo:wave_spawner.sp` / `AstSrc:wave_spawner.sp`（以作者仓库提交 `c0d829f` 为基线，本次重建使用）
+
+#### 仅有更新二进制（1）
+
+- `tls_restore_vocalize.smx`（允许手动发出笑声；新版不再依赖加载 `sceneprocessor.smx`，运行效果待实机确认）
 
 ### 未加载（0）
 

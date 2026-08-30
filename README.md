@@ -51,7 +51,7 @@ Profile Controller 每秒检查人数，并在 `player_team` 后补做一次检�
 ## 当前集成
 
 - Competitive Rework 负责 Confogl、通用修复、扩展和模式切换生命周期；AstMod 专属插件隔离在 `addons/sourcemod/plugins/optional/astmod/`。
-- `cfg/generalfixes.cfg` 只保留所有模式都适用的修复；竞技规则位于 `cfg/competitive_shared.cfg`，Ast 系列只加载 `jointeam.smx`，不会同时加载 `playermanagement.smx`。
+- `cfg/generalfixes.cfg` 保留所有模式都适用的修复与通用体验调整；竞技规则位于 `cfg/competitive_shared.cfg`，Ast 系列只加载 `jointeam.smx`，不会同时加载 `playermanagement.smx`。
 - `pause.smx` 以 Competitive Rework 6.9 为主体，合入 `!p`、`!pausepanel` 和 0.1 秒延迟暂停；换位、插值、旁观速率、开位和 Boss 投票统一使用 Rework 的共享版本。
 - AstMod 的 Uzi、消音微冲、木喷、铁喷和确定性霰弹散布已与当前 Zonemod 同步；57 张官图 Stripper 配置也从 Zonemod 同步，未覆盖第三方地图文件和 global filters。
 - ACS 与 `!vote` 继续读取人工维护的 `cfgs.txt`，但会隐藏首图尚未安装的战役条目。

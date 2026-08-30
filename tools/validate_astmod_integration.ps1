@@ -282,7 +282,6 @@ foreach ($match in $forbidden) {
 }
 
 $competitiveOnlyPlugins = @(
-    "fixes/l4d_skip_intro.smx",
     "optional/playermanagement.smx",
     "optional/l4d2_tank_props_glow.smx",
     "fixes/l4d2_shadow_removal.smx",
@@ -300,6 +299,9 @@ foreach ($plugin in $competitiveOnlyPlugins) {
     Assert-NotContains "cfg/generalfixes.cfg" $escaped "Competitive-only plugin remains in generalfixes: $plugin"
     Assert-Contains "cfg/competitive_shared.cfg" ('^\s*sm plugins load ' + $escaped + '\s*$') "Competitive shared layer is missing: $plugin"
 }
+
+Assert-Contains "cfg/generalfixes.cfg" '^\s*sm plugins load fixes/l4d_skip_intro\.smx\s*$' "General fixes layer is missing l4d_skip_intro.smx"
+Assert-NotContains "cfg/competitive_shared.cfg" 'fixes/l4d_skip_intro\.smx' "l4d_skip_intro.smx is still duplicated in competitive_shared.cfg"
 
 $competitiveModeConfigs = @(
     "cfg/cfgogl/acemodrv/shared_plugins.cfg",
@@ -503,6 +505,14 @@ Assert-Contains `
     "addons/sourcemod/scripting/challenge.sp" `
     'RegAdminCmd\("sm_astreset"' `
     "Challenge does not expose the admin reset command"
+Assert-RawContains `
+    "addons/sourcemod/scripting/challenge.sp" `
+    '(?s)public Action OnInfectedDeath.*?isSurvivor\(attacker\).*?iKillCI\[attacker\]\+\+.*?iKillCI\[attacker\] % GetConVarInt\(hReammoCI\)' `
+    "Challenge does not count common-infected kills for a survivor attacker"
+Assert-NotContains `
+    "addons/sourcemod/scripting/challenge.sp" `
+    'GetClientOfUserId\(GetEventInt\(event, "infected_id"\)\)' `
+    "Challenge still treats infected_death infected_id as a player userid"
 Assert-RawContains `
     "addons/sourcemod/scripting/challenge.sp" `
     '(?s)public void OnConfigsExecuted\(\).*?Timer_ReapplyGameplayOverrides.*?public Action Timer_EmptyServerReset.*?ResetSettings\(false\)' `

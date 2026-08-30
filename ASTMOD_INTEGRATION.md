@@ -18,7 +18,7 @@
 - AstMod 专属插件统一放在 `addons/sourcemod/plugins/optional/astmod/`，避免服务器启动时自动加载；Redux 专属替代件放在 `optional/astredux/`。
 - 不复制 `confogl_autoloader.smx`。模式启动、切换和退出统一使用 Rework 的 `!match`、`!chmatch` 和 `!rmatch`。
 - `confoglcompmod.smx`、`match_vote.smx`、`l4d2_skill_detect.smx` 以及当前武器属性插件使用 Rework 版本，不混用 AstMod 的旧副本。
-- `cfg/generalfixes.cfg` 只放所有模式都适用的修复；竞技模式额外执行 `cfg/competitive_shared.cfg`。因此 Ast 系列不会加载 `playermanagement.smx`、竞技反作弊、开场跳过或竞技地图过渡插件，也不会与自己的 `jointeam.smx` 冲突。
+- `cfg/generalfixes.cfg` 放所有模式都适用的修复与通用体验调整；`l4d_skip_intro.smx` 也在此统一加载，以牺牲少量战役演出换取首关重试速度。竞技模式额外执行 `cfg/competitive_shared.cfg`，因此 Ast 系列不会加载 `playermanagement.smx`、竞技反作弊或竞技地图过渡插件，也不会与自己的 `jointeam.smx` 冲突。
 - 模式关闭使用 `pred_unload_plugins`。模式 cfg 不自行调用 `load_unlock`、`unload_all` 或 `load_lock`。
 - 100 多条插件加载命令拆分为 `plugins_1.cfg`、`plugins_2.cfg` 和 `plugins_3.cfg`，避免 Source engine command buffer 截断后半段命令。AstMod 的 difficulty manager 在依赖插件之后加载。
 - `cfgs.txt` 中旧模式切换条目已删除；Wingman / Hunter 等历史模式没有迁移。ACS 与 `!vote` 会过滤首图未安装的战役，但目录本身仍需人工维护。
@@ -43,7 +43,8 @@ AstMod 是持续维护的 Baseline。它已同步到 2.8.1 的配置、VScript �
 - 2026-08-16 与当时 App 222860 的官方 `gamemodes.txt` 比较，当前副本只在末尾追加自定义模式。游戏更新后仍需重新比较，其他携带同名文件的 addon 也可能产生加载顺序冲突。
 - AstMod 运行包引入内容主要包括模式 cfg、VScript、Stripper、VPK、`optional/astmod/` 插件池、`cfgs.txt` 及所需 data/gamedata/translations；没有用旧版 SourceMod/MetaMod core 覆盖 Rework。当前 Baseline 以 2.8.1 为更新基准，历史文件不因升级而自动获得源码对应关系。
 - 本项目修改并维护 ACS、vote、Challenge 和 AI_HardSI；其余历史二进制的源码覆盖与重建能力以 `PLUGIN_SOURCE_INVENTORY.md` 为准。
-- `server.smx` 仍会在空服时换图，并暴露基于 `sv_crash` 的管理员重启命令；是否保留需在实机运行后决定。
+- `server.smx` 已移除；空服换图不是必需行为，服务器进程重启应交给 systemd 等宿主服务管理，而不是依赖插件触发 `sv_crash`。
+- `tls_restore_vocalize.smx` 已更新为不再需要 `sceneprocessor.smx` 的版本；后者保留在插件池中但不加载，仍需实机确认笑声等 vocalize 功能。
 
 ## 校验与测试
 
