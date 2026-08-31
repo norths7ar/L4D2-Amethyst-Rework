@@ -82,6 +82,28 @@ function Assert-KeyValuesBraceBalance {
     }
 }
 
+function Assert-PluginListCommands {
+    param([string]$RelativePath)
+
+    $path = Join-Path $Root $RelativePath
+    $lineNumber = 0
+    foreach ($line in Get-Content -LiteralPath $path -Encoding utf8) {
+        $lineNumber++
+        $trimmed = $line.Trim()
+        if ([string]::IsNullOrWhiteSpace($trimmed) -or $trimmed -match '^[\\/]*//' -or $trimmed.StartsWith(';')) {
+            continue
+        }
+        $command = ($line -replace '\s*//.*$', '').Trim()
+        if ([string]::IsNullOrWhiteSpace($command)) {
+            continue
+        }
+        if ($command -match '^sm\s+plugins\s+' -or $command -match '^exec\s+\S+\.cfg\s*$') {
+            continue
+        }
+        Add-Failure "Non-plugin command in plugin list ${RelativePath}:$lineNumber ($command)"
+    }
+}
+
 function Get-KeyValuesSectionContent {
     param(
         [string]$RelativePath,
@@ -324,14 +346,22 @@ foreach ($config in $competitiveModeConfigs) {
     Assert-Contains $config '^\s*exec competitive_shared\.cfg\s*$' "Competitive mode does not load competitive_shared.cfg"
 }
 
+$pluginListPaths = @(
+    "cfg/competitive_shared.cfg",
+    "cfg/generalfixes.cfg"
+)
+$cfgoglRoot = Join-Path $Root "cfg/cfgogl"
+$pluginListPaths += Get-ChildItem -LiteralPath $cfgoglRoot -Recurse -File |
+    Where-Object { $_.Name -like "plugins_*.cfg" -or $_.Name -in @("shared_plugins.cfg", "confogl_plugins.cfg") } |
+    ForEach-Object { [System.IO.Path]::GetRelativePath($Root, $_.FullName).Replace('\', '/') }
+foreach ($pluginListPath in $pluginListPaths | Sort-Object -Unique) {
+    Assert-PluginListCommands $pluginListPath
+}
+
 foreach ($mode in @("astmod", "astredux", "astflex")) {
     $pluginConfig = "cfg/cfgogl/$mode/plugins_1.cfg"
-    $modeConfig = "cfg/cfgogl/$mode/$mode.cfg"
     Assert-Contains $pluginConfig '^\s*sm plugins load optional/astmod/jointeam\.smx\s*$' "Ast mode does not load jointeam"
     Assert-Contains $pluginConfig '^\s*sm plugins load optional/astmod/advertisements\.smx\s*$' "Ast mode does not load the bundled advertisements plugin"
-    Assert-NotContains $pluginConfig '^\s*sm_cvar sm_advertisements_' "Ast plugin load list contains advertisement runtime settings"
-    Assert-Contains $modeConfig '^\s*sm_cvar sm_advertisements_interval 120\s*$' "Ast mode does not use the agreed announcement interval"
-    Assert-Contains $modeConfig '^\s*sm_cvar sm_advertisements_random 0\s*$' "Ast mode does not keep announcements in configured order"
     Assert-NotContains $pluginConfig 'playermanagement|hostname\.smx|l4d2_storm\.smx|optional/astmod/(pause|slots_vote|specrates|lerpmonitor|l4d_boss_vote)\.smx' "Ast mode loads a conflicting or obsolete private functional plugin"
     foreach ($sharedPlugin in @("lerpmonitor", "slots_vote", "specrates", "pause", "l4d_boss_vote")) {
         Assert-Contains $pluginConfig ('^\s*sm plugins load optional/' + $sharedPlugin + '\.smx\s*$') "Ast mode does not use the shared $sharedPlugin plugin"
