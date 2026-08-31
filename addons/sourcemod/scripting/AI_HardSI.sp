@@ -125,6 +125,12 @@ public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
 	g_hAssaultTimer = null;
 }
 
+public void OnMapEnd()
+{
+	g_bSurvivorsLeftSafeArea = false;
+	g_hAssaultTimer = null;
+}
+
 /***********************************************************************************************************************************************************************************
 
 																	KEEP SI AGGRESSIVE
