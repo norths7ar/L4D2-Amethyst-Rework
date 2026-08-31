@@ -2,13 +2,13 @@
 
 这是一个以 [L4D2 Competitive Rework](https://github.com/SirPlease/L4D2-Competitive-Rework) 为框架、以 AstMod 2.8.1 为 PVE 基础的完整服务端配置。仓库保留 Rework 原有的对抗配置，并把 AstMod 系列做成可以通过 `!match` / `!rmatch` 进入、切换和退出的独立模式。
 
-AstMod 的价值不只是提高数值，而是自定义刷特、Hard SI、资源控制、武器节奏、地图修正和难度投票共同形成的多人药役体验。本项目希望保留这种辨识度，同时逐步解决旧插件、Versus 底层和第三方战役机制之间的冲突。
+AstMod 由自定义刷特、Hard SI、资源控制、武器节奏、地图修正和难度投票共同组成多人药役体验。本项目保留这套玩法辨识度，并持续处理旧插件、Versus 底层和第三方战役机制之间的兼容。
 
 ## 模式
 
 | 模式 | 状态 | 定位 |
 | --- | --- | --- |
-| **AstMod** | 可用 Baseline | 以 2.8.1 更新后的运行规则为基础，保留高压药役、自定义刷特和默认开启的 Hard SI；不是未经修改的历史镜像。 |
+| **AstMod** | 可用 Baseline | 以 2.8.1 更新后的运行规则为基础，保留高压药役、自定义刷特和默认开启的 Hard SI。 |
 | **AstRedux** | 当前开发主线 | 已用声明式人数 profile 替换旧 DAS，并开始把波次、Tank 和 AutoWipe 等规则拆成可维护组件；当前仍借用 Versus，后续目标是可靠的 Coop-native 底层。 |
 | **AstFlex** | 暂停开发 | 前期减压玩法的 preview。等 Coop-native 底层可行后，再作为 Redux ruleset 的休闲 preset 继续开发。 |
 
@@ -16,7 +16,7 @@ AstMod 的价值不只是提高数值，而是自定义刷特、Hard SI、资源
 
 ## AstMod 与 AstRedux
 
-AstMod 是可玩的维护基线，接入 Competitive Rework 所必需的兼容修改以及已经确认适合 Baseline 的改进仍可继续合入；它不是冻结的 2.7.1 副本。AstRedux 则是与 Baseline 隔离的规则实验：先复用未改动的 AstMod 资产，再逐项替换难以理解、难以维护或妨碍第三方战役兼容的底层规则。Redux 的实验不会自动回写 AstMod。
+AstMod 是可玩的维护基线，持续合入接入 Competitive Rework 所需的兼容修改和已经确认适合 Baseline 的改进。AstRedux 是独立规则实验：复用稳定的 AstMod 资产，再逐项建设可维护、兼容第三方战役的底层规则；实验结果经评估后再选择是否合入 Baseline。
 
 | 方面 | AstMod Baseline | AstRedux 当前实验 |
 | --- | --- | --- |
@@ -30,12 +30,12 @@ AstMod 是可玩的维护基线，接入 Competitive Rework 所必需的兼容�
 
 ### 为什么替换旧 DAS
 
-旧 DAS 的人数识别本身不是主要问题：它统计真人生还者而不要求仍然存活，所以“有人退出才降档，游戏内死亡不降档”符合本项目的预期。问题主要在于规则的表达和执行方式。
+旧 DAS 统计仍在生还者队伍中的真人，所以“有人退出才降档，游戏内死亡不降档”符合本项目的预期。改造重点在规则的表达和执行方式。
 
 - DAS 把 1–4 人映射成 Easy、Normal、Hard、Impossible，再执行一整份 cfg。一个人数变化会同时改变数十个 CVar、加载或卸载插件、重载伤害播报并执行 `sm_reloadscript`，不同职责被绑在同一次切档中。
-- Tank 近战伤害不能从任何一个数值直接读出。例如 1P cfg 设置 `z_tank_health 800`，经过当前 mutation 的 1.5 倍得到 1200 最终血量；引擎近战以最大血量的 5% 计算为 60，再由 `tankdamagemult 5.0` 乘回约 300。4P 则是 4500 × 1.5 得到 6750，再以 5% × 0.9 得到约 304。维护者必须同时理解 cfg、mutation、引擎规则和武器属性插件，才能知道最终结果。
+- Tank 近战伤害由一条跨层链路得出。例如 1P cfg 设置 `z_tank_health 800`，经过当前 mutation 的 1.5 倍得到 1200 最终血量；引擎近战以最大血量的 5% 计算为 60，再由 `tankdamagemult 5.0` 乘回约 300。4P 则是 4500 × 1.5 得到 6750，再以 5% × 0.9 得到约 304。维护时要同时核对 cfg、mutation、引擎规则和武器属性插件。
 - `tankdamagemult` 依赖武器属性插件的具体接口和二进制行为；更换插件版本后，即使 cfg 没变，伤害链路也可能失效或改变。插件动态 load/unload 与 Rework 负责的模式生命周期也存在职责重叠。
-- 一份 cfg 同时承担“数值表”和“执行脚本”，难以区分哪些是人数基线、哪些是运行时开关，也不利于以后让 `/tz` 投票作为临时 override 覆盖 profile。
+- 一份 cfg 同时承担“数值表”和“执行脚本”。Redux 将人数基线与运行时开关分层，让 `/tz` 投票可作为临时 override 覆盖 profile。
 
 Redux 因此把人数档改为声明式 profile：配置直接写最终 Tank 血量、固定近战伤害、微冲换弹时长、刷特参数和各项 CVar。当前 Controller 负责选择 profile、下发 CVar 和武器属性，以及执行 Tank 与 No-Witch 规则；AutoWipe 等独立 adapter 常驻加载并由 profile CVar 控制。1P/2P 分别沿用 2.8.1 的 1.4/1.5 秒和 1.74/1.85 秒 Uzi/消音微冲换弹补偿；3P/4P 采用 ZoneMod 2.9 的 1.9 秒 Uzi，并把消音微冲恢复到约 2.24 秒的原版换弹时长。完整配置以 [`addons/sourcemod/configs/astredux_profiles.cfg`](addons/sourcemod/configs/astredux_profiles.cfg) 为准。
 
@@ -51,14 +51,30 @@ Profile Controller 每秒检查人数，并在 `player_team` 后补做一次检�
 ## 当前集成
 
 - Competitive Rework 负责 Confogl、通用修复、扩展和模式切换生命周期；AstMod 专属插件隔离在 `addons/sourcemod/plugins/optional/astmod/`。
-- `cfg/generalfixes.cfg` 保留所有模式都适用的修复与通用体验调整；竞技规则位于 `cfg/competitive_shared.cfg`，Ast 系列只加载 `jointeam.smx`，不会同时加载 `playermanagement.smx`。
+- `cfg/generalfixes.cfg` 保留所有模式都适用的修复与通用体验调整；竞技规则位于 `cfg/competitive_shared.cfg`，竞技模式加载 `playermanagement.smx`，Ast 系列加载 `jointeam.smx`。
 - `pause.smx` 以 Competitive Rework 6.9 为主体，合入 `!p`、`!pausepanel` 和 0.1 秒延迟暂停；换位、插值、旁观速率、开位和 Boss 投票统一使用 Rework 的共享版本。
 - AstMod 的 Uzi、消音微冲、木喷、铁喷和确定性霰弹散布已与当前 Zonemod 同步；57 张官图 Stripper 配置也从 Zonemod 同步，未覆盖第三方地图文件和 global filters。
-- AstRedux 在共享武器基准之上为 1P/2P 恢复微冲换弹补偿，并把猎枪、军狙、Scout 和 AWP 作为同一组限制为全队最多一把；只写主动改变的武器属性，不重复马格南、手枪或通常会被替换掉的原版狙击属性。
+- AstRedux 在共享武器基准之上为 1P/2P 恢复微冲换弹补偿，并把猎枪、军狙、Scout 和 AWP 作为同一组限制为全队最多一把；武器配置集中记录主动改变的属性。
 - ACS 与 `!vote` 继续读取人工维护的 `cfgs.txt`，但会隐藏首图尚未安装的战役条目。
-- `!vote` 中的 Ast 玩法入口改为 `!ast`；`!tz` 保留为短兼容命令，`!settings` 继续可用。天气和激光已从玩法菜单移除；单人生还者直接调整并广播，多人生还者必须投票。
+- `!vote` 保留通用投票入口；Ast 玩法调整由 `!ast` 打开，`!tz` 保留为兼容短命令。单人生还者直接调整并广播，多人生还者必须投票。
 - AstRedux 与 Baseline 的差异、旧 DAS 的问题和当前 profile 记录在上节；AstMod Baseline 仍保留 DAS，但已同步 2.8.1 的波次参数和功能更新。
-- AstFlex 目前仍依赖 AstMod 的 Versus-backed 底层，不能视为第三方战役兼容方案。
+- AstFlex 目前使用 AstMod 的 Versus-backed 底层，第三方战役兼容工作随 Coop-native 底层推进。
+
+### 玩家常用指令
+
+| 输入 | 作用 |
+| --- | --- |
+| `!match` | 打开 matchmode 选择；已有模式时进入切换流程。 |
+| `!chmatch` | 直接打开当前模式的切换流程。 |
+| `!rmatch` | 重置当前 matchmode。 |
+| `!vote` | 打开由 `cfgs.txt` 提供的通用投票菜单。 |
+| `!mapvote` | 打开 ACS 战役换图投票。 |
+| `!mapvotes` | 查看当前 ACS 换图投票。 |
+| `!ast` / `!tz` | 打开 Ast 玩法调整菜单。 |
+| `!si <时间> <数量>` | 在新版刷特机制下发起特感刷新参数调整；单人生还者直接生效，多人生还者投票。 |
+| `!votekick` | 发起玩家踢人投票。 |
+
+管理员另有 `!astreset`，立即恢复当前 Ast 模式的默认玩法设置。
 
 ## 当前验证状态
 
@@ -70,6 +86,8 @@ Profile Controller 每秒检查人数，并在 `player_team` 后补做一次检�
 
 - [ASTMOD_INTEGRATION.md](ASTMOD_INTEGRATION.md)：AstMod 接入 Competitive Rework 的文件、生命周期、资产与验证说明。
 - [PLUGIN_SOURCE_INVENTORY.md](PLUGIN_SOURCE_INVENTORY.md)：现有 SMX 的二进制来源、源码线索和可重建边界。
+- [author/CONFIG_GUIDE.md](author/CONFIG_GUIDE.md)：作者维护模式配置时的读取入口和分层关系。
+- [author/SERVER_OPERATIONS.md](author/SERVER_OPERATIONS.md)：Ubuntu 22.04 L4D2 服务器的运行与维护笔记。
 - `tools/validate_astmod_integration.ps1`：必要资产、启用插件加载、57 张官图 Stripper 和关键生命周期约束的静态校验。
 
 ## 上游与致谢

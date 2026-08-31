@@ -1,13 +1,13 @@
 # AstMod 插件源码与 SMX 对应清单
 
-这份清单只回答现有 `.smx` 的二进制来源和可供维护的 `.sp` 线索。数据来自插件加载配置、SHA-256 对照和源码路径扫描；同名源码不等于已证明的构建输入。
+这份清单记录现有 `.smx` 的二进制来源、可供维护的 `.sp` 线索和可重建状态。数据来自插件加载配置、SHA-256 对照和源码路径扫描；构建关系以记录的源码、编译器、include、参数和产物比较为准。
 
 ## 判定标准
 
 - 主清单范围是 `addons/sourcemod/plugins/optional/astmod/*.smx`，共 121 个；“当前加载”表示 `astmod`、`astredux` 或 `astflex` 至少有一个模式启用该插件。
-- “AstMod 2.7.1 一致”只表示当前 SMX 与原包同名二进制哈希一致。
+- “AstMod 2.7.1 一致”表示当前 SMX 与原包同名二进制哈希一致；源码关系另按本清单中的构建状态记录。
 - `repo:` 指本仓库 `addons/sourcemod/scripting/`；`AstSrc:` 指外部参考克隆 `../../repos/L4D2-AstMod-Scriptings-upstream/`。
-- “源码线索”表示值得核对的文件；只有记录了源码、编译器、include、参数和产物比较，才能升级为可重建关系。
+- “源码线索”列出值得核对的文件；可重建关系同时记录源码、编译器、include、参数和产物比较。
 
 ## 总数
 
@@ -17,9 +17,9 @@
 | 当前加载 | 82 |
 | 当前停用 | 39 |
 | 与 AstMod 2.7.1 原包二进制完全一致 | 113 |
-| 本地修改或新增、二进制来源不再等同原包 | 8 |
+| 本地修改或新增、由本仓库维护的当前二进制 | 8 |
 
-“与 2.7.1 一致”继续作为历史二进制来源判定，不代表当前 Baseline 仍停留在 2.7.1。2.8.1 配置升级没有替历史插件补出源码；新增 Wave Spawner 和本轮重建插件则由仓库直接维护构建关系。
+“与 2.7.1 一致”是历史二进制来源判定；当前 Baseline 的运行规则以 2.8.1 为基准。历史插件继续按已有源码线索列示，Wave Spawner 和本轮重建插件由仓库直接维护构建关系。
 
 ## 仓库统一提供、三个模式共同加载的插件
 
@@ -41,13 +41,21 @@
 
 ## AstRedux 专属、可从仓库源码重建的插件
 
-下面 3 个插件位于 `optional/astredux/`，不计入后文 `optional/astmod/` 的 121 个二进制。它们已经用仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 编译通过；构建产物的来源关系由本仓库直接维护，不是按同名猜测。
+下面 3 个插件位于 `optional/astredux/`，单列于 AstMod 隔离目录的 121 个二进制之外。它们已经用仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 编译通过；本仓库直接维护其构建产物关系。
 
 | 加载路径 | 源码 | 职责 |
 | --- | --- | --- |
 | `optional/astredux/astredux_profile_controller.smx` | `addons/sourcemod/scripting/astredux_profile_controller.sp` | 读取并应用 1–4 人声明式 profile，协调 Tank、刷特、No-Witch 和 adapter 开关 |
 | `optional/astredux/astredux_autowipe.smx` | `addons/sourcemod/scripting/astredux_autowipe.sp` | 常驻 AutoWipe adapter，由 profile cvar 控制是否生效 |
 | `optional/astredux/challenge.smx` | `addons/sourcemod/scripting/astredux_challenge.sp` + `challenge.sp` | Redux 专用 `!ast` build，读取当前 Redux profile 并与旧 DAS 解耦 |
+
+## 作者可选功能
+
+这里记录服务器作者额外加入的娱乐与管理功能。每项记录插件用途、实际加载位置、源码或二进制来源，以及所需 cfg、data、translations、VScript 或 VPK 资产。
+
+| 插件 | 用途 | 加载位置 | 来源与资产 |
+| --- | --- | --- | --- |
+| 待首个功能落地后登记 |  |  |  |
 
 ## 维护来源补充
 
@@ -59,7 +67,7 @@
 
 ## 1. 二进制来源已确认：与 AstMod 2.7.1 原包一致（113）
 
-这里的“已确认”只表示当前 SMX 与 2.7.1 运行包中的二进制哈希完全一致，不表示源码对应关系已经确认。
+这里的“已确认”表示当前 SMX 与 2.7.1 运行包中的二进制哈希完全一致；源码对应关系由每项后的 `repo:`、`AstSrc:` 或构建状态继续说明。
 
 ### 已加载（74）
 
@@ -198,7 +206,7 @@
 
 ## 2. 本地修改或新增的当前二进制（8）
 
-这八个插件均由本仓库修改、新增或更新，当前 SMX 不再等同 AstMod 2.7.1 原包。`challenge.smx` 与 `wave_spawner.smx` 已用随仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 重建；`jointeam.smx` 与 `versus_coop_mode.smx` 随对应仓库源码一同更新，但尚未独立复现构建；ACS、AI_HardSI 与 vote 继续沿用此前的本地修改二进制，准确构建链尚未锁定；`tls_restore_vocalize.smx` 是海洋提供的更新二进制，没有对应源码。
+这八个插件由本仓库修改、新增或更新。`challenge.smx` 与 `wave_spawner.smx` 已用随仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 重建；`jointeam.smx` 与 `versus_coop_mode.smx` 随对应仓库源码一同更新，构建复现列为后续工作；ACS、AI_HardSI 与 vote 延续此前的本地修改二进制，构建链列为待锁定；`tls_restore_vocalize.smx` 记录为海洋提供的更新二进制。
 
 ### 已加载（8）
 
@@ -222,4 +230,4 @@
 
 ## 构建边界
 
-静态校验可以确认文件、加载路径和部分配置约束，但不能证明所有历史 `.sp` 与 `.smx` 一一对应。仅二进制插件没有可编译输入，部分源码位于外部参考目录；ACS、AI_HardSI 与 vote 的完整编译器/include/参数仍未锁定，`jointeam` 与 `versus_coop_mode` 也尚未独立复现提交者的构建，因此当前仓库不能完整重建全部发布二进制。
+静态校验覆盖文件、加载路径和部分配置约束。完整可重建状态需要逐项保存 `.sp`、编译器、include、参数和产物比较；仅二进制插件、外部参考源码、ACS、AI_HardSI、vote、`jointeam` 与 `versus_coop_mode` 的构建状态均在本清单中如实标注。
