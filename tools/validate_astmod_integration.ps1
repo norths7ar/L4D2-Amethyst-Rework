@@ -143,9 +143,6 @@ $requiredPaths = @(
     "addons/sourcemod/scripting/astredux_challenge.sp",
     "addons/sourcemod/scripting/astredux_autowipe.sp",
     "addons/sourcemod/scripting/astredux_profile_controller.sp",
-    "addons/sourcemod/scripting/server_announcements.sp",
-    "addons/sourcemod/configs/server_announcements.txt",
-    "addons/sourcemod/plugins/optional/server_announcements.smx",
     "addons/sourcemod/scripting/vote.sp",
     "cfg/cfgogl/astmod/astmod.cfg",
     "cfg/cfgogl/astmod/confogl.cfg",
@@ -492,14 +489,6 @@ Assert-Contains `
     "addons/sourcemod/configs/cfgs.txt" `
     '^\s*"sm_ast"\s*$' `
     "The !vote menu does not route to !ast"
-Assert-Contains `
-    "cfg/sharedplugins.cfg" `
-    '^\s*sm plugins load optional/server_announcements\.smx\s*$' `
-    "Server announcements are not loaded for every matchmode"
-Assert-Contains `
-    "addons/sourcemod/configs/server_announcements.txt" `
-    '^\s*"text"\s+".+"\s*$' `
-    "Server announcements do not contain any configured messages"
 Assert-RawContains `
     "addons/sourcemod/scripting/pause.sp" `
     '(?s)version = "6\.9\.0".*?RegConsoleCmd\("sm_p".*?RegConsoleCmd\("sm_pausepanel".*?CreateTimer\(0\.1, Pause_Timer' `
