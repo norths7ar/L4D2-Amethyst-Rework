@@ -1,0 +1,70 @@
+// Advertisements 2.0
+// by Tsunami
+//
+// Types
+// -----
+// center: Center message
+// chat: Chat message
+// hint: Hint message
+// menu: Menu message
+// top: Top message
+//
+// Flags (optional)
+// -----
+// Accepts flags of admins that will not see the advertisement.
+// When omitted everyone will see the advertisement.
+// When left empty only admins will see the advertisement.
+
+"Advertisements"
+{
+	"1"
+	{
+		"type"		"S"
+		"text"		"{GREEN}[公告] {LIGHTGREEN}更新了刷特机制, 只能通过指令修改, 如 !si 0 10, 即 0秒10特."
+	}
+	"2"
+	{
+		"type"		"S"
+		"text"		"{GREEN}[公告] {LIGHTGREEN}tz 菜单可更改为旧版刷特."
+	}
+	"3"
+	{
+		"type"		"S"
+		"text"		"{GREEN}[公告] {LIGHTGREEN}一代图的长按读条机关时长根据人数有所减少."
+	}
+	"4"
+	{
+		"type"		"S"
+		"text"		"{GREEN}[公告] {LIGHTGREEN}本服非长期服, 仅测试使用, 随时关闭."
+	}
+	"5"
+	{
+		"type"		"S"
+		"text"		"{GREEN}[公告] {LIGHTGREEN}地图上默认不刷药, 用完自动发."
+	}
+	"6"
+	{
+		"type"		"S"
+		"text"		"{GREEN}[公告] {LIGHTGREEN}垃圾群: 819906811."
+	}
+	"7"
+	{
+		"type"		"S"
+		"text"		"{GREEN}[公告] {LIGHTGREEN} 默认难度必然不适合所有人, 使用 {OLIVE}!si {LIGHTGREEN}修改难度."
+	}
+	// "8"
+	// {
+	// 	"type"		"S"
+	// 	"text"		"{GREEN}[公告] {LIGHTGREEN} 服务器赞助: {OLIVE}名字没想好{LIGHTGREEN}."
+	// }
+	"9"
+	{
+		"type"		"S"
+		"text"		"{GREEN}[反馈] {LIGHTGREEN}遇到 BUG 请联系服主, 并尽量提供地图、模式和发生时间."
+	}
+	"10"
+	{
+		"type"		"S"
+		"text"		"{GREEN}[好友] {LIGHTGREEN}欢迎添加服主好友, 约人开黑或反馈问题都可以."
+	}
+}

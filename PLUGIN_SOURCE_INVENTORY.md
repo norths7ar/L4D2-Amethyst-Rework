@@ -185,7 +185,7 @@
 
 #### 仅有二进制（10）
 
-- `advertisements.smx`（海洋说明【确定】：广告插件；配置文件为 `addons/sourcemod/configs/advertisement.cfg`）
+- `advertisements.smx`（海洋说明【确定】：广告插件；运行二进制与 AstMod 2.7.1、2.8.1 包内文件完全一致，配置文件实际为 `addons/sourcemod/configs/advertisements.txt`；其行为与配置格式参见上游 [sm-advertisements](https://github.com/ErikMinekus/sm-advertisements)）
 - `sceneprocessor.smx`（旧版 `tls_restore_vocalize.smx` 的前置插件；新版不再加载，二进制暂留）
 - `autoadmin.smx`（海洋说明【确定用途】：进服自动获取阉割版 admin 身份，可用基础指令，如 all4dead 菜单、处死玩家和特感；笔记中另提到 `fuck`，具体是否可用未确认）
 - `hostname.smx`（海洋说明【确定】：服务器名称；当前不加载）

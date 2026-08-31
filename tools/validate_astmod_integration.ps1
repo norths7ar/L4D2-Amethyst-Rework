@@ -125,6 +125,7 @@ $requiredPaths = @(
     "assets/astmod_vpk/addoninfo.txt",
     "assets/astmod_vpk/scripts/gamemodes.txt",
     "addons/sourcemod/configs/cfgs.txt",
+    "addons/sourcemod/configs/advertisements.txt",
     "addons/sourcemod/configs/astredux_profiles.cfg",
     "addons/sourcemod/plugins/optional/pause.smx",
     "addons/sourcemod/plugins/optional/astmod/versus_coop_mode.smx",
@@ -326,6 +327,8 @@ foreach ($config in $competitiveModeConfigs) {
 foreach ($mode in @("astmod", "astredux", "astflex")) {
     $pluginConfig = "cfg/cfgogl/$mode/plugins_1.cfg"
     Assert-Contains $pluginConfig '^\s*sm plugins load optional/astmod/jointeam\.smx\s*$' "Ast mode does not load jointeam"
+    Assert-Contains $pluginConfig '^\s*sm plugins load optional/astmod/advertisements\.smx\s*$' "Ast mode does not load the bundled advertisements plugin"
+    Assert-Contains $pluginConfig '^\s*sm_cvar sm_advertisements_interval 120\s*$' "Ast mode does not use the agreed announcement interval"
     Assert-NotContains $pluginConfig 'playermanagement|hostname\.smx|l4d2_storm\.smx|optional/astmod/(pause|slots_vote|specrates|lerpmonitor|l4d_boss_vote)\.smx' "Ast mode loads a conflicting or obsolete private functional plugin"
     foreach ($sharedPlugin in @("lerpmonitor", "slots_vote", "specrates", "pause", "l4d_boss_vote")) {
         Assert-Contains $pluginConfig ('^\s*sm plugins load optional/' + $sharedPlugin + '\.smx\s*$') "Ast mode does not use the shared $sharedPlugin plugin"
