@@ -185,7 +185,7 @@
 
 #### 仅有二进制（10）
 
-- `advertisements.smx`（海洋说明【确定】：广告插件；配置文件为 `addons/sourcemod/configs/advertisement.cfg`）
+- `advertisements.smx`（海洋说明【确定】：旧广告插件；其所述配置文件 `addons/sourcemod/configs/advertisement.cfg` 当前并不存在，插件未加载；服务器现改用本仓库可重建的 `server_announcements.smx`）
 - `sceneprocessor.smx`（旧版 `tls_restore_vocalize.smx` 的前置插件；新版不再加载，二进制暂留）
 - `autoadmin.smx`（海洋说明【确定用途】：进服自动获取阉割版 admin 身份，可用基础指令，如 all4dead 菜单、处死玩家和特感；笔记中另提到 `fuck`，具体是否可用未确认）
 - `hostname.smx`（海洋说明【确定】：服务器名称；当前不加载）
@@ -196,18 +196,19 @@
 - `l4d2_weapon_csgo_reload.smx`（海洋说明【部分确定、不确定兼容性】：老 Wingman 使用；TLS 之后可能有 bug）
 - `swamp_finale_fix.smx`（海洋说明【确定状态、不确定用途】：ProMod 插件，似乎修复 c3m4 种植园；海洋不知道具体作用，因此没有加载）
 
-## 2. 本地修改或新增的当前二进制（8）
+## 2. 本地修改或新增的当前二进制（9）
 
-这八个插件均由本仓库修改、新增或更新，当前 SMX 不再等同 AstMod 2.7.1 原包。`challenge.smx` 与 `wave_spawner.smx` 已用随仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 重建；`jointeam.smx` 与 `versus_coop_mode.smx` 随对应仓库源码一同更新，但尚未独立复现构建；ACS、AI_HardSI 与 vote 继续沿用此前的本地修改二进制，准确构建链尚未锁定；`tls_restore_vocalize.smx` 是海洋提供的更新二进制，没有对应源码。
+这九个插件均由本仓库修改、新增或更新，当前 SMX 不再等同 AstMod 2.7.1 原包。`challenge.smx`、`wave_spawner.smx` 与 `server_announcements.smx` 已用随仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 重建；`jointeam.smx` 与 `versus_coop_mode.smx` 随对应仓库源码一同更新，但尚未独立复现构建；ACS、AI_HardSI 与 vote 继续沿用此前的本地修改二进制，准确构建链尚未锁定；`tls_restore_vocalize.smx` 是海洋提供的更新二进制，没有对应源码。
 
-### 已加载（8）
+### 已加载（9）
 
-#### 有本仓库维护源码（7）
+#### 有本仓库维护源码（8）
 
 - `ACS.smx` → `repo:ACS.sp` / `AstSrc:ACS.sp`
 - `AI_HardSI.smx` → `repo:AI_HardSI.sp` / `AstSrc:AI_HardSI.sp`
 - `challenge.smx` → `repo:challenge.sp`（本次重建使用） / `AstSrc:challenge.sp`（上游参考）
 - `jointeam.smx` → `repo:jointeam.sp` / `AstSrc:jointeam.sp`（增加 ReadyUp 兼容 Forward；`sm_fuck` 使用 ban flag，只按名称处死 AI 特感）
+- `server_announcements.smx` → `repo:server_announcements.sp`（由 `cfg/sharedplugins.cfg` 为所有 matchmode 加载；公告内容位于 `addons/sourcemod/configs/server_announcements.txt`）
 - `vote.smx` → `repo:vote.sp` / `AstSrc:vote.sp`
 - `versus_coop_mode.smx` → `repo:versus_coop_mode.sp` / [`umlka/l4d2`](https://github.com/umlka/l4d2/tree/main/versus_coop_mode)（修复 Director 一字节字段的越界写）
 - `wave_spawner.smx` → `repo:wave_spawner.sp` / `AstSrc:wave_spawner.sp`（以作者仓库提交 `c0d829f` 为基线，本次重建使用）
