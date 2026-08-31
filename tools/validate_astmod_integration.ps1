@@ -645,7 +645,7 @@ Assert-KeyValuesBraceBalance "addons/sourcemod/configs/astredux_profiles.cfg"
 
 foreach ($profile in @(
     @{ Players = 1; Health = 1200; SmgReload = "1.4"; SilencedReload = "1.5"; WaveSize = 3; WaveInterval = "10.0" },
-    @{ Players = 2; Health = 2550; SmgReload = "1.74"; SilencedReload = "1.85"; WaveSize = 3; WaveInterval = "15.0" },
+    @{ Players = 2; Health = 2550; SmgReload = "1.74"; SilencedReload = "1.85"; WaveSize = 3; WaveInterval = "10.0" },
     @{ Players = 3; Health = 4500; SmgReload = "1.9"; SilencedReload = "2.24"; WaveSize = 5; WaveInterval = "26.0" },
     @{ Players = 4; Health = 6750; SmgReload = "1.9"; SilencedReload = "2.24"; WaveSize = 6; WaveInterval = "22.0" }
 )) {
