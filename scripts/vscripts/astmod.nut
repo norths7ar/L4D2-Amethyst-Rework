@@ -49,11 +49,19 @@ ModeData <-{
 	BonusSpawnTime		= 0			// 用于脚本判断，不需要修改。击杀的奖励时间
 }
 
-::HUDInfo <- {
-    si_count = { normal=0, smoker=0, boomer=0, hunter=0, spitter=0, jockey=0, charger=0 }
-    si_names = [ "normal", "smoker", "boomer", "hunter", "spitter", "jockey", "charger"]
-	si_text = ""
-	wave_text = ""
+// 插件修改特感刷新参数时会重新读取/执行整个脚本文件。
+// 如果这里每次都用 <- 重新创建 HUDInfo，会把正在游戏中靠事件累积的
+// si_count 直接清零，导致后续 player_death 里的 si_count[name]--
+// 从 0 减到 -1，数量计算就错乱了。所以只在 HUDInfo 尚不存在时才初始化，
+// 脚本被重载时保留已有的存活特感计数。
+if (!("HUDInfo" in getroottable()))
+{
+	::HUDInfo <- {
+		si_count = { normal=0, smoker=0, boomer=0, hunter=0, spitter=0, jockey=0, charger=0 }
+		si_names = [ "normal", "smoker", "boomer", "hunter", "spitter", "jockey", "charger"]
+		si_text = ""
+		hud_mode = "stats"
+	}
 }
 
 function update_diff()
@@ -62,35 +70,16 @@ function update_diff()
 
 	Waves.Enabled ? update_diff_new() : update_diff_old();
 
-	g_ModeScript.UpdateHUDWave(); // 刷新安全区的 HUD
+	if (HUDInfo.hud_mode == "stats") {
+		g_ModeScript.UpdateHUDStats();
+	} else {
+		g_ModeScript.UpdateHUDSI();
+	}
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------
 // Function
 //-----------------------------------------------------------------------------------------------------------------------------
-
-// ::CheckBonusTime <- function() {
-// 	if (Waves.BonusSpawnTime = 0.0) {
-// 		// 奖励时间结束，强制刷新
-// 		// EntFire("worldspawn", "CallScriptFunction", "ResetWave", Waves.BonusSpawnTime);
-// 		ResetWave();
-// 		// SendToServerConsole(format("say time: %.2f", Time()));
-// 	} else {
-// 		// 等待奖励时间
-// 		// SendToServerConsole( format("say BonusTime: %.2f, time: %.2f", Waves.BonusSpawnTime, Time()) );
-// 		EntFire("worldspawn", "CallScriptFunction", "CheckBonusTime", Waves.BonusSpawnTime);
-// 		Waves.BonusSpawnTime = 0.0;
-// 	}
-// };
-
-// ::ResetWave <- function() {
-// 	// 记录存活的特感数量
-// 	Waves.SpawnedSICount = Waves.AliveSICount;
-// 	Waves.HasFirstDeath = false;
-// 	// 强制刷新
-// 	Director.ResetSpecialTimers();
-// };
-
 function update_diff_new()
 {
 	local difficulty = Convars.GetStr("das_fakedifficulty");
@@ -300,6 +289,8 @@ function InitHUD() {
 
 function UpdateHUDSI()
 {
+	HUDInfo.hud_mode = "si";
+
     // 显示特感
 	HUDInfo.si_text = "";
     foreach (name in HUDInfo.si_names)
@@ -320,8 +311,9 @@ function UpdateHUDSI()
 	InitHUD();
 }
 
-function UpdateHUDWave()
+function UpdateHUDStats()
 {
+	HUDInfo.hud_mode = "stats";
 	local timer_new = Convars.GetStr("ast_sitimer_new").tofloat();
 	local limit_new = Convars.GetStr("ast_silimit_new").tointeger();
 
@@ -369,26 +361,11 @@ function OnGameEvent_player_first_spawn( params )
 	// AI 特感
 	if (team == 3 && isBot && zombieType < ZOMBIE_WITCH)
 	{
-		// if ( Waves.SpawnedSICount >= Waves.MaxSILimit ) { // 超过一波数量
-		// 	// 直接 Kill 掉会导致原地留下烟雾口水之类的特效，可能需要提早，不过影响不大
-		// 	clientEnt.Kill();
-		// 	// Say(clientEnt, "Blocked from spawning.", false);
-		// 	return;
-		// }
-		// Waves.SpawnedSICount++;
-		// Waves.AliveSICount++;
-		// // Say(clientEnt, "SpawnedSICount: " + Waves.SpawnedSICount, false);
-
 		// HUD
 		local name = HUDInfo.si_names[zombieType];
 		HUDInfo.si_count[name]++;
 		UpdateHUDSI();
 	}
-	// if (team == 3 && zombieType == ZOMBIE_TANK) // 克局特感 -1
-	// {
-	// 	if (Waves.MaxSILimit > 0)
-	// 		Waves.MaxSILimit--;
-	// }
 }
 
 function OnGameEvent_player_death( params )
@@ -406,73 +383,23 @@ function OnGameEvent_player_death( params )
 
 	if ( victimTeam == 3 && zombieType < ZOMBIE_WITCH )
 	{
-		// Waves.AliveSICount--;
 		// HUD
 		local name = HUDInfo.si_names[zombieType];
 		HUDInfo.si_count[name]--;
 		UpdateHUDSI();
-
-		// // 获取当前时间
-		// local time = Time();
-		// // 如果是第一只死的
-		// if (!Waves.HasFirstDeath)
-		// {
-		// 	Waves.HasFirstDeath = true;
-		// 	Waves.FirstDeathTime = time;
-		// 	// 计时重置波次
-		// 	if (Waves.SpawnTime > 0)
-		// 	{
-		// 		// EntFire("worldspawn", "CallScriptFunction", "ResetWave", Waves.SpawnTime);
-		// 		// 到复活时间时，先检查有无奖励时间
-		// 		EntFire("worldspawn", "CallScriptFunction", "CheckBonusTime", Waves.SpawnTime);
-		// 	} else
-		// 	{
-		// 		// 特感速递直接复活，无奖励时间
-		// 		ResetWave();
-		// 	}
-		// }
-		// else // 后面死的
-		// {
-		// 	// 减去第一只死的时间，计算还有多久下一波
-		// 	local interval = time - Waves.FirstDeathTime;
-		// 	// 剩余复活时间 = 设定复活时间 - 当前时间 + 奖励时间
-		// 	local remainTime = Waves.SpawnTime - interval + Waves.BonusSpawnTime;
-		// 	local timeDiv = remainTime / Waves.SpawnTime;
-		// 	// Say(victimEnt, format("time: %.2f, last: %.2f, remainTime: %.2f, timeDiv: %.3f", time, Waves.FirstDeathTime, remainTime, timeDiv), false);
-
-		// 	// 分段发放奖励时间，特感越多，理论上奖励时间就越长
-		// 	if (timeDiv <= 0.25) {
-		// 		Waves.BonusSpawnTime += 5.0;
-		// 	} else if (timeDiv <= 0.5) {
-		// 		Waves.BonusSpawnTime += 3.0;
-		// 	} else if (timeDiv <= 0.8) {
-		// 		Waves.BonusSpawnTime += 2.0;
-		// 	}
-		// }
 	}
-
-	// if (victimTeam == 3 && zombieType == ZOMBIE_TANK)
-	// {
-	// 	Waves.MaxSILimit++;
-	// }
 }
 
 function OnGameEvent_round_start( params )
 {
 	if (!Waves.Enabled) return;
 
-	// local timer_new = Convars.GetStr("ast_sitimer_new").tofloat();
-	// local limit_new = Convars.GetStr("ast_silimit_new").tointeger();
+	foreach (name in HUDInfo.si_names)
+{
+        HUDInfo.si_count[name] = 0;
+    }
 
-	// Waves.AliveSICount = 0;
-	// Waves.SpawnTime = timer_new;
-	// Waves.MaxSILimit = limit_new;
-
-	// EntFire("worldspawn", "KillScriptFunction", "ResetWave");
-	// EntFire("worldspawn", "KillScriptFunction", "CheckBonusTime");
-
-	// ResetWave();
-	UpdateHUDWave();
+	UpdateHUDStats();
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------
