@@ -105,7 +105,6 @@ public void OnPluginStart()
 {
 	RegConsoleCmd("sm_tz", challengeRequest, "打开难度控制系统菜单");
 	RegConsoleCmd("sm_ast", challengeRequest, "打开 Ast 玩法调整菜单");
-	RegConsoleCmd("sm_settings", challengeRequest, "打开玩法与难度设置菜单");
 	RegAdminCmd("sm_astreset", ResetSettingsCommand, ADMFLAG_CONFIG, "立即恢复当前 Ast 模式默认设置");
 	HookEvent("player_death", OnPlayerDeath, EventHookMode_Post);
 	HookEvent("infected_death", OnInfectedDeath, EventHookMode_Post);
@@ -998,16 +997,16 @@ public void ResetSettings(bool announce)
 	SetConVarInt(hSITimer, 1);
 	SetConVarBool(FindConVar("ast_wave_spawn"), true);
 	SetConVarBool(hRehealth, false);
-	SetConVarBool(hReammo, true);
+	SetConVarBool(hReammo, false);
 	ConVar hHardSIEnable = FindConVar("ai_hardsi_enable");
 	if (hHardSIEnable != null) hHardSIEnable.SetBool(true);
 
 	if (FindConVar("ast_pills_map_kill") != null) {
 		SetConVarBool(FindConVar("ast_pills_enabled"), true);
-		SetConVarBool(FindConVar("ast_pills_map_kill"), true);
+		SetConVarBool(FindConVar("ast_pills_map_kill"), false);
 	}
 	if (FindConVar("weapon_allow_m2_hunter") != null) {
-		SetConVarString(FindConVar("weapon_allow_m2_hunter"), WEAPON_SMG);
+		SetConVarString(FindConVar("weapon_allow_m2_hunter"), "");
 	}
 	if (FindConVar("ast_maxinfected") != null) {
 		SetConVarInt(FindConVar("ast_maxinfected"), 0);
