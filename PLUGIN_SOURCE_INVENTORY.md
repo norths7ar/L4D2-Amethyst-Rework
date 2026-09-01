@@ -4,7 +4,7 @@
 
 ## 判定标准
 
-- 主清单范围是 `addons/sourcemod/plugins/optional/astmod/*.smx`，共 122 个；“当前加载”表示 `astmod`、`astredux` 或 `astflex` 至少有一个模式启用该插件。
+- 主清单范围是 `addons/sourcemod/plugins/optional/astmod/*.smx`，共 91 个；“当前加载”表示 `astmod`、`astredux` 或 `astflex` 至少有一个模式启用该插件。另有 31 个通用插件已收敛到 Rework 的 `optional/*.smx` 共享版本，不再保留 Ast 隔离副本。
 - “AstMod 2.7.1 一致”表示当前 SMX 与原包同名二进制哈希一致；源码关系另按本清单中的构建状态记录。
 - `repo:` 指本仓库 `addons/sourcemod/scripting/`；`AstSrc:` 指外部参考克隆 `../../repos/L4D2-AstMod-Scriptings-upstream/`。
 - “源码线索”列出值得核对的文件；可重建关系同时记录源码、编译器、include、参数和产物比较。
@@ -13,10 +13,10 @@
 
 | 项目 | 数量 |
 | --- | ---: |
-| AstMod 隔离目录内的 SMX | 122 |
-| 当前加载 | 84 |
+| AstMod 隔离目录内的 SMX | 91 |
+| 当前加载 | 53 |
 | 当前停用 | 38 |
-| 与 AstMod 2.7.1 原包二进制完全一致 | 113 |
+| 与 AstMod 2.7.1 原包二进制完全一致 | 82 |
 | 本地修改或新增、由本仓库维护的当前二进制 | 9 |
 
 “与 2.7.1 一致”是历史二进制来源判定；当前 Baseline 的运行规则以 2.8.1 为基准。历史插件继续按已有源码线索列示，Wave Spawner 和本轮重建插件由仓库直接维护构建关系。
@@ -39,9 +39,13 @@
 | `optional/pause.smx` | `addons/sourcemod/scripting/pause.sp`（Rework 6.9 主体，合入海洋版短命令、面板命令和延迟暂停） |
 | `optional/astmod/wave_spawner.smx` | `addons/sourcemod/scripting/wave_spawner.sp`（作者仓库提交 `c0d829f` 为基线；2.8.1 包缺少成品） |
 
+第一轮共享收敛将下列 31 个通用插件从 Ast 隔离路径改为 `optional/*.smx`。这些共享版本均有 `addons/sourcemod/scripting/` 下的同名源码，由 Zonemod 当前配置实际加载，并已使用仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 编译通过；该编译检查不证明现有 SMX 与源码字节完全一致。
+
+`blockheatseekingchargers`、`bossspawningfix`、`eq_finale_tanks`、`fix_engine`、`l4d_bash_kills`、`l4d_common_ragdolls_be_gone`、`l4d_pounceprotect`、`l4d_tank_control_eq`、`l4d_tank_damage_announce`、`l4d2_collision_adjustments`、`l4d2_getup_fixes`、`l4d2_getup_slide_fix`、`l4d2_ghost_warp`、`l4d2_godframes_control_merge`、`l4d2_hittable_control`、`l4d2_hunter_no_deadstops`、`l4d2_m2_control_eq`、`l4d2_saferoom_detect`、`l4d2_saferoom_item_remove`、`l4d2_si_staggers`、`l4d2_spitblock`、`l4d2_tank_announce`、`l4d2_tank_attack_control`、`l4d2_uncommon_blocker`、`l4d2_unsilent_jockey`、`l4d2_weaponrules`、`nosaferoomkits`、`rock_stumble_block`、`staggersolver`、`temphealthfix`、`witch_and_tankifier`。
+
 ## AstRedux 专属、可从仓库源码重建的插件
 
-下面 5 个插件位于 `optional/astredux/`，单列于 AstMod 隔离目录的 121 个二进制之外。它们已经用仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 编译通过；本仓库直接维护其构建产物关系。
+下面 5 个插件位于 `optional/astredux/`，单列于 AstMod 隔离目录的 91 个二进制之外。它们已经用仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 编译通过；本仓库直接维护其构建产物关系。
 
 | 加载路径 | 源码 | 职责 |
 | --- | --- | --- |
@@ -69,81 +73,50 @@
 
 ## 按状态分类的插件清单
 
-## 1. 二进制来源已确认：与 AstMod 2.7.1 原包一致（113）
+## 1. 二进制来源已确认：与 AstMod 2.7.1 原包一致（82）
 
 这里的“已确认”表示当前 SMX 与 2.7.1 运行包中的二进制哈希完全一致；源码对应关系由每项后的 `repo:`、`AstSrc:` 或构建状态继续说明。
 
-### 已加载（75）
+### 已加载（44）
 
-#### 找到单一源码线索（62）
+#### 找到单一源码线索（32）
 
 - `all4dead2.smx` → `AstSrc:all4dead2.sp`
-- `blockheatseekingchargers.smx` → `repo:blockheatseekingchargers.sp`
 - `blocktrolls.smx` → `repo:blocktrolls.sp`
-- `bossspawningfix.smx` → `repo:bossspawningfix.sp`
 - `difficulty_adjustment_system.smx` → `AstSrc:difficulty_adjustment_system.sp`
-- `eq_finale_tanks.smx` → `repo:eq_finale_tanks.sp`
-- `fix_engine.smx` → `repo:fix_engine.sp`
 - `HunterSkeetSound.smx` → `AstSrc:HunterSkeetSound.sp`
-- `l4d_bash_kills.smx` → `repo:l4d_bash_kills.sp`
-- `l4d_common_ragdolls_be_gone.smx` → `repo:l4d_common_ragdolls_be_gone.sp`
-- `l4d_pounceprotect.smx` → `repo:l4d_pounceprotect.sp`
 - `l4d_reload_fix.smx` → `repo:l4d2_reload_fix.sp`（文件名别名，仍需确认）
 - `l4d_stuckzombiemeleefix.smx` → `repo:archive/l4d_stuckzombiemeleefix.sp`
-- `l4d_tank_control_eq.smx` → `repo:l4d_tank_control_eq.sp`
-- `l4d_tank_damage_announce.smx` → `repo:l4d_tank_damage_announce.sp`
 - `l4d_tank_props.smx` → `repo:archive/l4d_tank_props.sp`
 - `l4d_witch_damage_announce.smx` → `repo:l4d_witch_damage_announce.sp`
 - `l4d2_bot_spit_ignite_gascan.smx` → `AstSrc:l4d2_bot_spit_ignite_gascan.sp`
-- `l4d2_collision_adjustments.smx` → `repo:l4d2_collision_adjustments.sp`
 - `l4d2_director_commonlimit_block.smx` → `repo:l4d2_director_commonlimit_block.sp`
 - `l4d2_drop.smx` → `AstSrc:l4d2_drop.sp`
 - `l4d2_fix_deathspit.smx` → `repo:archive/l4d2_fix_deathspit.sp`
-- `l4d2_getup_fixes.smx` → `repo:l4d2_getup_fixes.sp`
-- `l4d2_getup_slide_fix.smx` → `repo:l4d2_getup_slide_fix.sp`
-- `l4d2_ghost_warp.smx` → `repo:l4d2_ghost_warp.sp`
-- `l4d2_godframes_control_merge.smx` → `repo:l4d2_godframes_control_merge.sp`
-- `l4d2_hittable_control.smx` → `repo:l4d2_hittable_control.sp`
 - `l4d2_horde_equaliser.smx` → `repo:l4d2_horde_equaliser.sp`
 - `l4d2_jockey_skeet.smx` → `repo:l4d2_jockey_skeet.sp`
 - `l4d2_ladder_rambos.smx` → `repo:l4d2_ladder_rambos.sp`
-- `l4d2_m2_control_eq.smx` → `repo:l4d2_m2_control_eq.sp`
 - `l4d2_melee_spawn_control.smx` → `repo:l4d2_melee_spawn_control.sp`
 - `l4d2_pickup.smx` → `repo:l4d2_pickup.sp`
-- `l4d2_saferoom_detect.smx` → `repo:l4d2_saferoom_detect.sp`
-- `l4d2_saferoom_item_remove.smx` → `repo:l4d2_saferoom_item_remove.sp`
-- `l4d2_si_staggers.smx` → `repo:l4d2_si_staggers.sp`
 - `l4d2_slowdown_control.smx` → `repo:l4d2_slowdown_control.sp`
 - `l4d2_smoker_drag_damage_interval.smx` → `repo:l4d2_smoker_drag_damage_interval.sp`
 - `l4d2_sniper_bodyshot.smx` → `repo:l4d2_sniper_bodyshot.sp`
-- `l4d2_spitblock.smx` → `repo:l4d2_spitblock.sp`
 - `l4d2_stats.smx` → `repo:l4d2_stats.sp`
 - `l4d2_steady_boost.smx` → `repo:l4d2_steady_boost.sp`
-- `l4d2_tank_announce.smx` → `repo:l4d2_tank_announce.sp`
-- `l4d2_tank_attack_control.smx` → `repo:l4d2_tank_attack_control.sp`
 - `l4d2_tank_charger_m2_fix.smx` → `repo:l4d2_tank_charger_m2_fix.sp`
-- `l4d2_uncommon_blocker.smx` → `repo:l4d2_uncommon_blocker.sp`
-- `l4d2_unsilent_jockey.smx` → `repo:l4d2_unsilent_jockey.sp`
 - `l4d2_votetospec.smx` → `AstSrc:l4d2_votetospec.sp`
-- `l4d2_weaponrules.smx` → `repo:l4d2_weaponrules.sp`
 - `MeleeInTheSafeRoom.smx` → `repo:MeleeInTheSafeRoom.sp`
 - `mob_interval_limit.smx` → `AstSrc:mob_interval_limit.sp`
 - `musical_jockeys_coop.smx` → `repo:archive/musical_jockeys.sp`（文件名别名，仍需确认）
-- `nosaferoomkits.smx` → `repo:nosaferoomkits.sp`
 - `noteam_nudging.smx` → `repo:noteam_nudging.sp`
 - `pill_passer.smx` → `repo:pill_passer.sp`
 - `pills_giver.smx` → `AstSrc:pills_giver.sp`
-- `rock_stumble_block.smx` → `repo:rock_stumble_block.sp`
 - `script_reloader.smx` → `AstSrc:script_reloader.sp`
-- `staggersolver.smx` → `repo:staggersolver.sp`
 - `tankdoorfix.smx` → `repo:archive/tankdoorfix.sp`
-- `temphealthfix.smx` → `repo:temphealthfix.sp`
-- `witch_and_tankifier.smx` → `repo:witch_and_tankifier.sp`
 
-#### 找到多个可能对应的源码线索（3）
+#### 找到多个可能对应的源码线索（2）
 
 - `l4d_boss_percent.smx` → `repo:l4d_boss_percent.sp` / `AstSrc:l4d_boss_percent.sp`（海洋已回复：今后维护优先以作者仓库版本为准；这不证明当前 SMX 由该版本构建）
-- `l4d2_hunter_no_deadstops.smx` → `repo:l4d2_hunter_no_deadstops.sp` / `AstSrc:l4d2_hunter_no_deadstops.sp`（海洋已回复：今后维护优先以作者仓库版本为准；这不证明当前 SMX 由该版本构建）
 - `survivor_mvp.smx` → `repo:survivor_mvp.sp` / `AstSrc:survivor_mvp.sp`（海洋已回复：今后维护优先以作者仓库版本为准；这不证明当前 SMX 由该版本构建）
 
 #### 仅有二进制（10）
