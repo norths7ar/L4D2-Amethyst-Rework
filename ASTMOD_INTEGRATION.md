@@ -44,7 +44,7 @@ AstMod 是持续维护的 Baseline。它已同步到 2.8.1 的配置、VScript �
 - 57 份符合 `cXmY*.cfg` 的 Zonemod 官图 Stripper 已同步到 `cfg/stripper/astmod/maps/`；global filters 和第三方地图文件没有覆盖，校验脚本会比较哈希。
 - `addons/astmod.vpk` 提供 `astmod`、`astredux` 和历史 `hunter` mutation。可审阅源文件位于 `assets/astmod_vpk/`，可用 `tools/build_astmod_vpk.ps1` 重建。
 - 2026-08-16 与当时 App 222860 的官方 `gamemodes.txt` 比较，当前副本只在末尾追加自定义模式。游戏更新后仍需重新比较，其他携带同名文件的 addon 也可能产生加载顺序冲突。
-- AstMod 运行包包含模式 cfg、VScript、Stripper、VPK、`optional/astmod/` 插件池、imatchext 扩展及其 gamedata/translations、`missioncycle.txt`、`vote_menu.txt` 和其余所需 data/gamedata/translations；SourceMod/MetaMod core 延续 Rework 提供的版本。当前 Baseline 以 2.8.1 为更新基准，历史二进制的源码对应关系以清单逐项记录。
+- AstMod 运行包包含模式 cfg、VScript、Stripper、VPK、`optional/astmod/` 插件池、imatchext 扩展及其可选 langparser 依赖、gamedata/translations、`missioncycle.txt`、`vote_menu.txt` 和其余所需 data/gamedata/translations；SourceMod/MetaMod core 延续 Rework 提供的版本。当前 Baseline 以 2.8.1 为更新基准，历史二进制的源码对应关系以清单逐项记录。
 - 本项目修改并维护 Campaign Switcher、vote、Challenge、AI_HardSI、jointeam 和 versus_coop_mode，并直接维护 Wave Spawner 的构建关系；其余历史二进制的源码覆盖与重建能力以 `PLUGIN_SOURCE_INVENTORY.md` 为准。
 - `server.smx` 已移除；空服换图和服务器进程重启由 systemd 等宿主服务管理。避免以插件触发 `sv_crash` 作为重启方式。
 - `tls_restore_vocalize.smx` 已更新为不再需要 `sceneprocessor.smx` 的版本；后者保留在插件池中但不加载，仍需实机确认笑声等 vocalize 功能。

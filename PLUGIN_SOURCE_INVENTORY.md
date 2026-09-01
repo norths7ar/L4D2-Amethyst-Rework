@@ -63,6 +63,7 @@
 
 - 对存在多个源码线索的 `l4d_boss_percent`、`l4d2_hunter_no_deadstops` 和 `survivor_mvp`，海洋建议今后维护以 `AstSrc:` 为准；这不证明当前二进制由该版本构建。AstFlex 与竞技模式仍使用仓库可重建的共享 `pause.smx`；AstMod/AstRedux 改用 `pause_coop.smx`，隔离目录内其他历史副本仍不据此建立来源关系。
 - Campaign Switcher 运行依赖官方 [`shqke/imatchext`](https://github.com/shqke/imatchext) CI 产物：提交 `c384bccefc593bc308fe829013b3ebcbe62e78a2`、Actions run `28502325023`、artifact `imatchext-sm1.12-oldlinux-c384bcc`。仓库只纳入 L4D2 oldlinux 扩展及运行所需 include、gamedata、translations；`imatchext.ext.2.l4d2.so` SHA-256 为 `8CD002D994B9569AC74763D9087411E118A76C38DD2F2901F1ACA96F153CC67F`。
+- imatchext 将 [`shqke/langparser`](https://github.com/shqke/langparser) 声明为可选自动加载依赖；缺失时不影响 Mission API，但会让每次冷启动留下 FAILED 扩展和错误日志。为避免该假告警，仓库纳入提交 `b5da6308f9fc5c70a6407c39cd308edb0eee5319`、Actions run `28502343205`、artifact `langparser-sm1.11-linux-b5da630` 的 L4D2 扩展。该二进制已在生产机以 `file`、`ldd`、`readelf` 核对为 32-bit L4D2 ABI，最高要求 `GLIBC_2.4`；SHA-256 为 `7C3E22D857779E713FA9D34B322363168C1BBD71FCB4B13EDD8A71D8E89C30FC`。
 - `versus_coop_mode.smx` 现由仓库内 `versus_coop_mode.sp` 维护；上游线索是 [`umlka/l4d2/versus_coop_mode`](https://github.com/umlka/l4d2/tree/main/versus_coop_mode)。当前版本将相邻的一字节 Director 回合字段改为 `NumberType_Int8` 写入，避免旧版四字节写破坏后续指针。
 - Lysis 反编译只能用于分析仅二进制插件，不能恢复原始源码或证明构建链。
 
