@@ -5,6 +5,7 @@
 #include <sdktools>
 #include <builtinvotes>
 #include <left4dhooks>
+#include <script_reloader>
 
 #define TEAM_SURVIVORS 2
 #define TEAM_INFECTED 3
@@ -360,7 +361,10 @@ void RefreshEffectiveWave()
 
 void ApplyDirectorSettings()
 {
-    ServerCommand("sm_reloadscript");
+    if (!VScript_Reload())
+    {
+        LogError("[AstRedux] Could not apply Director settings through script_reloader.");
+    }
 }
 
 void ResetWaveState()

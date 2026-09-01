@@ -7,6 +7,7 @@
 #include <sdkhooks>
 #include <left4dhooks>
 #include <colors>
+#include <script_reloader>
 
 #define MENU_DISPLAY_TIME		15
 
@@ -1586,7 +1587,9 @@ public void BypassAndExecuteCommand(int client, char[] strCommand, char[] strPar
 
 public void ReloadVScript(ConVar convar, const char[] oldvalue, const char[] newvalue)
 {
-	ServerCommand("sm_reloadscript");
+	if (!VScript_Reload()) {
+		LogError("[Ast] Could not reload VScript through script_reloader.");
+	}
 }
 
 void AddToggleMenuItem(Handle menu, const char[] label, bool enabled)
