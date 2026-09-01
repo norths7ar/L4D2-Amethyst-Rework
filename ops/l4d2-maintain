@@ -751,7 +751,7 @@ start_runtime() {
 
 health_check() {
     local status_output humans map reason='service is not active'
-    for _ in {1..6}; do
+    for _ in {1..4}; do
         if ! systemctl is-active --quiet "$SERVICE_NAME"; then
             reason='service is not active'
         elif ! ss -lun "sport = :$PORT" \
