@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+CONFIG_PATH=${L4D2_MAINTAIN_CONFIG:-/etc/l4d2-maintain.conf}
+if [[ ! -r "$CONFIG_PATH" ]]; then
+    printf 'l4d2-console: cannot read %s\n' "$CONFIG_PATH" >&2
+    exit 1
+fi
+# shellcheck source=/dev/null
+source "$CONFIG_PATH"
+
+runtime_kind() {
+    local service_state
+    service_state=$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || true)
+    case "$service_state" in
+        active|activating|deactivating)
+            printf 'systemd\n'
+            return
+            ;;
+    esac
+    if runuser -u "$TMUX_USER" -- tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
+        printf 'tmux\n'
+        return
+    fi
+    if pgrep -u "$SERVICE_USER" -f '[s]rcds_linux' >/dev/null; then
+        printf 'unmanaged\n'
+        return
+    fi
+    printf 'stopped\n'
+}
+
+send_line() {
+    local line=$1
+    local runtime
+    runtime=$(runtime_kind)
+    case "$runtime" in
+        systemd)
+            [[ -p "$RUNTIME_DIR/console.fifo" ]] || {
+                printf 'l4d2-console: console FIFO is missing\n' >&2
+                return 1
+            }
+            timeout 3 bash -c 'printf "%s\n" "$1" > "$2"' _ "$line" "$RUNTIME_DIR/console.fifo"
+            ;;
+        tmux)
+            runuser -u "$TMUX_USER" -- tmux send-keys -t "$TMUX_SESSION" -l -- "$line"
+            runuser -u "$TMUX_USER" -- tmux send-keys -t "$TMUX_SESSION" Enter
+            ;;
+        *)
+            printf 'l4d2-console: runtime is %s; no controllable console\n' "$runtime" >&2
+            return 1
+            ;;
+    esac
+}
+
+capture_recent() {
+    case "$(runtime_kind)" in
+        systemd)
+            journalctl -u "$SERVICE_NAME" -n 600 --no-pager -o cat
+            ;;
+        tmux)
+            runuser -u "$TMUX_USER" -- tmux capture-pane -p -t "$TMUX_SESSION" -S -600
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+query_status() {
+    local marker="L4D2_MAINTAIN_$$_$(date +%s%N)"
+    local output=''
+    send_line "echo ${marker}_BEGIN; status; echo ${marker}_END"
+    for _ in {1..10}; do
+        sleep 0.3
+        output=$(capture_recent || true)
+        if grep -Fq "${marker}_END" <<<"$output"; then
+            awk -v begin="${marker}_BEGIN" -v end="${marker}_END" '
+                index($0, begin) { capture=1; next }
+                index($0, end) { if (capture) exit }
+                capture { print }
+            ' <<<"$output"
+            return 0
+        fi
+    done
+    printf 'l4d2-console: timed out waiting for status output\n' >&2
+    return 1
+}
+
+validate_normal_password() {
+    [[ ${NORMAL_SERVER_PASSWORD:-} =~ ^[A-Za-z0-9._-]*$ ]] || {
+        printf 'l4d2-console: NORMAL_SERVER_PASSWORD contains unsupported characters\n' >&2
+        return 1
+    }
+}
+
+usage() {
+    printf 'Usage: l4d2-console {runtime|status|reload-addons|gate-close|gate-open|quit}\n' >&2
+    exit 2
+}
+
+case ${1:-} in
+    runtime)
+        runtime_kind
+        ;;
+    status)
+        query_status
+        ;;
+    reload-addons)
+        send_line 'update_addon_paths; mission_reload'
+        ;;
+    gate-close)
+        send_line "sv_password maintenance-$RANDOM-$(date +%s%N)"
+        ;;
+    gate-open)
+        validate_normal_password
+        send_line "sv_password \"${NORMAL_SERVER_PASSWORD:-}\""
+        ;;
+    quit)
+        send_line 'quit'
+        for _ in {1..30}; do
+            if ! pgrep -u "$SERVICE_USER" -f '[s]rcds_linux' >/dev/null; then
+                exit 0
+            fi
+            sleep 1
+        done
+        printf 'l4d2-console: srcds did not exit after quit\n' >&2
+        exit 1
+        ;;
+    *)
+        usage
+        ;;
+esac

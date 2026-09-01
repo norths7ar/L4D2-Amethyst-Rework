@@ -1,0 +1,13 @@
+# Managed by L4D2-Amethyst-Rework ops/install.sh
+[Unit]
+Description=Check L4D2 desired state every ten minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=10min
+RandomizedDelaySec=30
+Persistent=true
+Unit=l4d2-maintenance.service
+
+[Install]
+WantedBy=timers.target

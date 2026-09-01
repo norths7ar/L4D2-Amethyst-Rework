@@ -1,50 +1,37 @@
 # Ubuntu 22.04 L4D2 服务器运行与维护
 
-这份笔记面向在 Ubuntu 22.04 上部署 L4D2 Dedicated Server 的维护者，覆盖账号、进程、更新、发布、日志和恢复。玩法规则与模式配置见同目录的 `CONFIG_GUIDE.md`；AstMod 接入资产见 `../ASTMOD_INTEGRATION.md`。
+这份笔记面向 `/home/l4d2` 上的生产 L4D2 Dedicated Server。玩法规则与模式配置见同目录的 `CONFIG_GUIDE.md`；可执行运维入口和状态机见 `../ops/README.md`。
 
-## 运行账户与目录
+## 账户与目录
 
-服务器维护使用两个账户：日常 SSH/SFTP 运维账户，以及专门运行游戏进程的服务账户。服务账户拥有游戏目录，运维账户通过 `sudo -u <service-user>` 发布和启动服务。
-
-建议将目录划分为：
+日常 SSH/SFTP 使用 `ecs-user`，游戏进程使用专用账户 `l4d2`。主机层维护通过 `sudo l4d2-maintain ...` 执行，再按职责以 `l4d2` 身份访问游戏和 Git 文件。
 
 ```text
-/srv/l4d2/
+/home/l4d2/
   server/       # SteamCMD 安装的实际游戏目录
-  integration/  # 本仓库的服务器工作副本
-  backup/       # 可恢复的配置与个人数据备份
-  inbox/        # SFTP 上传暂存区
+  integration/  # 本仓库的干净工作副本，日常发布源为 origin/main
+  releases/     # 按 commit 构建的不可变 release
+  overlay/      # 管理员、个人配置等服务器私有覆盖
+  content/      # 已激活的用户 VPK
+  retiring/     # 被替换或删除的 VPK 可恢复副本
+  backups/      # 发布前备份
+
+/home/ecs-user/l4d2-addons/  # SFTP 可见的用户 VPK 期望集合
+/var/lib/l4d2-maintain/      # manifest、pending 和已部署 commit
+/run/l4d2/                   # 本机控制台 FIFO
 ```
 
-管理员 SteamID、个人称号、聊天归档和私有战役清单保存在维护者自己的 overlay；仓库记录这些功能的格式、部署位置和操作流程。
+管理员 SteamID、个人称号、聊天归档等保存在 overlay。仓库只记录这些功能的格式、部署位置和操作流程，不保存私密值。
 
-## 连接与交互式控制台
+## 连接与控制台
 
-SSH 密钥是日常连接方式，SFTP 客户端可以作为图形化上传、下载和编辑工具。WinSCP、FileZilla 等客户端均可使用同一套 SFTP 凭据。
+SSH 密钥是日常连接方式，WinSCP、FileZilla 等 SFTP 客户端可使用同一凭据。生产实例不开放 RCON。
 
-首次安装、调试启动参数或观察插件加载时，使用 tmux 或 screen 保存游戏控制台：
+稳定服务通过 `/run/l4d2/console.fifo` 接收固定的本机维护指令。tmux 只用于首次迁移前、迁移失败回退和临时交互调试，不再作为长期进程管理器。
 
-```bash
-tmux new -s l4d2
-tmux attach -t l4d2
-```
+## systemd 生命周期
 
-按 `Ctrl+B` 后按 `D` 脱离 tmux，会话和游戏继续运行。tmux 适合交互式调试；稳定服务由 systemd 承载。
-
-## systemd 承载游戏进程
-
-systemd 服务负责启动 Dedicated Server、记录标准输出，并在异常退出后重新拉起。一个基础服务包含以下职责：
-
-```ini
-[Service]
-User=l4d2
-WorkingDirectory=/srv/l4d2/server
-ExecStart=/srv/l4d2/server/srcds_run -game left4dead2 -console -usercon -tickrate 100 -port 27015 +map c1m1_hotel
-Restart=on-failure
-RestartSec=10
-```
-
-常用操作：
+`ops/systemd/l4d2.service` 以 `l4d2` 账户从 `/home/l4d2/server` 启动游戏，标准输出进入 journal，异常退出由 systemd 重启。不要在 service 运行时另起 tmux 游戏实例。
 
 ```bash
 sudo systemctl start l4d2
@@ -53,48 +40,72 @@ sudo systemctl status l4d2
 sudo journalctl -u l4d2 -f
 ```
 
-游戏内插件负责玩法，systemd 负责进程生命周期。部署、更新和空服维护通过 systemd service/timer 或维护脚本发起服务重启。
+首次安装分两步。第一步只写入脚本、配置和 unit，不改变当前 tmux；第二步设置临时服务器密码阻止新连接，确认空服后切换。systemd 启动失败会恢复并验证原 tmux 启动方式。
 
-## 空服维护与定时任务
+```bash
+sudo ./ops/install.sh
+sudo l4d2-maintain preflight
+sudo ./ops/install.sh --activate
+```
 
-定时任务适合安排在维护窗口执行：检查 Steam 更新、同步仓库工作副本、部署已验证改动、轮转日志和重启服务。
+## 空服维护与 timer
 
-空服发布使用一个维护脚本完成两件事：读取服务器玩家状态，并在无人时执行部署和 `systemctl restart l4d2`。有玩家时脚本留下待发布标记，在下一次空服窗口继续处理。这样玩法插件始终服务于游戏过程，主机服务统一处理发布和重启。
+`l4d2-maintenance.timer` 每十分钟运行一次收敛检查：检查 Steam 版本、Git 目标、用户 VPK 增删和进程 uptime。
 
-## 更新与发布
+`l4d2-maintain` 从本机控制台的 `status` 读取真人数。无法确认人数时拒绝维护；有人时只记录 pending；冷维护前先设置临时服务器密码阻止新连接，再确认空服并执行发布。中止时解除密码，成功重启后由 `server.cfg` 恢复 `NORMAL_SERVER_PASSWORD`。超过默认 36 小时 uptime 只增加待重启理由，不按固定时刻强退玩家。
 
-更新游戏本体时，停止服务后使用 SteamCMD 更新 App 222860，再启动服务完成一次冷加载检查。
+## Git 更新与发布
 
-本仓库的发布流程：
+默认发布过程如下：
 
-1. 更新 `/srv/l4d2/integration/` 工作副本；
-2. 在工作副本运行 `pwsh -File tools/validate_astmod_integration.ps1`；
-3. 将 `addons/`、`cfg/`、`scripts/` 同步到 `server/left4dead2/`；
-4. 确认游戏目录归服务账户所有；
-5. 重启服务，进入对应模式完成冒烟测试。
+1. 获取 `/home/l4d2/integration` 的 `origin/main`，解析固定 commit；
+2. 在 `/home/l4d2/releases/<commit>/` 构建 release，随后合入私有 overlay；
+3. 拒绝脏工作区和已纳管文件的未知漂移，备份当前版本；
+4. 只同步 Git/overlay 纳管路径，并按旧 manifest 删除仓库中已经删除的文件；
+5. 重启并通过 service、UDP 端口和控制台 `status` 健康检查；Git、overlay、missioncycle 和 content 失败时只自动恢复一次纳管状态。
 
-VPK 放入 `left4dead2/addons/`。新增战役后检查控制台 addon 载入信息，再实际换图或运行 `!mapvote` 验证战役入口。
+服务器不会在游戏目录内运行 Git，也不会自动 reset 本地改动。功能分支或固定 commit 只能通过显式 `sudo l4d2-maintain converge <ref>` 发布；日常 timer 始终回到 `origin/main`。
 
-## 管理员与个人文件
+更新游戏本体时，维护器先比较 Steam build。版本变化只记 pending，到空服窗口停止游戏后执行 SteamCMD，再与 Git/VPK 变更合并成一次冷启动。Steam 本体不在普通文件备份的回滚范围内；若更新后的二进制或 ABI 无法通过健康检查，需要使用 Steam/主机快照人工恢复，不能把配置恢复误称为 Steam 回滚。
 
-`addons/sourcemod/configs/admins_simple.ini` 是 SourceMod 的管理员列表。维护者可用图形化编辑器维护私有 overlay 中的副本，再发布到服务器配置目录；新增管理员后重载管理员配置或重启服务。
+## 用户 VPK 与战役清单
 
-个人可选插件放在独立的 optional 层，启用方式、所需 cfg、data、translations、VScript 和 VPK 资产写入插件清单。实际 SteamID、称号映射与玩家日志留在私有 overlay。
+第三方 VPK 不进入 Git 发布目录。通过 SFTP 上传到 `/home/ecs-user/l4d2-addons`，上传中使用 `.part`，完成后原子改名为 `.vpk`。该目录是期望集合：新增文件表示安装，删除文件表示退役。
+
+新增或更新时，维护器先检查 VPK 结构、分卷、mission 文件和重复地图，再原子复制并执行：
+
+```text
+update_addon_paths; mission_reload
+```
+
+热加载后仍保留冷重启标记。删除时先从 `addons/sourcemod/configs/missioncycle.txt` 的“第三方战役”段移除，实际 VPK 等到空服窗口再退役和冷重启。该 `missioncycle.txt` 是 Campaign Switcher 唯一运行时清单；`vote_menu.txt` 只负责通用投票入口。
+
+## 管理员与私有 overlay
+
+`addons/sourcemod/configs/admins_simple.ini` 是 SourceMod 管理员列表。服务器私有版本应按同一相对路径放入 `/home/l4d2/overlay/`，由发布 staging 合入，避免 Git 更新覆盖私有值。
+
+个人可选插件同样放在 overlay，并保持插件、cfg、data、translations、VScript 和 VPK 依赖完整。用户上传的第三方 VPK 不属于 overlay，由 content 状态机单独管理。
 
 ## 日志、备份与恢复
 
 | 信息 | 位置或入口 |
 | --- | --- |
 | 进程启动与崩溃 | `journalctl -u l4d2` |
+| 自动维护 | `journalctl -u l4d2-maintenance` |
 | 引擎日志 | `left4dead2/logs/` |
 | SourceMod 日志 | `left4dead2/addons/sourcemod/logs/` |
-| 实时调试 | tmux/screen 控制台或 journal 跟随输出 |
+| 当前综合状态 | `sudo l4d2-maintain status` |
 
-排查记录至少包含发生时间、地图、模式、玩家人数和控制台报错。备份覆盖私有 overlay、已验证配置版本和上传的第三方 VPK；恢复时先还原已验证配置，再启动服务验证冷加载和模式进入。
+每次冷维护前保存旧 manifest、Git commit、missioncycle、纳管文件和 content 快照。纳管状态自动恢复只尝试一次；仍失败或 Steam 本体不兼容时，timer 以非零状态退出，保留 journal 和备份供人工处理。
+
+```bash
+sudo l4d2-maintain rollback
+```
 
 ## 日常检查
 
-- 查看磁盘空间、系统内存、游戏进程和 UDP 端口监听状态。
-- 查看 SourceMod error log、systemd journal 和游戏崩溃痕迹。
-- 在游戏、插件或 VPK 更新后执行一次模式加载与换图测试。
-- 定期验证备份能恢复管理员配置和个人 overlay。
+- `sudo l4d2-maintain status`：磁盘、进程、端口、玩家、地图、Git、VPK 和 pending。
+- `sudo l4d2-maintain preflight`：依赖、目录、工作区、进程唯一性和玩家状态来源。
+- `sudo systemctl list-timers l4d2-maintenance.timer`：下次自动收敛时间。
+- `sudo journalctl -u l4d2 -u l4d2-maintenance --since today`：游戏与维护失败。
+- 游戏、插件或 VPK 更新后实际进入对应模式并换图；宿主健康检查不能替代玩法验证。
