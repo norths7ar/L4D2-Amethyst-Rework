@@ -13,16 +13,20 @@ DirectorOptions <-
 	SpecialRespawnInterval			= 0
 	SpecialInitialSpawnDelayMin 	= 0 // 出门后多久刷特感
 	SpecialInitialSpawnDelayMax 	= 0
-	PreferredSpecialDirection 		= 4
 	cm_HeadshotOnly 				= 0
+
+	// SPAWN_NO_PREFERENCE = -1, SPAWN_BEHIND_SURVIVORS = 1, SPAWN_BATTLEFIELD = 2, SPAWN_POSITIONAL = 3, SPAWN_SPECIALS_ANYWHERE = 4
+	PreferredSpecialDirection 		= 2
 
 	RelaxMaxInterval 				= 0 // Maximum time to spend in the RELAX tempo.
 	RelaxMinInterval 				= 0 // Minimum time to spend in the RELAX tempo.
 
-
+	// 下面这三个参数是旧版刷新机制用的，新版不要修改！！！
 	DominatorLimit 			= 12
 	cm_BaseSpecialLimit 	= 12
 	cm_MaxSpecials 			= 12
+
+	// 这里不用管，仅初始化
 	BoomerLimit 			= 1
 	SpitterLimit 			= 0
 	HunterLimit 			= 1
@@ -31,22 +35,16 @@ DirectorOptions <-
 	SmokerLimit 			= 0
 }
 
-// ModeData 两个值不直接控制特感刷新，可以理解成上限
+// 旧版特感刷新参数
+// 这两个值直接控制特感刷新，到 update_diff_old() 中修改，此处仅初始化。
 ModeData <-{
-	g_nSI				= 24		// 数值必须比所有特感 Limit 加起来都要大（包含 Tank），总之越大越好
-	g_nTime				= 0			// 0秒，保证需要时能尽快刷出
+	g_nSI				= 24		// 最大同时在场特感数量
+	g_nTime				= 0			// 特感刷新间隔时间
 }
 
 // 特感刷新参数
 ::Waves <- {
 	Enabled				= true		// 新版特感刷新机制开关
-	MaxSILimit 			= 3			// 同场特感数量
-	SpawnTime 			= 3			// 复活间隔
-	SpawnedSICount 		= 0			// 用于脚本判断，不需要修改。当前波次刷出的特感数量
-	AliveSICount 		= 0			// 用于脚本判断，不需要修改。当前场上的特感数量
-	HasFirstDeath 		= false		// 用于脚本判断，不需要修改。当前波次是否有特感已经死亡
-	FirstDeathTime		= -1		// 用于脚本判断，不需要修改。第一只的死亡时间
-	BonusSpawnTime		= 0			// 用于脚本判断，不需要修改。击杀的奖励时间
 }
 
 // 插件修改特感刷新参数时会重新读取/执行整个脚本文件。
@@ -86,25 +84,46 @@ function update_diff_new()
 	local timer_new = Convars.GetStr("ast_sitimer_new").tofloat();
 	local limit_new = Convars.GetStr("ast_silimit_new").tointeger();
 
-	DirectorOptions.HunterLimit = Convars.GetStr("astredux_si_hunter_limit").tointeger();
-	DirectorOptions.SmokerLimit = Convars.GetStr("astredux_si_smoker_limit").tointeger();
-	DirectorOptions.BoomerLimit = Convars.GetStr("astredux_si_boomer_limit").tointeger();
-	DirectorOptions.SpitterLimit = Convars.GetStr("astredux_si_spitter_limit").tointeger();
-	DirectorOptions.JockeyLimit = Convars.GetStr("astredux_si_jockey_limit").tointeger();
-	DirectorOptions.ChargerLimit = Convars.GetStr("astredux_si_charger_limit").tointeger();
-	DirectorOptions.PreferredSpecialDirection = Convars.GetStr("astredux_si_preferred_direction").tointeger();
+	local hunter = Convars.GetStr("astredux_si_hunter_limit").tointeger();
+	local smoker = Convars.GetStr("astredux_si_smoker_limit").tointeger();
+	local boomer = Convars.GetStr("astredux_si_boomer_limit").tointeger();
+	local spitter = Convars.GetStr("astredux_si_spitter_limit").tointeger();
+	local jockey = Convars.GetStr("astredux_si_jockey_limit").tointeger();
+	local charger = Convars.GetStr("astredux_si_charger_limit").tointeger();
+	local preferred = Convars.GetStr("astredux_si_preferred_direction").tointeger();
 
-	DirectorOptions.cm_BaseSpecialLimit 					= ModeData.g_nSI
-	DirectorOptions.cm_MaxSpecials 							= ModeData.g_nSI
-	DirectorOptions.DominatorLimit 							= ModeData.g_nSI
-	DirectorOptions.cm_SpecialRespawnInterval 				= ModeData.g_nTime
-	DirectorOptions.cm_SpecialSlotCountdownTime 			= ModeData.g_nTime
-	Waves.MaxSILimit										= limit_new
-	Waves.SpawnTime											= timer_new
+	// 计算基准值为各特感上限之和
+	local baseTotal = hunter + smoker + boomer + spitter + jockey + charger;
+
+	local scale = 1.0;
+	if (limit_new > 0 && baseTotal > 0) {
+		if (limit_new <= baseTotal) {
+			scale = 1.0;
+		} else {
+			scale = limit_new.tofloat() / baseTotal.tofloat();
+		}
+	}
+
+	// 以 cvar 中原始 limit 为基准，按 ast_silimit_new 的目标值做比例放大。
+	if (limit_new <= baseTotal) {
+		DirectorOptions.HunterLimit = hunter > 0 ? hunter : 0;
+		DirectorOptions.SmokerLimit = smoker > 0 ? smoker : 0;
+		DirectorOptions.BoomerLimit = boomer > 0 ? boomer : 0;
+		DirectorOptions.SpitterLimit = spitter > 0 ? spitter : 0;
+		DirectorOptions.JockeyLimit = jockey > 0 ? jockey : 0;
+		DirectorOptions.ChargerLimit = charger > 0 ? charger : 0;
+	} else {
+		DirectorOptions.HunterLimit = hunter > 0 ? ((hunter * scale) + 0.999999).tointeger() : 0;
+		DirectorOptions.SmokerLimit = smoker > 0 ? ((smoker * scale) + 0.999999).tointeger() : 0;
+		DirectorOptions.BoomerLimit = boomer > 0 ? ((boomer * scale) + 0.999999).tointeger() : 0;
+		DirectorOptions.SpitterLimit = spitter > 0 ? ((spitter * scale) + 0.999999).tointeger() : 0;
+		DirectorOptions.JockeyLimit = jockey > 0 ? ((jockey * scale) + 0.999999).tointeger() : 0;
+		DirectorOptions.ChargerLimit = charger > 0 ? ((charger * scale) + 0.999999).tointeger() : 0;
+	}
+	DirectorOptions.PreferredSpecialDirection = preferred;
 }
 
 // 旧版本刷新机制
-// 替换时注意修改 MapData 为 ModeData
 function update_diff_old()
 {
 	local difficulty = Convars.GetStr("astredux_profile_current");
