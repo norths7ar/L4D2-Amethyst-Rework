@@ -52,10 +52,10 @@ Profile Controller 每 5 秒检查人数，并将密集的 `player_team` 事件�
 
 - Competitive Rework 负责 Confogl、通用修复、扩展和模式切换生命周期；AstMod 专属插件隔离在 `addons/sourcemod/plugins/optional/astmod/`。
 - `cfg/generalfixes.cfg` 保留所有模式都适用的修复与通用体验调整；竞技规则位于 `cfg/competitive_shared.cfg`，竞技模式加载 `playermanagement.smx`，Ast 系列加载 `jointeam.smx`。
-- `pause.smx` 以 Competitive Rework 6.9 为主体，合入 `!p`、`!pausepanel` 和 0.1 秒延迟暂停；换位、插值、旁观速率、开位和 Boss 投票统一使用 Rework 的共享版本。
+- AstMod 与 AstRedux 使用 `pause_coop.smx`：暂停后由当前每名真人生还者分别准备，全部准备才倒计时恢复；AstFlex 与竞技模式继续使用 Rework 的通用 `pause.smx`。换位、插值、旁观速率、开位和 Boss 投票仍统一使用 Rework 的共享版本。
 - AstMod 的 Uzi、消音微冲、木喷、铁喷和确定性霰弹散布已与当前 Zonemod 同步；57 张官图 Stripper 配置也从 Zonemod 同步，未覆盖第三方地图文件和 global filters。
 - AstRedux 在共享武器基准之上为 1P/2P 恢复微冲换弹补偿，并把猎枪、军狙、Scout 和 AWP 作为同一组限制为全队最多一把；武器配置集中记录主动改变的属性。
-- Campaign Switcher 从 `missioncycle.txt` 读取战役轮换并隐藏首图尚未安装的条目；`!vote` 独立读取 `vote_menu.txt`，只提供服务器操作投票。
+- Campaign Switcher 以 `missioncycle.txt` 作为 Map 白名单、顺序和显示名策略，以 imatchext Mission Cache 作为实际可用 Mission、Chapter 与官图/三方图事实来源；`!vote` 独立读取 `vote_menu.txt`，只提供服务器操作投票。
 - `!vote` 保留通用投票入口；Ast 玩法调整由 `!ast` 打开，`!tz` 保留为兼容短命令。单人生还者直接调整并广播，多人生还者必须投票。
 - AstRedux 与 Baseline 的差异、旧 DAS 的问题和当前 profile 记录在上节；AstMod Baseline 仍保留 DAS，但已同步 2.8.1 的波次参数和功能更新。
 - AstFlex 目前使用 AstMod 的 Versus-backed 底层，第三方战役兼容工作随 Coop-native 底层推进。
@@ -68,8 +68,9 @@ Profile Controller 每 5 秒检查人数，并将密集的 `player_team` 事件�
 | `!chmatch` | 直接打开当前模式的切换流程。 |
 | `!rmatch` | 重置当前 matchmode。 |
 | `!vote` | 打开由 `vote_menu.txt` 提供的服务器操作投票菜单。 |
-| `!mapvote` | 打开 Campaign Switcher 战役换图投票。 |
-| `!mapvotes` | 查看当前 Campaign Switcher 换图投票。 |
+| `!mapvote` | 随时发起即时 Map 换图投票，普通玩家可用。 |
+| `!nextmap` | 在终章累计选择下一张 Map；同一面板显示各选项票数。 |
+| `!chaptervote` | 发起当前 Map 内的 Chapter 即时换关投票。 |
 | `!ast` / `!tz` | 打开 Ast 玩法调整菜单。 |
 | `!si <时间> <数量>` | 调整 Redux 的波次刷新参数；单人生还者直接生效，多人生还者投票。 |
 | `!votekick` | 发起玩家踢人投票。 |
@@ -80,7 +81,7 @@ Profile Controller 每 5 秒检查人数，并将密集的 `player_team` 事件�
 
 旧版整合已经完成 Ubuntu 22.04 Dedicated Server 冷加载、AstMod/AstRedux 模式加载与卸载、四档 Redux profile，以及 AstMod → Zonemod 的玩家连接切换验证。本轮 2.8.1 升级已经完成源码编译和静态集成校验，但尚未重新进行 Dedicated Server 运行测试。
 
-仍需真人完成完整章节与终章、`!match` / `!vote` / `!mapvote` / `!ast` / `!si` 菜单流程、临时 override 跨图与空服重置、Redux 自动人数切档、单一波次刷特、Tank 存量边界、固定近战伤害和多轮模式往返测试。当前属于持续开发配置，不提供稳定发布包承诺。
+仍需真人完成完整章节与终章、`!match` / `!vote` / `!mapvote` / `!nextmap` / `!chaptervote` / `!ast` / `!si` 菜单流程、每人准备暂停、临时 override 跨图与空服重置、Redux 自动人数切档、单一波次刷特、Tank 存量边界、固定近战伤害和多轮模式往返测试。当前属于持续开发配置，不提供稳定发布包承诺。
 
 ## 文档
 

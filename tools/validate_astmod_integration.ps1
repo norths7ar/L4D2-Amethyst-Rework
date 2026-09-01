@@ -133,6 +133,17 @@ $requiredPaths = @(
     "addons/sourcemod/configs/vote_menu.txt",
     "addons/sourcemod/configs/advertisements.txt",
     "addons/sourcemod/configs/astredux_profiles.cfg",
+    "addons/sourcemod/extensions/imatchext.autoload",
+    "addons/sourcemod/extensions/imatchext.ext.2.l4d2.so",
+    "addons/sourcemod/gamedata/imatchext.txt",
+    "addons/sourcemod/scripting/include/imatchext.inc",
+    "addons/sourcemod/translations/imatchext.phrases.txt",
+    "addons/sourcemod/translations/chi/imatchext.phrases.txt",
+    "addons/sourcemod/translations/zho/imatchext.phrases.txt",
+    "addons/sourcemod/scripting/campaign_switcher.sp",
+    "addons/sourcemod/scripting/pause_coop.sp",
+    "addons/sourcemod/plugins/optional/astmod/campaign_switcher.smx",
+    "addons/sourcemod/plugins/optional/astmod/pause_coop.smx",
     "addons/sourcemod/scripting/astredux_profile_controller.sp",
     "addons/sourcemod/scripting/astredux_wave_spawner.sp",
     "addons/sourcemod/scripting/astredux_rules.sp",
@@ -307,6 +318,50 @@ Assert-NotContains `
     "scripts/vscripts/astredux.nut" `
     '\bscale\b' `
     "AstRedux still uses proportional SI limit scaling"
+
+Assert-Contains `
+    "addons/sourcemod/scripting/campaign_switcher.sp" `
+    '#include <imatchext>' `
+    "Campaign Switcher does not use imatchext as its mission registry"
+Assert-Contains `
+    "addons/sourcemod/scripting/campaign_switcher.sp" `
+    'RegConsoleCmd\("sm_mapvote"' `
+    "Campaign Switcher does not register sm_mapvote"
+Assert-Contains `
+    "addons/sourcemod/scripting/campaign_switcher.sp" `
+    'RegConsoleCmd\("sm_nextmap"' `
+    "Campaign Switcher does not register sm_nextmap"
+Assert-Contains `
+    "addons/sourcemod/scripting/campaign_switcher.sp" `
+    'RegConsoleCmd\("sm_chaptervote"' `
+    "Campaign Switcher does not register sm_chaptervote"
+Assert-NotContains `
+    "addons/sourcemod/scripting/campaign_switcher.sp" `
+    'sm_mapvotes' `
+    "Campaign Switcher still exposes the retired sm_mapvotes command"
+Assert-Contains `
+    "addons/sourcemod/scripting/pause_coop.sp" `
+    'CreateGlobalForward\("OnPause"' `
+    "Coop pause does not publish the pause forward"
+Assert-Contains `
+    "addons/sourcemod/scripting/pause_coop.sp" `
+    'CreateGlobalForward\("OnUnpause"' `
+    "Coop pause does not publish the unpause forward"
+
+foreach ($mode in @("astmod", "astredux")) {
+    Assert-Contains `
+        "cfg/cfgogl/$mode/plugins_1.cfg" `
+        'sm plugins load optional/astmod/pause_coop\.smx' `
+        "$mode does not load the coop pause implementation"
+    Assert-NotContains `
+        "cfg/cfgogl/$mode/plugins_1.cfg" `
+        'sm plugins load optional/pause\.smx' `
+        "$mode still loads the generic pause implementation"
+}
+Assert-Contains `
+    "cfg/cfgogl/astflex/plugins_1.cfg" `
+    'sm plugins load optional/pause\.smx' `
+    "AstFlex no longer loads the generic pause implementation"
 
 foreach ($mode in $modes) {
     $pluginList = Join-Path $Root "cfg/cfgogl/$mode/plugins_1.cfg"

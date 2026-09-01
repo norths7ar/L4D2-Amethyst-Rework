@@ -4,7 +4,7 @@
 
 ## 判定标准
 
-- 主清单范围是 `addons/sourcemod/plugins/optional/astmod/*.smx`，共 121 个；“当前加载”表示 `astmod`、`astredux` 或 `astflex` 至少有一个模式启用该插件。
+- 主清单范围是 `addons/sourcemod/plugins/optional/astmod/*.smx`，共 122 个；“当前加载”表示 `astmod`、`astredux` 或 `astflex` 至少有一个模式启用该插件。
 - “AstMod 2.7.1 一致”表示当前 SMX 与原包同名二进制哈希一致；源码关系另按本清单中的构建状态记录。
 - `repo:` 指本仓库 `addons/sourcemod/scripting/`；`AstSrc:` 指外部参考克隆 `../../repos/L4D2-AstMod-Scriptings-upstream/`。
 - “源码线索”列出值得核对的文件；可重建关系同时记录源码、编译器、include、参数和产物比较。
@@ -13,11 +13,11 @@
 
 | 项目 | 数量 |
 | --- | ---: |
-| AstMod 隔离目录内的 SMX | 121 |
-| 当前加载 | 82 |
-| 当前停用 | 39 |
+| AstMod 隔离目录内的 SMX | 122 |
+| 当前加载 | 84 |
+| 当前停用 | 38 |
 | 与 AstMod 2.7.1 原包二进制完全一致 | 113 |
-| 本地修改或新增、由本仓库维护的当前二进制 | 8 |
+| 本地修改或新增、由本仓库维护的当前二进制 | 9 |
 
 “与 2.7.1 一致”是历史二进制来源判定；当前 Baseline 的运行规则以 2.8.1 为基准。历史插件继续按已有源码线索列示，Wave Spawner 和本轮重建插件由仓库直接维护构建关系。
 
@@ -61,7 +61,8 @@
 
 ## 维护来源补充
 
-- 对存在多个源码线索的 `l4d_boss_percent`、`l4d2_hunter_no_deadstops` 和 `survivor_mvp`，海洋建议今后维护以 `AstSrc:` 为准；这不证明当前二进制由该版本构建。运行中的共享 `pause.smx` 已改为本仓库可重建版本，隔离目录内的历史副本仍不据此建立来源关系。
+- 对存在多个源码线索的 `l4d_boss_percent`、`l4d2_hunter_no_deadstops` 和 `survivor_mvp`，海洋建议今后维护以 `AstSrc:` 为准；这不证明当前二进制由该版本构建。AstFlex 与竞技模式仍使用仓库可重建的共享 `pause.smx`；AstMod/AstRedux 改用 `pause_coop.smx`，隔离目录内其他历史副本仍不据此建立来源关系。
+- Campaign Switcher 运行依赖官方 [`shqke/imatchext`](https://github.com/shqke/imatchext) CI 产物：提交 `c384bccefc593bc308fe829013b3ebcbe62e78a2`、Actions run `28502325023`、artifact `imatchext-sm1.12-oldlinux-c384bcc`。仓库只纳入 L4D2 oldlinux 扩展及运行所需 include、gamedata、translations；`imatchext.ext.2.l4d2.so` SHA-256 为 `8CD002D994B9569AC74763D9087411E118A76C38DD2F2901F1ACA96F153CC67F`。
 - `versus_coop_mode.smx` 现由仓库内 `versus_coop_mode.sp` 维护；上游线索是 [`umlka/l4d2/versus_coop_mode`](https://github.com/umlka/l4d2/tree/main/versus_coop_mode)。当前版本将相邻的一字节 Director 回合字段改为 `NumberType_Int8` 写入，避免旧版四字节写破坏后续指针。
 - Lysis 反编译只能用于分析仅二进制插件，不能恢复原始源码或证明构建链。
 
@@ -71,7 +72,7 @@
 
 这里的“已确认”表示当前 SMX 与 2.7.1 运行包中的二进制哈希完全一致；源码对应关系由每项后的 `repo:`、`AstSrc:` 或构建状态继续说明。
 
-### 已加载（74）
+### 已加载（75）
 
 #### 找到单一源码线索（62）
 
@@ -144,8 +145,9 @@
 - `l4d2_hunter_no_deadstops.smx` → `repo:l4d2_hunter_no_deadstops.sp` / `AstSrc:l4d2_hunter_no_deadstops.sp`（海洋已回复：今后维护优先以作者仓库版本为准；这不证明当前 SMX 由该版本构建）
 - `survivor_mvp.smx` → `repo:survivor_mvp.sp` / `AstSrc:survivor_mvp.sp`（海洋已回复：今后维护优先以作者仓库版本为准；这不证明当前 SMX 由该版本构建）
 
-#### 仅有二进制（9）
+#### 仅有二进制（10）
 
+- `advertisements.smx`（海洋说明【确定】：广告插件；运行二进制与 AstMod 2.7.1、2.8.1 包内文件完全一致，配置文件实际为 `addons/sourcemod/configs/advertisements.txt`；其行为与配置格式参见上游 [sm-advertisements](https://github.com/ErikMinekus/sm-advertisements)）
 - `cannounce.smx`（海洋说明【确定】：进服欢迎提示）
 - `enhancedsprays.smx`（海洋说明【确定】：无冷却喷漆、旁观喷漆）
 - `healer_witch.smx`（海洋说明【确定】：秒妹回血）
@@ -156,7 +158,7 @@
 - `tank_hud.smx`（海洋说明【确定来源/用途】：ProMod 插件，适合战役使用的精简化旁观 TankHUD）
 - `witch_glow.smx`（海洋说明【确定用途】：Witch Party 插件）
 
-### 未加载（39）
+### 未加载（38）
 
 #### 找到单一源码线索（27）
 
@@ -193,9 +195,8 @@
 - `confoglcompmod.smx` → `repo:confoglcompmod.sp` / `repo:archive/confoglcompmod.sp`（隔离副本，运行时未使用；当前海洋源码 clone 中没有同名文件，无法把作者回复机械映射到这一项）
 - `pause.smx` → `repo:pause.sp` / `AstSrc:pause.sp`（隔离历史副本；运行时使用仓库根共享版本）
 
-#### 仅有二进制（10）
+#### 仅有二进制（9）
 
-- `advertisements.smx`（海洋说明【确定】：广告插件；运行二进制与 AstMod 2.7.1、2.8.1 包内文件完全一致，配置文件实际为 `addons/sourcemod/configs/advertisements.txt`；其行为与配置格式参见上游 [sm-advertisements](https://github.com/ErikMinekus/sm-advertisements)）
 - `sceneprocessor.smx`（旧版 `tls_restore_vocalize.smx` 的前置插件；新版不再加载，二进制暂留）
 - `autoadmin.smx`（海洋说明【确定用途】：进服自动获取阉割版 admin 身份，可用基础指令，如 all4dead 菜单、处死玩家和特感；笔记中另提到 `fuck`，具体是否可用未确认）
 - `hostname.smx`（海洋说明【确定】：服务器名称；当前不加载）
@@ -206,15 +207,16 @@
 - `l4d2_weapon_csgo_reload.smx`（海洋说明【部分确定、不确定兼容性】：老 Wingman 使用；TLS 之后可能有 bug）
 - `swamp_finale_fix.smx`（海洋说明【确定状态、不确定用途】：ProMod 插件，似乎修复 c3m4 种植园；海洋不知道具体作用，因此没有加载）
 
-## 2. 本地修改或新增的当前二进制（8）
+## 2. 本地修改或新增的当前二进制（9）
 
-这八个插件由本仓库修改、新增或更新。`campaign_switcher.smx`、`vote.smx`、`challenge.smx` 与 `wave_spawner.smx` 已用随仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 重建；`jointeam.smx` 与 `versus_coop_mode.smx` 随对应仓库源码一同更新，构建复现列为后续工作；AI_HardSI 延续此前的本地修改二进制，构建链列为待锁定；`tls_restore_vocalize.smx` 记录为海洋提供的更新二进制。
+这九个插件由本仓库修改、新增或更新。`campaign_switcher.smx`、`pause_coop.smx`、`vote.smx`、`challenge.smx` 与 `wave_spawner.smx` 已用随仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 重建；`jointeam.smx` 与 `versus_coop_mode.smx` 随对应仓库源码一同更新，构建复现列为后续工作；AI_HardSI 延续此前的本地修改二进制，构建链列为待锁定；`tls_restore_vocalize.smx` 记录为海洋提供的更新二进制。
 
-### 已加载（8）
+### 已加载（9）
 
-#### 有本仓库维护源码（7）
+#### 有本仓库维护源码（8）
 
-- `campaign_switcher.smx` → `repo:campaign_switcher.sp` / `AstSrc:ACS.sp`（从 ACS 历史名称改名并拆出独立 `missioncycle.txt`）
+- `campaign_switcher.smx` → `repo:campaign_switcher.sp` / `AstSrc:ACS.sp`（以 imatchext Mission Cache 统一发现 Mission/Chapter；`missioncycle.txt` 只保留 Map 策略）
+- `pause_coop.smx` → `repo:pause_coop.sp` / [`Sglight/L4D2-AstMod-Scriptings@9e71791`](https://github.com/Sglight/L4D2-AstMod-Scriptings/blob/9e7179187dd71d846a8a622d20a2fe43f0a312f1/pause_coop.sp)（逐人生还者准备面板，按当前 SourceMod 生命周期重写）
 - `AI_HardSI.smx` → `repo:AI_HardSI.sp` / `AstSrc:AI_HardSI.sp`
 - `challenge.smx` → `repo:challenge.sp`（本次重建使用） / `AstSrc:challenge.sp`（上游参考）
 - `jointeam.smx` → `repo:jointeam.sp` / `AstSrc:jointeam.sp`（增加 ReadyUp 兼容 Forward；`sm_fuck` 使用 ban flag，只按名称处死 AI 特感）

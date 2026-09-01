@@ -2,613 +2,860 @@
 #pragma newdecls required
 
 #include <sourcemod>
-#include <sdktools>
-#include <left4dhooks>
+#include <builtinvotes>
+#include <imatchext>
 
-#define PLUGIN_VERSION	"v1.2.8-integration"
+#define PLUGIN_VERSION "2.0.0"
 #define MISSION_CYCLE_PATH "configs/missioncycle.txt"
+#define MAX_MAP_NAME 128
+#define MAP_CHANGE_DELAY 3.0
+#define FINALE_CHANGE_DELAY 6.0
+#define AUTO_MENU_DELAY 5.0
 
-//Define the wait time after round before changing to the next map in each game mode
-#define WAIT_TIME_BEFORE_SWITCH_COOP			6.0
-#define WAIT_TIME_BEFORE_SWITCH_VERSUS			6.0
-
-//Define Game Modes
-#define GAMEMODE_UNKNOWN	-1
-#define GAMEMODE_COOP 		0
-#define GAMEMODE_VERSUS 	1
-#define GAMEMODE_SCAVENGE 	2
-#define GAMEMODE_SURVIVAL 	3
-
-#define SOUND_NEW_VOTE_START	"ui/Beep_SynthTone01.wav"
-#define SOUND_NEW_VOTE_WINNER	"ui/alert_clink.wav"
-
-#define STRING_MAX_LENGTH 64
-
-//Global Variables
-int g_iGameMode;					//Integer to store the gamemode
-
-//Campaign and map strings/names
-ArrayList g_arrayCampaignFirstMap;
-ArrayList g_arrayDisplayName;
-int g_iCampaignCount = 0;
-
-//Voting Variables
-float g_fNextMapAdInterval = 300.0;						//Interval for next campaign advertisement
-bool g_bClientShownVoteAd[MAXPLAYERS + 1];				//If the client has seen the ad already
-bool g_bClientVoted[MAXPLAYERS + 1];					//If the client has voted on a map
-int g_iClientVote[MAXPLAYERS + 1];							//The value of the clients vote
-int g_iWinningMapIndex;										//Winning map/campaign's index
-int g_iWinningMapVotes;										//Winning map/campaign's number of votes
-Handle g_hMenu_Vote[MAXPLAYERS + 1]	= {INVALID_HANDLE, ...};	//Handle for each players vote menu
-
-// Campaign rotation
-KeyValues g_hMissionCycle;
-
-void LoadMissionCycle()
-{
-	char sBuffer[PLATFORM_MAX_PATH];
-	g_hMissionCycle = new KeyValues("MissionCycle");
-	BuildPath(Path_SM, sBuffer, sizeof(sBuffer), MISSION_CYCLE_PATH);
-	if (!g_hMissionCycle.ImportFromFile(sBuffer))
-	{
-		SetFailState("Couldn't load %s!", MISSION_CYCLE_PATH);
-	}
-
-	g_arrayCampaignFirstMap = new ArrayList(STRING_MAX_LENGTH);
-	g_arrayDisplayName = new ArrayList(STRING_MAX_LENGTH);
-	g_iCampaignCount = 0;
-
-	ReadMissionCycle(g_arrayCampaignFirstMap, g_arrayDisplayName);
-}
-
-void ReadMissionCycle(ArrayList arrayCampaignFirstMap, ArrayList arrayDisplayName)
-{
-	g_hMissionCycle.Rewind();
-	if (g_hMissionCycle.GotoFirstSubKey())
-	{
-		do
-		{
-			char strCampaignFirstMap[STRING_MAX_LENGTH];
-			char strDisplayName[STRING_MAX_LENGTH];
-
-			if (g_hMissionCycle.GotoFirstSubKey())
-			{
-				do
-				{
-					g_hMissionCycle.GetSectionName(strCampaignFirstMap, sizeof(strCampaignFirstMap));
-					g_hMissionCycle.GetString("name", strDisplayName, sizeof(strDisplayName));
-
-					if (!IsMapValid(strCampaignFirstMap))
-					{
-						LogMessage("Skipping unavailable campaign map: %s (%s)", strCampaignFirstMap, strDisplayName);
-						continue;
-					}
-
-					arrayCampaignFirstMap.PushString(strCampaignFirstMap);
-					arrayDisplayName.PushString(strDisplayName);
-					g_iCampaignCount++;
-				}
-				while (g_hMissionCycle.GotoNextKey());
-			}
-
-			g_hMissionCycle.GoBack();
-		}
-		while (g_hMissionCycle.GotoNextKey());
-	}
-}
-
-/*======================================================================================
-#####################             P L U G I N   I N F O             ####################
-======================================================================================*/
+/**
+ * Campaign Switcher started as Chris Pringle's Automatic Campaign Switcher and
+ * was adapted for AstMod by 海洋空氣. This implementation keeps its finale
+ * selection model, but uses imatchext's live Mission Cache for mission/chapter
+ * facts and missioncycle.txt only for the server owner's allow-list, order and
+ * display-name policy.
+ *
+ * Player-facing terminology intentionally uses Map for a complete mission and
+ * Chapter for one BSP. Internally the game and imatchext call a complete Map a
+ * Mission, so those names remain in API-facing code.
+ *
+ * The immediate vote flow follows Forgetest's vote_custom_campaigns plugin:
+ * https://github.com/Target5150/MoYu_Server_Stupid_Plugins
+ */
 
 public Plugin myinfo =
 {
 	name = "Campaign Switcher",
-	author = "Chris Pringle, 海洋空氣",
-	description = "Automatically switches to the next campaign when the previous campaign is over",
+	author = "Chris Pringle, 海洋空氣, Forgetest, Amethyst Rework",
+	description = "Immediate Map votes, finale Map selection and Chapter votes",
 	version = PLUGIN_VERSION,
-	url = "http://forums.alliedmods.net/showthread.php?t=156392"
-}
+	url = "https://github.com/Sglight/L4D2-Amethyst-Rework"
+};
 
-/*======================================================================================
-#################             O N   P L U G I N   S T A R T            #################
-======================================================================================*/
+ArrayList g_mapMissions;
+ArrayList g_mapFirstChapters;
+ArrayList g_mapDisplayNames;
+ArrayList g_mapOfficial;
+
+ConVar g_voteParticipation;
+ConVar g_votePassPercent;
+
+char g_changeVoteMap[MAX_MAP_NAME];
+char g_changeVoteName[MAX_MAP_NAME];
+char g_nextMapVote[MAXPLAYERS + 1][MAX_MAP_NAME];
+bool g_nextMapMenuShown[MAXPLAYERS + 1];
+bool g_finaleChangeScheduled;
 
 public void OnPluginStart()
 {
-	//Get the strings for all of the maps that are in rotation
-	LoadMissionCycle();
+	LoadTranslations("imatchext.phrases");
 
-	//Create custom console variables
-	CreateConVar("campaign_switcher_version", PLUGIN_VERSION, "Version of Campaign Switcher on this server", FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_DONTRECORD);
+	g_mapMissions = new ArrayList();
+	g_mapFirstChapters = new ArrayList(MAX_MAP_NAME);
+	g_mapDisplayNames = new ArrayList(MAX_MAP_NAME);
+	g_mapOfficial = new ArrayList();
+
+	g_voteParticipation = CreateConVar(
+		"campaign_vote_participation",
+		"0.60",
+		"Fraction of eligible players who must cast a vote before a Map or Chapter vote can pass.",
+		FCVAR_NOTIFY,
+		true,
+		0.0,
+		true,
+		1.0
+	);
+	g_votePassPercent = CreateConVar(
+		"campaign_vote_pass_percent",
+		"0.60",
+		"Fraction of cast votes that must approve an immediate Map or Chapter change.",
+		FCVAR_NOTIFY,
+		true,
+		0.0,
+		true,
+		1.0
+	);
+
+	CreateConVar(
+		"campaign_switcher_version",
+		PLUGIN_VERSION,
+		"Campaign Switcher version.",
+		FCVAR_SPONLY | FCVAR_REPLICATED | FCVAR_NOTIFY | FCVAR_DONTRECORD
+	);
+
+	RegConsoleCmd("sm_mapvote", Command_MapVote, "Vote to change to another Map now");
+	RegConsoleCmd("sm_nextmap", Command_NextMap, "Choose the Map played after the finale");
+	RegConsoleCmd("sm_chaptervote", Command_ChapterVote, "Vote to change Chapter within the current Map");
+	RegAdminCmd("sm_campaign_reload", Command_ReloadMaps, ADMFLAG_CHANGEMAP, "Reload missioncycle.txt against the Mission Cache");
 
 	HookEvent("finale_win", Event_FinaleWin);
-	HookEvent("player_disconnect", Event_PlayerDisconnect);
 
-	//Register custom console commands
-	RegConsoleCmd("sm_mapvote", MapVote);
-	RegConsoleCmd("sm_mapvotes", DisplayCurrentVotes);
+	ResetNextMapVotes();
 }
 
-/*======================================================================================
-#################                     E V E N T S                      #################
-======================================================================================*/
+public void OnConfigsExecuted()
+{
+	ReloadMapRegistry();
+}
 
 public void OnMapStart()
 {
-	//Set all the menu handles to invalid
-	CleanUpMenuHandles();
-
-	//Set the game mode
-	FindGameMode();
-
-	//Precache sounds
-	PrecacheSound(SOUND_NEW_VOTE_START);
-	PrecacheSound(SOUND_NEW_VOTE_WINNER);
-
-
-	//Display advertising for the next campaign or map
-	if (L4D_IsMissionFinalMap())
-		CreateTimer(g_fNextMapAdInterval, Timer_AdvertiseNextMap, _, TIMER_FLAG_NO_MAPCHANGE);
-
-	ResetAllVotes();				//Reset every player's vote
+	ResetNextMapVotes();
+	g_finaleChangeScheduled = false;
+	CreateTimer(0.5, Timer_ReloadRegistry, _, TIMER_FLAG_NO_MAPCHANGE);
+	CreateTimer(AUTO_MENU_DELAY, Timer_ShowFinaleMenus, _, TIMER_FLAG_NO_MAPCHANGE);
 }
 
-//Event fired when a finale is won
-public Action Event_FinaleWin(Handle hEvent, const char[] strName, bool bDontBroadcast)
+public void OnMissionCacheReload()
 {
-	//Change to the next campaign
-	if(g_iGameMode == GAMEMODE_COOP)
-		CheckMapForChange();
-
-	return Plugin_Continue;
+	CreateTimer(0.1, Timer_ReloadRegistry, _, TIMER_FLAG_NO_MAPCHANGE);
 }
-
-//Event fired when a player disconnects from the server
-public Action Event_PlayerDisconnect(Handle hEvent, const char[] strName, bool bDontBroadcast)
-{
-	int iClient = GetClientOfUserId(GetEventInt(hEvent, "userid"));
-
-	if(iClient	< 1)
-		return Plugin_Continue;
-
-	//Reset the client's votes
-	g_bClientVoted[iClient] = false;
-	g_iClientVote[iClient] = -1;
-
-	//Check to see if there is a new vote winner
-	SetTheCurrentVoteWinner();
-
-	return Plugin_Continue;
-}
-
-/*======================================================================================
-#################              F I N D   G A M E   M O D E             #################
-======================================================================================*/
-
-//Find the current gamemode and store it into this plugin
-void FindGameMode()
-{
-	//Get the gamemode string from the game
-	char strGameMode[20];
-	GetConVarString(FindConVar("mp_gamemode"), strGameMode, sizeof(strGameMode));
-
-	//Set the global gamemode int for this plugin
-	if(StrEqual(strGameMode, "coop"))
-		g_iGameMode = GAMEMODE_COOP;
-	else if(StrEqual(strGameMode, "realism"))
-		g_iGameMode = GAMEMODE_COOP;
-	else if(StrEqual(strGameMode,"versus"))
-		g_iGameMode = GAMEMODE_COOP;
-	else if(StrEqual(strGameMode, "teamversus"))
-		g_iGameMode = GAMEMODE_VERSUS;
-	else if(StrEqual(strGameMode, "scavenge"))
-		g_iGameMode = GAMEMODE_SCAVENGE;
-	else if(StrEqual(strGameMode, "teamscavenge"))
-		g_iGameMode = GAMEMODE_SCAVENGE;
-	else if(StrEqual(strGameMode, "survival"))
-		g_iGameMode = GAMEMODE_SURVIVAL;
-	else if(StrEqual(strGameMode, "mutation1"))		//Last Man On Earth
-		g_iGameMode = GAMEMODE_COOP;
-	else if(StrEqual(strGameMode, "mutation2"))		//Headshot!
-		g_iGameMode = GAMEMODE_COOP;
-	else if(StrEqual(strGameMode, "mutation3"))		//Bleed Out
-		g_iGameMode = GAMEMODE_COOP;
-	else if(StrEqual(strGameMode, "mutation4"))		//Hard Eight
-		g_iGameMode = GAMEMODE_COOP;
-	else if(StrEqual(strGameMode, "mutation5"))		//Four Swordsmen
-		g_iGameMode = GAMEMODE_COOP;
-	//else if(StrEqual(strGameMode, "mutation6"))	//Nothing here
-	//	g_iGameMode = GAMEMODE_COOP;
-	else if(StrEqual(strGameMode, "mutation7"))		//Chainsaw Massacre
-		g_iGameMode = GAMEMODE_COOP;
-	else if(StrEqual(strGameMode, "mutation8"))		//Ironman
-		g_iGameMode = GAMEMODE_COOP;
-	else if(StrEqual(strGameMode, "mutation9"))		//Last Gnome On Earth
-		g_iGameMode = GAMEMODE_COOP;
-	else if(StrEqual(strGameMode, "mutation10"))	//Room For One
-		g_iGameMode = GAMEMODE_COOP;
-	else if(StrEqual(strGameMode, "mutation11"))	//Healthpackalypse!
-		g_iGameMode = GAMEMODE_VERSUS;
-	else if(StrEqual(strGameMode, "mutation12"))	//Realism Versus
-		g_iGameMode = GAMEMODE_VERSUS;
-	else if(StrEqual(strGameMode, "mutation13"))	//Follow the Liter
-		g_iGameMode = GAMEMODE_SCAVENGE;
-	else if(StrEqual(strGameMode, "mutation14"))	//Gib Fest
-		g_iGameMode = GAMEMODE_COOP;
-	else if(StrEqual(strGameMode, "mutation15"))	//Versus Survival
-		g_iGameMode = GAMEMODE_SURVIVAL;
-	else if(StrEqual(strGameMode, "mutation16"))	//Hunting Party
-		g_iGameMode = GAMEMODE_COOP;
-	else if(StrEqual(strGameMode, "mutation17"))	//Lone Gunman
-		g_iGameMode = GAMEMODE_COOP;
-	else if(StrEqual(strGameMode, "mutation18"))	//Bleed Out Versus
-		g_iGameMode = GAMEMODE_VERSUS;
-	else if(StrEqual(strGameMode, "mutation19"))	//Taaannnkk!
-		g_iGameMode = GAMEMODE_VERSUS;
-	else if(StrEqual(strGameMode, "mutation20"))	//Healing Gnome
-		g_iGameMode = GAMEMODE_COOP;
-	else if(StrEqual(strGameMode, "community1"))	//Special Delivery
-		g_iGameMode = GAMEMODE_COOP;
-	else if(StrEqual(strGameMode, "community2"))	//Flu Season
-		g_iGameMode = GAMEMODE_COOP;
-	else if(StrEqual(strGameMode, "community3"))	//Riding My Survivor
-		g_iGameMode = GAMEMODE_VERSUS;
-	else if(StrEqual(strGameMode, "community4"))	//Nightmare
-		g_iGameMode = GAMEMODE_SURVIVAL;
-	else if(StrEqual(strGameMode, "community5"))	//Death's Door
-		g_iGameMode = GAMEMODE_COOP;
-	else
-		g_iGameMode = GAMEMODE_COOP;
-}
-
-/*======================================================================================
-#################             A C S   C H A N G E   M A P              #################
-======================================================================================*/
-
-//Check to see if the current map is a finale, and if so, switch to the next campaign
-void CheckMapForChange()
-{
-	if(L4D_IsMissionFinalMap())
-	{
-		//Check to see if someone voted for a campaign, if so, then change to the winning campaign
-		if(g_iWinningMapVotes > 0 && g_iWinningMapIndex >= 0)
-		{
-			char strCampaignFirstMap[STRING_MAX_LENGTH];
-			char strDisplayName[STRING_MAX_LENGTH];
-			g_arrayCampaignFirstMap.GetString(g_iWinningMapIndex, strCampaignFirstMap, STRING_MAX_LENGTH);
-			g_arrayDisplayName.GetString(g_iWinningMapIndex, strDisplayName, STRING_MAX_LENGTH);
-			if(IsMapValid(strCampaignFirstMap) == true)
-			{
-				PrintToChatAll("\x03[战役切换] \x05切换至票数最多的地图: \x04%s", strDisplayName);
-
-				if(g_iGameMode == GAMEMODE_VERSUS)
-					CreateTimer(WAIT_TIME_BEFORE_SWITCH_VERSUS, Timer_ChangeCampaign, g_iWinningMapIndex);
-				else if(g_iGameMode == GAMEMODE_COOP)
-					CreateTimer(WAIT_TIME_BEFORE_SWITCH_COOP, Timer_ChangeCampaign, g_iWinningMapIndex);
-
-				return;
-			}
-			else
-			{
-				PrintToChatAll("地图不存在");
-				LogError("Error: %s is an invalid map name, attempting normal map rotation.", strCampaignFirstMap);
-			}
-		}
-
-		//If no map was chosen in the vote, then go random map
-		int iMapIndex = RandomMap();
-		char strCampaignFirstMap[STRING_MAX_LENGTH];
-		char strDisplayName[STRING_MAX_LENGTH];
-		g_arrayCampaignFirstMap.GetString(iMapIndex, strCampaignFirstMap, STRING_MAX_LENGTH);
-		g_arrayDisplayName.GetString(iMapIndex, strDisplayName, STRING_MAX_LENGTH);
-
-		if(IsMapValid(strCampaignFirstMap) == true)
-		{
-			PrintToChatAll("\x03[战役切换] \x05无人投票，切换至地图 \x04%s", strDisplayName);
-
-			if(g_iGameMode == GAMEMODE_VERSUS)
-				CreateTimer(WAIT_TIME_BEFORE_SWITCH_VERSUS, Timer_ChangeCampaign, iMapIndex);
-			else if(g_iGameMode == GAMEMODE_COOP)
-				CreateTimer(WAIT_TIME_BEFORE_SWITCH_COOP, Timer_ChangeCampaign, iMapIndex);
-		}
-		else
-			LogError("Error: %s is an invalid map name, unable to switch map.", strCampaignFirstMap);
-
-		return;
-	}
-}
-
-public int RandomMap()
-{
-	int iCampaignIndex = GetRandomInt(0, 12);
-	if (iCampaignIndex == 1)
-		iCampaignIndex = 13;
-	return iCampaignIndex;
-}
-
-//Change campaign to its index
-public Action Timer_ChangeCampaign(Handle timer, int iCampaignIndex)
-{
-	// 随机官图
-	if(iCampaignIndex == 1) {
-		iCampaignIndex = RandomMap();
-	}
-
-	char strCampaignFirstMap[STRING_MAX_LENGTH];
-	g_arrayCampaignFirstMap.GetString(iCampaignIndex, strCampaignFirstMap, STRING_MAX_LENGTH);
-
-	ServerCommand("changelevel %s", strCampaignFirstMap);	//Change the campaign
-
-	return Plugin_Stop;
-}
-
-/*======================================================================================
-#################            A C S   A D V E R T I S I N G             #################
-======================================================================================*/
-
-public Action Timer_AdvertiseNextMap(Handle timer, int iMapIndex)
-{
-	//If next map advertising is enabled, display the text and start the timer again
-	DisplayNextMapToAll();
-	CreateTimer(g_fNextMapAdInterval, Timer_AdvertiseNextMap, _, TIMER_FLAG_NO_MAPCHANGE);
-
-	return Plugin_Stop;
-}
-
-void DisplayNextMapToAll()
-{
-	//If there is a winner to the vote display the winner if not display the next map in rotation
-	if(g_iWinningMapIndex >= 0) {
-		char strDisplayName[STRING_MAX_LENGTH];
-		g_arrayDisplayName.GetString(g_iWinningMapIndex, strDisplayName, STRING_MAX_LENGTH);
-		PrintToChatAll("\x03[战役切换] \x05下一张地图是 \x04%s", strDisplayName);
-	}
-	else
-	{
-		PrintToChatAll("\x03[战役切换] \x05无人投票，章节结束将更换至\x04随机官图");
-	}
-}
-
-/*======================================================================================
-#################              V O T I N G   S Y S T E M               #################
-======================================================================================*/
-
-/*======================================================================================
-################             P L A Y E R   C O M M A N D S              ################
-======================================================================================*/
-
-//Command that a player can use to vote/revote for a map/campaign
-public Action MapVote(int iClient, int args)
-{
-	if(L4D_IsMissionFinalMap() == false)
-	{
-		PrintToChat(iClient, "\x03[战役切换] \x05只能在救援关投票哦~");
-		return Plugin_Handled;
-	}
-
-	//Open the vote menu for the client if they arent using the server console
-	if(iClient < 1)
-		PrintToServer("You cannot vote for a map from the server console, use the in-game chat.");
-	else
-		VoteMenuDraw(iClient);
-	return Plugin_Continue;
-}
-
-//Command that a player can use to see the total votes for all maps/campaigns
-public Action DisplayCurrentVotes(int iClient, int args)
-{
-	if(L4D_IsMissionFinalMap() == false)
-	{
-		PrintToChat(iClient, "\x03[战役切换] \x05只能在救援关投票哦~");
-		return Plugin_Handled;
-	}
-
-	int iPlayer, iMap;
-
-	//Get the total number of maps for the current game mode
-	// iNumberOfMaps = NUMBER_OF_CAMPAIGNS;
-
-	//Display to the client the current winning map
-	if(g_iWinningMapIndex != -1)
-	{
-		char strDisplayName[STRING_MAX_LENGTH];
-		g_arrayDisplayName.GetString(g_iWinningMapIndex, strDisplayName, STRING_MAX_LENGTH);
-		PrintToChat(iClient, "\x03[战役切换] \x05当前票数最多: \x04%s.", strDisplayName);
-	}
-	else
-		PrintToChat(iClient, "\x03[战役切换] \x05还没有人投票，输入 \x04!mapvote \x05进行投票.");
-
-	//Loop through all maps and display the ones that have votes
-	int[] iMapVotes = new int[g_iCampaignCount];
-
-	for(iMap = 0; iMap < g_iCampaignCount; iMap++)
-	{
-		iMapVotes[iMap] = 0;
-
-		//Tally votes for the current map
-		for(iPlayer = 1; iPlayer <= MaxClients; iPlayer++)
-			if(g_iClientVote[iPlayer] == iMap)
-				iMapVotes[iMap]++;
-
-		//Display this particular map and its amount of votes it has to the client
-		if(iMapVotes[iMap] > 0)
-		{
-			char strDisplayName[STRING_MAX_LENGTH];
-			g_arrayDisplayName.GetString(iMap, strDisplayName, STRING_MAX_LENGTH);
-			PrintToChat(iClient, "\x04          %s: \x05%d 票.", strDisplayName, iMapVotes[iMap]);
-		}
-	}
-	return Plugin_Continue;
-}
-
-/*======================================================================================
-###############                   V O T E   M E N U                       ##############
-======================================================================================*/
 
 public void OnClientPutInServer(int client)
 {
-	if (L4D_IsMissionFinalMap() == true)
-		for(int iClient = 1;iClient <= MaxClients; iClient++)
-		{
-			if(g_bClientShownVoteAd[iClient] == false && g_bClientVoted[iClient] == false && IsClientInGame(iClient) == true && IsFakeClient(iClient) == false)
-			{
-				VoteMenuDraw(iClient);
-				g_bClientShownVoteAd[iClient] = true;
-			}
-		}
+	if (IsFakeClient(client))
+		return;
+
+	CreateTimer(AUTO_MENU_DELAY, Timer_ShowFinaleMenuToClient, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
 }
 
-//Draw the menu for voting
-public Action VoteMenuDraw(int iClient)
+public void OnClientDisconnect(int client)
 {
-	if(iClient < 1 || IsClientInGame(iClient) == false || IsFakeClient(iClient) == true)
-		return Plugin_Handled;
+	g_nextMapVote[client][0] = '\0';
+	g_nextMapMenuShown[client] = false;
+}
 
-	//Create the menu
-	g_hMenu_Vote[iClient] = CreateMenu(VoteMenuHandler);
+public Action Timer_ReloadRegistry(Handle timer)
+{
+	ReloadMapRegistry();
+	return Plugin_Stop;
+}
 
-	//Populate the menu with the maps in rotation for the corresponding game mode
-
-	SetMenuTitle(g_hMenu_Vote[iClient], "投票选择下一张地图\n ");
-
-	for(int iCampaign = 0; iCampaign < g_iCampaignCount; iCampaign++)
-	{
-		char strDisplayName[STRING_MAX_LENGTH];
-		g_arrayDisplayName.GetString(iCampaign, strDisplayName, STRING_MAX_LENGTH);
-		AddMenuItem(g_hMenu_Vote[iClient], strDisplayName, strDisplayName);
-	}
-
-	//Add an exit button
-	SetMenuExitButton(g_hMenu_Vote[iClient], false);
-
-	//And finally, show the menu to the client
-	DisplayMenu(g_hMenu_Vote[iClient], iClient, MENU_TIME_FOREVER);
-
-	//Play a sound to indicate that the user can vote on a map
-	EmitSoundToClient(iClient, SOUND_NEW_VOTE_START);
+public Action Command_ReloadMaps(int client, int args)
+{
+	if (ReloadMapRegistry())
+		ReplyToCommand(client, "[地图] 已载入 %d 张 Map。", g_mapMissions.Length);
+	else
+		ReplyToCommand(client, "[地图] 没有可用 Map，请检查 Mission Cache 与 missioncycle.txt。");
 
 	return Plugin_Handled;
 }
 
-//Handle the menu selection the client chose for voting
-public int VoteMenuHandler(Handle hMenu, MenuAction maAction, int iClient, int iItemNum)
+bool ReloadMapRegistry()
 {
-	if(maAction == MenuAction_Select)
+	g_mapMissions.Clear();
+	g_mapFirstChapters.Clear();
+	g_mapDisplayNames.Clear();
+	g_mapOfficial.Clear();
+
+	if (!ModeSymbol.IsValid(CurrentMode))
 	{
-		g_bClientVoted[iClient] = true;
-
-		//Set the players current vote
-		g_iClientVote[iClient] = iItemNum;
-
-		//Check to see if theres a new winner to the vote
-		SetTheCurrentVoteWinner();
-
-		//Display the appropriate message to the voter
-		if(iItemNum == -1)
-			PrintToChat(iClient, "\x03[战役切换] \x05你还没有投票. 请输入: \x04!mapvote \x05进行投票");
-		else {
-			char strDisplayName[STRING_MAX_LENGTH];
-			g_arrayDisplayName.GetString(iItemNum, strDisplayName, STRING_MAX_LENGTH);
-			PrintToChat(iClient, "\x03[战役切换] \x05你已经投票:  \x04%s.\n           \x05更改投票请输入: \x04!mapvote\n           \x05查看目前票数请输入: \x04!mapvotes", strDisplayName);
-		}
+		LogError("Cannot build Map registry: current game mode is unavailable in imatchext");
+		return false;
 	}
-	return 1;
-}
 
-//Resets all the menu handles to invalid for every player, until they need it again
-void CleanUpMenuHandles()
-{
-	for(int iClient = 0; iClient <= MAXPLAYERS; iClient++)
+	char path[PLATFORM_MAX_PATH];
+	BuildPath(Path_SM, path, sizeof(path), MISSION_CYCLE_PATH);
+
+	KeyValues policy = new KeyValues("MissionCycle");
+	if (!policy.ImportFromFile(path))
 	{
-		if(g_hMenu_Vote[iClient] != INVALID_HANDLE)
+		delete policy;
+		LogError("Cannot load %s", MISSION_CYCLE_PATH);
+		return false;
+	}
+
+	if (policy.GotoFirstSubKey())
+	{
+		do
 		{
-			CloseHandle(g_hMenu_Vote[iClient]);
-			g_hMenu_Vote[iClient] = INVALID_HANDLE;
+			if (!policy.GotoFirstSubKey())
+				continue;
+
+			do
+			{
+				char firstChapter[MAX_MAP_NAME];
+				char displayName[MAX_MAP_NAME];
+				policy.GetSectionName(firstChapter, sizeof(firstChapter));
+				policy.GetString("name", displayName, sizeof(displayName), firstChapter);
+
+				MissionSymbol mission = FindMissionByFirstChapter(firstChapter);
+				if (!MissionSymbol.IsValid(mission))
+				{
+					LogMessage("Skipping unavailable Map policy entry: %s (%s)", firstChapter, displayName);
+					continue;
+				}
+
+				if (FindMapIndex(firstChapter) != -1)
+				{
+					LogError("Ignoring duplicate Map policy entry: %s", firstChapter);
+					continue;
+				}
+
+				g_mapMissions.Push(view_as<int>(mission));
+				g_mapFirstChapters.PushString(firstChapter);
+				g_mapDisplayNames.PushString(displayName);
+				g_mapOfficial.Push(mission.IsAddon ? 0 : 1);
+			}
+			while (policy.GotoNextKey());
+
+			policy.GoBack();
 		}
-	}
-}
-
-/*======================================================================================
-#########       M I S C E L L A N E O U S   V O T E   F U N C T I O N S        #########
-======================================================================================*/
-
-//Resets all the votes for every player
-void ResetAllVotes()
-{
-	for(int iClient = 1; iClient <= MaxClients; iClient++)
-	{
-		g_bClientVoted[iClient] = false;
-		g_iClientVote[iClient] = -1;
-
-		//Reset so that the player can see the advertisement
-		g_bClientShownVoteAd[iClient] = false;
+		while (policy.GotoNextKey());
 	}
 
-	//Reset the winning map to NULL
-	g_iWinningMapIndex = -1;
-	g_iWinningMapVotes = 0;
+	delete policy;
+	LogMessage("Loaded %d allowed Maps from %s", g_mapMissions.Length, MISSION_CYCLE_PATH);
+	return g_mapMissions.Length > 0;
 }
 
-//Tally up all the votes and set the current winner
-void SetTheCurrentVoteWinner()
+MissionSymbol FindMissionByFirstChapter(const char[] expectedMap)
 {
-	int iPlayer, iMap, iNumberOfMaps;
-
-	//Store the current winnder to see if there is a change
-	int iOldWinningMapIndex = g_iWinningMapIndex;
-
-	//Get the total number of maps for the current game mode
-	iNumberOfMaps = g_iCampaignCount;
-
-	//Loop through all maps and get the highest voted map
-	// int iMapVotes[NUMBER_OF_CAMPAIGNS] = {0, ...};
-	int[] iMapVotes = new int[g_iCampaignCount];
-	int iCurrentlyWinningMapVoteCounts = 0;
-	bool bSomeoneHasVoted = false;
-
-	for(iMap = 0; iMap < iNumberOfMaps; iMap++)
+	for (MissionSymbol mission = MissionSymbol.First(); MissionSymbol.IsValid(mission); mission = mission.Next())
 	{
-		iMapVotes[iMap] = 0;
+		if (mission.IsDisabled || CurrentMode.GetNumChapters(mission) < 1)
+			continue;
 
-		//Tally votes for the current map
-		for(iPlayer = 1; iPlayer <= MaxClients; iPlayer++)
-			if(g_iClientVote[iPlayer] == iMap)
-				iMapVotes[iMap]++;
-
-		//Check if there is at least one vote, if so set the bSomeoneHasVoted to true
-		if(bSomeoneHasVoted == false && iMapVotes[iMap] > 0)
-			bSomeoneHasVoted = true;
-
-		//Check if the current map has more votes than the currently highest voted map
-		if(iMapVotes[iMap] > iCurrentlyWinningMapVoteCounts)
+		char mapName[MAX_MAP_NAME];
+		char unusedDisplayName[1];
+		if (GetChapterInfo(mission, 1, mapName, sizeof(mapName), unusedDisplayName, 0, LANG_SERVER)
+			&& StrEqual(mapName, expectedMap, false))
 		{
-			iCurrentlyWinningMapVoteCounts = iMapVotes[iMap];
-
-			g_iWinningMapIndex = iMap;
-			g_iWinningMapVotes = iMapVotes[iMap];
+			return mission;
 		}
 	}
 
-	//If no one has voted, reset the winning map index and votes
-	//This is only for if someone votes then their vote is removed
-	if(bSomeoneHasVoted == false)
+	return MissionSymbol_Invalid;
+}
+
+int FindMapIndex(const char[] firstChapter)
+{
+	char candidate[MAX_MAP_NAME];
+	for (int i = 0; i < g_mapFirstChapters.Length; i++)
 	{
-		g_iWinningMapIndex = -1;
-		g_iWinningMapVotes = 0;
+		g_mapFirstChapters.GetString(i, candidate, sizeof(candidate));
+		if (StrEqual(candidate, firstChapter, false))
+			return i;
+	}
+	return -1;
+}
+
+int FindMapIndexByMission(MissionSymbol mission)
+{
+	for (int i = 0; i < g_mapMissions.Length; i++)
+	{
+		if (view_as<MissionSymbol>(g_mapMissions.Get(i)) == mission)
+			return i;
+	}
+	return -1;
+}
+
+bool GetChapterInfo(
+	MissionSymbol mission,
+	int chapter,
+	char[] mapName,
+	int mapNameLength,
+	char[] displayName,
+	int displayNameLength,
+	int client
+)
+{
+	mapName[0] = '\0';
+	if (displayNameLength > 0)
+		displayName[0] = '\0';
+
+	KeyValues chapterInfo = new KeyValues("chapter");
+	if (!CurrentMode.ExportChapter(mission, chapter, chapterInfo))
+	{
+		delete chapterInfo;
+		return false;
 	}
 
-	//If the vote winner has changed then display the new winner to all the players
-	if(g_iWinningMapIndex > -1 && iOldWinningMapIndex != g_iWinningMapIndex)
-	{
-		//Send sound notification to all players
-		for(iPlayer = 1; iPlayer <= MaxClients; iPlayer++)
-			if(IsClientInGame(iPlayer) == true && IsFakeClient(iPlayer) == false)
-				EmitSoundToClient(iPlayer, SOUND_NEW_VOTE_WINNER);
+	chapterInfo.GetString("Map", mapName, mapNameLength);
+	char rawDisplayName[MAX_MAP_NAME];
+	chapterInfo.GetString("DisplayName", rawDisplayName, sizeof(rawDisplayName));
+	delete chapterInfo;
 
-		//Show message to all the players of the new vote winner
-		char strDisplayName[STRING_MAX_LENGTH];
-		g_arrayDisplayName.GetString(g_iWinningMapIndex, strDisplayName, STRING_MAX_LENGTH);
-		PrintToChatAll("\x03[战役切换] \x04%s \x05当前票数最多.", strDisplayName);
+	if (!mapName[0])
+		return false;
+
+	if (displayNameLength > 0)
+	{
+		char localized[MAX_MAP_NAME];
+		if (TranslateGamePhrase(rawDisplayName, localized, sizeof(localized), client))
+			FormatEx(displayName, displayNameLength, "第%d关 - %s", chapter, localized);
+		else if (rawDisplayName[0] && rawDisplayName[0] != '#')
+			FormatEx(displayName, displayNameLength, "第%d关 - %s", chapter, rawDisplayName);
+		else
+			FormatEx(displayName, displayNameLength, "第%d关 - %s", chapter, mapName);
 	}
+
+	return true;
+}
+
+bool TranslateGamePhrase(const char[] rawPhrase, char[] output, int outputLength, int client)
+{
+	if (!rawPhrase[0])
+		return false;
+
+	char phrase[MAX_MAP_NAME];
+	int source = rawPhrase[0] == '#' ? 1 : 0;
+	int target;
+	while (rawPhrase[source] && target < sizeof(phrase) - 1)
+	{
+		phrase[target++] = CharToLower(rawPhrase[source++]);
+	}
+	phrase[target] = '\0';
+
+	if (!phrase[0] || !TranslationPhraseExists(phrase))
+		return false;
+
+	if (client != LANG_SERVER && !IsTranslatedForLanguage(phrase, GetClientLanguage(client)))
+		return false;
+
+	FormatEx(output, outputLength, "%T", phrase, client);
+	return true;
+}
+
+public Action Command_MapVote(int client, int args)
+{
+	if (!IsEligibleHuman(client))
+		return Plugin_Handled;
+
+	if (!g_mapMissions.Length)
+	{
+		PrintToChat(client, "\x04[地图] \x01当前没有可投票的 Map。");
+		return Plugin_Handled;
+	}
+
+	Menu menu = new Menu(MapSelectionHandler);
+	menu.SetTitle("投票立即更换 Map\n共 %d 张", g_mapMissions.Length);
+	menu.ExitButton = true;
+
+	char firstChapter[MAX_MAP_NAME];
+	char displayName[MAX_MAP_NAME];
+	for (int i = 0; i < g_mapMissions.Length; i++)
+	{
+		g_mapFirstChapters.GetString(i, firstChapter, sizeof(firstChapter));
+		g_mapDisplayNames.GetString(i, displayName, sizeof(displayName));
+		menu.AddItem(firstChapter, displayName);
+	}
+
+	menu.Display(client, 60);
+	return Plugin_Handled;
+}
+
+public int MapSelectionHandler(Menu menu, MenuAction action, int client, int item)
+{
+	if (action == MenuAction_Select)
+	{
+		char firstChapter[MAX_MAP_NAME];
+		menu.GetItem(item, firstChapter, sizeof(firstChapter));
+		int mapIndex = FindMapIndex(firstChapter);
+		if (mapIndex == -1)
+		{
+			PrintToChat(client, "\x04[地图] \x01该 Map 已不可用，请重新打开菜单。");
+			return 0;
+		}
+
+		char displayName[MAX_MAP_NAME];
+		g_mapDisplayNames.GetString(mapIndex, displayName, sizeof(displayName));
+		StartImmediateChangeVote(client, firstChapter, displayName);
+	}
+	else if (action == MenuAction_End)
+	{
+		delete menu;
+	}
+
+	return 0;
+}
+
+public Action Command_ChapterVote(int client, int args)
+{
+	if (!IsEligibleHuman(client))
+		return Plugin_Handled;
+
+	MissionSymbol mission = CurrentMission;
+	if (!MissionSymbol.IsValid(mission) || !ModeSymbol.IsValid(CurrentMode))
+	{
+		PrintToChat(client, "\x04[章节] \x01无法识别当前 Map。");
+		return Plugin_Handled;
+	}
+
+	int chapterCount = CurrentMode.GetNumChapters(mission);
+	if (chapterCount < 1)
+	{
+		PrintToChat(client, "\x04[章节] \x01当前 Map 没有可用 Chapter。");
+		return Plugin_Handled;
+	}
+
+	char mapTitle[MAX_MAP_NAME];
+	int currentIndex = FindMapIndexByMission(mission);
+	if (currentIndex != -1)
+		g_mapDisplayNames.GetString(currentIndex, mapTitle, sizeof(mapTitle));
+	else
+		mission.GetName(mapTitle, sizeof(mapTitle));
+
+	Menu menu = new Menu(ChapterSelectionHandler);
+	menu.SetTitle("%s\n选择 Chapter 后发起实时投票", mapTitle);
+	menu.ExitButton = true;
+
+	for (int chapter = 1; chapter <= chapterCount; chapter++)
+	{
+		char mapName[MAX_MAP_NAME];
+		char displayName[MAX_MAP_NAME];
+		if (!GetChapterInfo(mission, chapter, mapName, sizeof(mapName), displayName, sizeof(displayName), client))
+			continue;
+		if (!IsMapValid(mapName))
+			continue;
+		menu.AddItem(mapName, displayName);
+	}
+
+	if (!menu.ItemCount)
+	{
+		delete menu;
+		PrintToChat(client, "\x04[章节] \x01当前 Map 没有有效 Chapter。");
+		return Plugin_Handled;
+	}
+
+	menu.Display(client, 60);
+	return Plugin_Handled;
+}
+
+public int ChapterSelectionHandler(Menu menu, MenuAction action, int client, int item)
+{
+	if (action == MenuAction_Select)
+	{
+		char mapName[MAX_MAP_NAME];
+		char displayName[MAX_MAP_NAME];
+		menu.GetItem(item, mapName, sizeof(mapName), _, displayName, sizeof(displayName));
+		if (!IsMapValid(mapName))
+		{
+			PrintToChat(client, "\x04[章节] \x01该 Chapter 已不可用。");
+			return 0;
+		}
+		StartImmediateChangeVote(client, mapName, displayName);
+	}
+	else if (action == MenuAction_End)
+	{
+		delete menu;
+	}
+
+	return 0;
+}
+
+bool StartImmediateChangeVote(int client, const char[] mapName, const char[] displayName)
+{
+	if (!CheckVoteAccess(client))
+		return false;
+
+	int[] players = new int[MaxClients];
+	int total;
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsEligibleHuman(i))
+			players[total++] = i;
+	}
+
+	if (!total)
+		return false;
+
+	Handle vote = CreateBuiltinVote(
+		ImmediateVoteHandler,
+		BuiltinVoteType_ChgCampaign,
+		BuiltinVoteAction_Select | BuiltinVoteAction_Cancel | BuiltinVoteAction_End
+	);
+
+	strcopy(g_changeVoteMap, sizeof(g_changeVoteMap), mapName);
+	strcopy(g_changeVoteName, sizeof(g_changeVoteName), displayName);
+	SetBuiltinVoteArgument(vote, g_changeVoteName);
+	SetBuiltinVoteInitiator(vote, client);
+	SetBuiltinVoteResultCallback(vote, ImmediateVoteResult);
+
+	if (!DisplayBuiltinVote(vote, players, total, FindConVar("sv_vote_timer_duration").IntValue))
+	{
+		delete vote;
+		PrintToChat(client, "\x04[地图] \x01无法启动投票。");
+		return false;
+	}
+
+	return true;
+}
+
+bool CheckVoteAccess(int client)
+{
+	if (!IsEligibleHuman(client))
+		return false;
+
+	if (IsBuiltinVoteInProgress())
+	{
+		PrintToChat(client, "\x04[地图] \x01已有投票正在进行。");
+		return false;
+	}
+
+	int delay = CheckBuiltinVoteDelay();
+	if (delay > 0)
+	{
+		PrintToChat(client, "\x04[地图] \x01请等待 %d 秒再发起投票。", delay);
+		return false;
+	}
+
+	return true;
+}
+
+public int ImmediateVoteHandler(Handle vote, BuiltinVoteAction action, int param1, int param2)
+{
+	if (action == BuiltinVoteAction_Cancel)
+		DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Generic);
+	else if (action == BuiltinVoteAction_End)
+		delete vote;
+
+	return 0;
+}
+
+public int ImmediateVoteResult(
+	Handle vote,
+	int numVotes,
+	int numClients,
+	const int[][] clientInfo,
+	int numItems,
+	const int[][] itemInfo
+)
+{
+	if (numClients < 1 || float(numVotes) / float(numClients) < g_voteParticipation.FloatValue)
+	{
+		DisplayBuiltinVoteFail(vote, BuiltinVoteFail_NotEnoughVotes);
+		return 0;
+	}
+
+	int yesVotes;
+	for (int i = 0; i < numItems; i++)
+	{
+		if (itemInfo[i][BUILTINVOTEINFO_ITEM_INDEX] == BUILTINVOTES_VOTE_YES)
+			yesVotes = itemInfo[i][BUILTINVOTEINFO_ITEM_VOTES];
+	}
+
+	if (numVotes > 0 && float(yesVotes) / float(numVotes) >= g_votePassPercent.FloatValue)
+	{
+		DisplayBuiltinVotePass2(vote, TRANSLATION_L4D_VOTE_CHANGECAMPAIGN_PASSED, g_changeVoteName);
+		ScheduleMapChange(g_changeVoteMap, g_changeVoteName, MAP_CHANGE_DELAY);
+	}
+	else
+	{
+		DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
+	}
+
+	return 0;
+}
+
+public Action Command_NextMap(int client, int args)
+{
+	if (!IsEligibleHuman(client))
+		return Plugin_Handled;
+
+	if (!IsMissionFinalMap())
+	{
+		PrintToChat(client, "\x04[下一张图] \x01只能在救援关选择下一张 Map。");
+		return Plugin_Handled;
+	}
+
+	ShowNextMapMenu(client);
+	return Plugin_Handled;
+}
+
+void ShowNextMapMenu(int client, int firstItem = 0)
+{
+	if (!IsEligibleHuman(client) || !IsMissionFinalMap() || !g_mapMissions.Length)
+		return;
+
+	int mapCount = g_mapMissions.Length;
+	int[] counts = new int[mapCount];
+	int votesCast;
+	int highestVotes;
+	int tiedMaps;
+	int leader = BuildNextMapVoteStats(counts, votesCast, highestVotes, tiedMaps);
+	int eligible = CountEligibleHumans();
+
+	Menu menu = new Menu(NextMapMenuHandler);
+	if (leader == -1)
+		menu.SetTitle("选择下一张 Map（已投 %d/%d）\n尚无人投票", votesCast, eligible);
+	else if (tiedMaps > 1)
+		menu.SetTitle("选择下一张 Map（已投 %d/%d）\n%d 张 Map 以 %d 票并列领先", votesCast, eligible, tiedMaps, highestVotes);
+	else
+	{
+		char leaderName[MAX_MAP_NAME];
+		g_mapDisplayNames.GetString(leader, leaderName, sizeof(leaderName));
+		menu.SetTitle("选择下一张 Map（已投 %d/%d）\n领先：%s [%d票]", votesCast, eligible, leaderName, highestVotes);
+	}
+
+	char firstChapter[MAX_MAP_NAME];
+	char displayName[MAX_MAP_NAME];
+	char itemText[MAX_MAP_NAME + 32];
+	for (int i = 0; i < mapCount; i++)
+	{
+		g_mapFirstChapters.GetString(i, firstChapter, sizeof(firstChapter));
+		g_mapDisplayNames.GetString(i, displayName, sizeof(displayName));
+		FormatEx(
+			itemText,
+			sizeof(itemText),
+			StrEqual(g_nextMapVote[client], firstChapter, false) ? "[✓ %d票] %s" : "[%d票] %s",
+			counts[i],
+			displayName
+		);
+		menu.AddItem(firstChapter, itemText);
+	}
+
+	menu.ExitButton = true;
+	menu.DisplayAt(client, firstItem, MENU_TIME_FOREVER);
+	g_nextMapMenuShown[client] = true;
+}
+
+public int NextMapMenuHandler(Menu menu, MenuAction action, int client, int item)
+{
+	if (action == MenuAction_Select)
+	{
+		char firstChapter[MAX_MAP_NAME];
+		menu.GetItem(item, firstChapter, sizeof(firstChapter));
+		int mapIndex = FindMapIndex(firstChapter);
+		if (mapIndex == -1)
+		{
+			PrintToChat(client, "\x04[下一张图] \x01该 Map 已不可用。");
+			return 0;
+		}
+
+		strcopy(g_nextMapVote[client], sizeof(g_nextMapVote[]), firstChapter);
+		char displayName[MAX_MAP_NAME];
+		g_mapDisplayNames.GetString(mapIndex, displayName, sizeof(displayName));
+		PrintToChatAll("\x04[下一张图] \x03%N \x01选择了 \x05%s\x01。", client, displayName);
+
+		DataPack pack;
+		CreateDataTimer(0.1, Timer_RedisplayNextMap, pack, TIMER_FLAG_NO_MAPCHANGE);
+		pack.WriteCell(GetClientUserId(client));
+		pack.WriteCell(GetMenuSelectionPosition());
+	}
+	else if (action == MenuAction_Cancel)
+	{
+		g_nextMapMenuShown[client] = false;
+	}
+	else if (action == MenuAction_End)
+	{
+		delete menu;
+	}
+
+	return 0;
+}
+
+public Action Timer_RedisplayNextMap(Handle timer, DataPack pack)
+{
+	pack.Reset();
+	int client = GetClientOfUserId(pack.ReadCell());
+	int firstItem = pack.ReadCell();
+	if (client > 0)
+		ShowNextMapMenu(client, firstItem);
+	return Plugin_Stop;
+}
+
+int BuildNextMapVoteStats(int[] counts, int &votesCast, int &highestVotes, int &tiedMaps)
+{
+	votesCast = 0;
+	highestVotes = 0;
+	tiedMaps = 0;
+
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (!IsEligibleHuman(client) || !g_nextMapVote[client][0])
+			continue;
+
+		int mapIndex = FindMapIndex(g_nextMapVote[client]);
+		if (mapIndex == -1)
+			continue;
+
+		counts[mapIndex]++;
+		votesCast++;
+	}
+
+	int leader = -1;
+	for (int i = 0; i < g_mapMissions.Length; i++)
+	{
+		if (counts[i] > highestVotes)
+		{
+			highestVotes = counts[i];
+			tiedMaps = 1;
+			leader = i;
+		}
+		else if (counts[i] > 0 && counts[i] == highestVotes)
+		{
+			tiedMaps++;
+		}
+	}
+
+	return leader;
+}
+
+public Action Timer_ShowFinaleMenus(Handle timer)
+{
+	if (!IsMissionFinalMap())
+		return Plugin_Stop;
+
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (IsEligibleHuman(client) && !g_nextMapMenuShown[client])
+			ShowNextMapMenu(client);
+	}
+
+	return Plugin_Stop;
+}
+
+public Action Timer_ShowFinaleMenuToClient(Handle timer, int userId)
+{
+	int client = GetClientOfUserId(userId);
+	if (client > 0 && IsMissionFinalMap() && !g_nextMapMenuShown[client])
+		ShowNextMapMenu(client);
+	return Plugin_Stop;
+}
+
+public Action Event_FinaleWin(Event event, const char[] name, bool dontBroadcast)
+{
+	if (g_finaleChangeScheduled || !IsMissionFinalMap())
+		return Plugin_Continue;
+
+	g_finaleChangeScheduled = true;
+	int winner = SelectNextMapWinner();
+	if (winner == -1)
+	{
+		LogError("No valid official Map is available for finale fallback");
+		return Plugin_Continue;
+	}
+
+	char firstChapter[MAX_MAP_NAME];
+	char displayName[MAX_MAP_NAME];
+	g_mapFirstChapters.GetString(winner, firstChapter, sizeof(firstChapter));
+	g_mapDisplayNames.GetString(winner, displayName, sizeof(displayName));
+
+	int[] counts = new int[g_mapMissions.Length];
+	int votesCast;
+	int highestVotes;
+	int tiedMaps;
+	BuildNextMapVoteStats(counts, votesCast, highestVotes, tiedMaps);
+	if (votesCast > 0)
+		PrintToChatAll("\x04[下一张图] \x01投票结果：\x05%s\x01。", displayName);
+	else
+		PrintToChatAll("\x04[下一张图] \x01无人投票，随机官图：\x05%s\x01。", displayName);
+
+	ScheduleMapChange(firstChapter, displayName, FINALE_CHANGE_DELAY);
+	return Plugin_Continue;
+}
+
+int SelectNextMapWinner()
+{
+	int mapCount = g_mapMissions.Length;
+	if (!mapCount)
+		return -1;
+
+	int[] counts = new int[mapCount];
+	int votesCast;
+	int highestVotes;
+	int tiedMaps;
+	BuildNextMapVoteStats(counts, votesCast, highestVotes, tiedMaps);
+
+	if (highestVotes > 0)
+	{
+		int[] leaders = new int[mapCount];
+		int leaderCount;
+		for (int i = 0; i < mapCount; i++)
+		{
+			if (counts[i] == highestVotes)
+				leaders[leaderCount++] = i;
+		}
+		return leaders[GetRandomInt(0, leaderCount - 1)];
+	}
+
+	return SelectRandomOfficialMap();
+}
+
+int SelectRandomOfficialMap()
+{
+	int mapCount = g_mapMissions.Length;
+	int[] candidates = new int[mapCount];
+	int candidateCount;
+	MissionSymbol current = CurrentMission;
+
+	for (int i = 0; i < mapCount; i++)
+	{
+		MissionSymbol mission = view_as<MissionSymbol>(g_mapMissions.Get(i));
+		if (g_mapOfficial.Get(i) && mission != current)
+			candidates[candidateCount++] = i;
+	}
+
+	if (!candidateCount)
+	{
+		for (int i = 0; i < mapCount; i++)
+		{
+			if (g_mapOfficial.Get(i))
+				candidates[candidateCount++] = i;
+		}
+	}
+
+	return candidateCount ? candidates[GetRandomInt(0, candidateCount - 1)] : -1;
+}
+
+void ScheduleMapChange(const char[] mapName, const char[] displayName, float delay)
+{
+	DataPack pack;
+	CreateDataTimer(delay, Timer_ChangeMap, pack, TIMER_FLAG_NO_MAPCHANGE);
+	pack.WriteString(mapName);
+	pack.WriteString(displayName);
+}
+
+public Action Timer_ChangeMap(Handle timer, DataPack pack)
+{
+	pack.Reset();
+	char mapName[MAX_MAP_NAME];
+	char displayName[MAX_MAP_NAME];
+	pack.ReadString(mapName, sizeof(mapName));
+	pack.ReadString(displayName, sizeof(displayName));
+
+	if (!IsMapValid(mapName))
+	{
+		LogError("Cannot change to invalid Chapter %s (%s)", mapName, displayName);
+		PrintToChatAll("\x04[地图] \x01换图失败：目标 Chapter 已不可用。");
+		return Plugin_Stop;
+	}
+
+	PrintToChatAll("\x04[地图] \x01正在载入 \x05%s\x01……", displayName);
+	ForceChangeLevel(mapName, "Campaign Switcher vote");
+	return Plugin_Stop;
+}
+
+void ResetNextMapVotes()
+{
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		g_nextMapVote[client][0] = '\0';
+		g_nextMapMenuShown[client] = false;
+	}
+}
+
+bool IsEligibleHuman(int client)
+{
+	return client > 0
+		&& client <= MaxClients
+		&& IsClientInGame(client)
+		&& !IsFakeClient(client)
+		&& GetClientTeam(client) != 1;
+}
+
+int CountEligibleHumans()
+{
+	int count;
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (IsEligibleHuman(client))
+			count++;
+	}
+	return count;
 }
