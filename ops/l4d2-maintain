@@ -295,7 +295,7 @@ prepare_release() {
                 run_as_service git -C "$INTEGRATION_DIR" switch "$GIT_BRANCH"
             else
                 run_as_service git -C "$INTEGRATION_DIR" switch --create "$GIT_BRANCH" \
-                    --track "$GIT_REMOTE/$GIT_BRANCH"
+                    "$remote_ref"
             fi
         fi
         run_as_service git -C "$INTEGRATION_DIR" merge --ff-only "$remote_ref"
