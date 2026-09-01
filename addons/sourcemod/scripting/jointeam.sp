@@ -3,6 +3,7 @@
 
 #include <sourcemod>
 #include <sdktools>
+#include <sdkhooks>
 #include <left4dhooks>
 #include <colors>
 
@@ -41,6 +42,8 @@ bool isCountDownEnd = false;
 
 int tankAttackConVarInt[3] = {0, ...};
 float tankAttackConVarFloat = 0.0;
+
+bool gGodModeActive = false; // 当前是否应处于无敌状态（全局准备期共享）
 
 public Plugin myinfo =
 {
@@ -121,6 +124,8 @@ public void OnPluginStart()
 	HookEvent("round_start", Event_RoundStart, EventHookMode_PostNoCopy);
 	HookEvent("map_transition", Event_MapTransition);
 	HookEvent("player_death", Event_PlayerDeath);
+	HookEvent("player_hurt", Event_PlayerHurt_GodMode);
+	HookEvent("weapon_fire", Event_WeaponFire);
 
 	LoadTranslations("smac.phrases");
 }
@@ -150,10 +155,15 @@ public void OnMapStart()
 
 	/****** JoinTeam ******/
 	storeBotTankAttackConVar();
+	SetConVarInt(FindConVar("director_no_survivor_bots"), 0);
+    SetConVarInt(FindConVar("survivor_limit"), hMaxSurvivors.IntValue);
 }
 
 public void OnClientPutInServer(int client)
 {
+	/****** GodMode ******/
+	SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage_GodMode);
+
 	if ( !isClientValid(client) || gameStarted) return;
 
 	/****** Doorlock ******/
@@ -415,18 +425,63 @@ public void L4D2_OnEndVersusModeRound_Post()
 {
 	if (!GetConVarBool(hAllowBotSurvivors)) {
 		SetConVarInt(FindConVar("director_no_survivor_bots"), 0);
-		SetConVarInt(FindConVar("survivor_limit"), 4);
+		SetConVarInt(FindConVar("survivor_limit"), hMaxSurvivors.IntValue);
 	}
 	gameStarted = false;
 }
 
+// 不再通过修改 "god" / "sv_infinite_ammo" 这类全局 cvar 实现无敌 + 无限弹药，
+// 因为这会影响到其他插件/模式（例如玩家自己开的 god 指令、其他依赖这些 cvar 的逻辑）。
+// 改为对每个玩家单独拦截伤害，作为第一道防线；player_hurt 事件再做一次强制回血兜底，
+// 双保险，不管什么武器（包括霰弹枪）都不会真正掉血。
 public void setGodMode(bool boolean)
 {
-	int flags = GetCommandFlags("god");
-	SetCommandFlags("god", flags & ~FCVAR_NOTIFY);
-	SetConVarInt(FindConVar("god"), boolean);
-	SetCommandFlags("god", flags);
-	SetConVarInt(FindConVar("sv_infinite_ammo"), boolean);
+	gGodModeActive = boolean;
+}
+
+public Action OnTakeDamage_GodMode(int victim, int &attacker, int &inflictor, float &damage, int &damagetype)
+{
+	if (!gGodModeActive)
+	{
+		return Plugin_Continue;
+	}
+
+	if (victim > 0 && victim <= MaxClients && GetClientTeam(victim) == TEAM_SURVIVORS)
+	{
+		return Plugin_Handled; // 拦截伤害，但是 Shotgun 会漏
+	}
+	return Plugin_Continue;
+}
+
+// 兜底：不管上面那道 pre-hook 拦没拦住，只要玩家还处于无敌状态，
+// player_hurt 一广播就立刻回满血，血量最终不可能真的往下掉。
+public void Event_PlayerHurt_GodMode(Event event, const char[] name, bool dontBroadcast)
+{
+	int client = GetClientOfUserId(event.GetInt("userid"));
+	if (!gGodModeActive || !isGodModeClient(client) || !IsPlayerAlive(client)) return;
+
+	if (GetEntProp(client, Prop_Send, "m_isIncapacitated"))
+	{
+		L4D_ReviveSurvivor(client); // 万一还是被打倒地了，直接扶起来
+	}
+
+	SetEntityHealth(client, 100); // 回满血
+	L4D_SetTempHealth(client, 0.0); // 清除可能产生的虚血
+}
+
+public void Event_WeaponFire(Event event, const char[] name, bool dontBroadcast)
+{
+	int client = GetClientOfUserId(event.GetInt("userid"));
+	if (!gGodModeActive || !isGodModeClient(client)) return;
+
+	int weapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
+	if (weapon <= 0) return;
+
+	int clip = GetEntProp(weapon, Prop_Send, "m_iClip1");
+	if (clip >= 0) // -1 表示该武器没有弹匣概念（例如近战武器）
+	{
+		SetEntProp(weapon, Prop_Send, "m_iClip1", clip + 1); // 把这一枪打掉的弹药立刻补回来，实现“无限弹药”而不动全局 cvar
+	}
 }
 
 public void KickBots()
@@ -564,6 +619,15 @@ bool isClientValid(int client)
 	if (!IsClientConnected(client)) return false;
 	if (!IsClientInGame(client)) return false;
 	if (IsFakeClient(client)) return false;
+	return true;
+}
+
+// isClientValid() 会把机器人排除掉（很多指令只给真人用），
+// 但生还者 Bot 一样需要无敌/回血保护，所以 godmode 相关逻辑改用这个，不排除机器人。
+bool isGodModeClient(int client)
+{
+	if (client <= 0 || client > MaxClients) return false;
+	if (!IsClientInGame(client)) return false;
 	return true;
 }
 
