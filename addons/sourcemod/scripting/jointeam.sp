@@ -21,7 +21,15 @@ ConVar
 	hAllowBotSurvivors,
 	hSMACWelcome,
 	hSaveWeapons,
-	hSlayBotTime;
+	hSlayBotTime,
+	gBotTankAttackRange,
+	gBotTankSwingRange,
+	gBotTankFistRadius,
+	gBotTankAttackInterval,
+	gHumanTankAttackRange,
+	gHumanTankSwingRange,
+	gHumanTankFistRadius,
+	gHumanTankAttackInterval;
 
 bool gameStarted;
 
@@ -40,9 +48,6 @@ int countDown; // 倒计时
 bool isClientLoading[MAXPLAYERS + 1] = {false, ...};
 bool isCountDownEnd = false;
 
-int tankAttackConVarInt[3] = {0, ...};
-float tankAttackConVarFloat = 0.0;
-
 bool gGodModeActive = false; // 当前是否应处于无敌状态（全局准备期共享）
 
 public Plugin myinfo =
@@ -50,7 +55,7 @@ public Plugin myinfo =
 	name 			= "Jointeam",
 	author 			= "海洋空氣",
 	description 	= "加入生还者 + 等待玩家读图加载 + 出门发药 + 过关重置生还状态 + 自杀",
-	version 		= "1.9",
+	version 		= "1.10",
 	url 			= "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
 }
 
@@ -105,6 +110,14 @@ public void OnPluginStart()
 	hSMACWelcome = CreateConVar("ast_smacwelcome", "0", "是否伪装 SMAC 欢迎信息");
 	hSaveWeapons = CreateConVar("ast_saveweapons", "0", "关底是否保留武器");
 	hSlayBotTime = CreateConVar("ast_endroundslay_time", "10.0", "当最后一位生还跑路时处死 Bot 的等待时间");
+	gBotTankAttackRange = CreateConVar("ast_bot_tank_attack_range", "70", "Bot Tank 攻击范围");
+	gBotTankSwingRange = CreateConVar("ast_bot_tank_swing_range", "75", "Bot Tank 近战挥舞范围");
+	gBotTankFistRadius = CreateConVar("ast_bot_tank_fist_radius", "50", "Bot Tank 拳击半径");
+	gBotTankAttackInterval = CreateConVar("ast_bot_tank_attack_interval", "1.25", "Bot Tank 攻击间隔");
+	gHumanTankAttackRange = CreateConVar("ast_human_tank_attack_range", "50", "Human Tank 攻击范围");
+	gHumanTankSwingRange = CreateConVar("ast_human_tank_swing_range", "56", "Human Tank 近战挥舞范围");
+	gHumanTankFistRadius = CreateConVar("ast_human_tank_fist_radius", "15", "Human Tank 拳击半径");
+	gHumanTankAttackInterval = CreateConVar("ast_human_tank_attack_interval", "1.5", "Human Tank 攻击间隔");
 
 	RegConsoleCmd("sm_join", JoinTeam_Cmd, "Moves you to the survivor team");
 	RegConsoleCmd("sm_joingame", JoinTeam_Cmd, "Moves you to the survivor team");
@@ -154,7 +167,7 @@ public void OnMapStart()
 	CreateTimer(1.0, LoadingTimer, _, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT); // 开始无限循环判断是否全部加载完毕
 
 	/****** JoinTeam ******/
-	storeBotTankAttackConVar();
+	ApplyTankAttackProfile(false);
 	SetConVarInt(FindConVar("director_no_survivor_bots"), 0);
     SetConVarInt(FindConVar("survivor_limit"), hMaxSurvivors.IntValue);
 }
@@ -333,7 +346,7 @@ public Action Event_RoundStart(Handle event, const char[] name, bool dontBroadca
 		}
 	}
 
-	setBotTankAttackConVar();
+	ApplyTankAttackProfile(false);
 	return Plugin_Continue;
 }
 
@@ -360,7 +373,7 @@ public Action L4D_OnTryOfferingTankBot(int tank_index, bool &enterStasis)
 		// 允许加入特感 && 允许玩家当 Tank && 特感方有人
 		if ( GetConVarInt(hMaxInfected) > 0 && GetConVarBool(hAllowHumanTank) && getHumanInfected() >= 1 ) {
 			SetEntityHealth(tank_index, GetConVarInt(hHumanTankHp));
-			setHumanTankAttackConVar();
+			ApplyTankAttackProfile(true);
 			CPrintToChatAll("{default}玩家 Tank 血量只有 {olive}%d.", GetConVarInt(hHumanTankHp));
 			return Plugin_Continue;
 		}
@@ -395,7 +408,7 @@ public void Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast
 {
 	int client = GetClientOfUserId(event.GetInt("userid"));
 	if (!isInfected(client) || L4D2_GetPlayerZombieClass(client) != ZC_Tank) return;
-	setBotTankAttackConVar();
+	ApplyTankAttackProfile(false);
 }
 
 public Action MoveToSurTimer(Handle timer, int client)
@@ -589,28 +602,17 @@ int getHumanInfected() // infected players
 	return count;
 }
 
-void storeBotTankAttackConVar()
+void ApplyTankAttackProfile(bool humanTank)
 {
-	tankAttackConVarInt[0] = GetConVarInt(FindConVar("tank_attack_range"));
-	tankAttackConVarInt[1] = GetConVarInt(FindConVar("tank_swing_range"));
-	tankAttackConVarInt[2] = GetConVarInt(FindConVar("tank_fist_radius"));
-	tankAttackConVarFloat = GetConVarFloat(FindConVar("z_tank_attack_interval"));
-}
+	int attackRange = GetConVarInt(humanTank ? gHumanTankAttackRange : gBotTankAttackRange);
+	int swingRange = GetConVarInt(humanTank ? gHumanTankSwingRange : gBotTankSwingRange);
+	int fistRadius = GetConVarInt(humanTank ? gHumanTankFistRadius : gBotTankFistRadius);
+	float attackInterval = GetConVarFloat(humanTank ? gHumanTankAttackInterval : gBotTankAttackInterval);
 
-void setHumanTankAttackConVar()
-{
-	SetConVarInt(FindConVar("tank_attack_range"), 50);
-	SetConVarInt(FindConVar("tank_swing_range"), 56);
-	SetConVarInt(FindConVar("tank_fist_radius"), 15);
-	SetConVarFloat(FindConVar("z_tank_attack_interval"), 1.5);
-}
-
-void setBotTankAttackConVar()
-{
-	SetConVarInt(FindConVar("tank_attack_range"), tankAttackConVarInt[0]);
-	SetConVarInt(FindConVar("tank_swing_range"), tankAttackConVarInt[1]);
-	SetConVarInt(FindConVar("tank_fist_radius"), tankAttackConVarInt[2]);
-	SetConVarFloat(FindConVar("z_tank_attack_interval"), tankAttackConVarFloat);
+	SetConVarInt(FindConVar("tank_attack_range"), attackRange);
+	SetConVarInt(FindConVar("tank_swing_range"), swingRange);
+	SetConVarInt(FindConVar("tank_fist_radius"), fistRadius);
+	SetConVarFloat(FindConVar("z_tank_attack_interval"), attackInterval);
 }
 
 bool isClientValid(int client)
