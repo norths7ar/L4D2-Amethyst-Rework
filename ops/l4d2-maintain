@@ -209,7 +209,7 @@ status_command() {
 preflight_command() {
     require_root
     local failed=0 free_gib runtime status_output humans process_count
-    for executable in git rsync flock jq python3 sha256sum tar systemctl runuser ss sudo tmux; do
+    for executable in git rsync flock jq python3 sha256sum tar systemctl runuser ss sudo tmux stdbuf script; do
         if ! command -v "$executable" >/dev/null; then
             log "preflight: missing executable $executable"
             failed=1

@@ -82,7 +82,7 @@ query_status() {
     if [[ "$runtime" == systemd ]]; then
         if (
             set +o pipefail
-            timeout 35 journalctl -u "$SERVICE_NAME" --since "$since" --follow \
+            timeout 35 stdbuf -oL journalctl -u "$SERVICE_NAME" --since "$since" --follow \
                 --no-pager -o cat \
                 | awk -v begin="${marker}_BEGIN" -v end="${marker}_END" '
                     index($0, begin) { capture=1; next }
