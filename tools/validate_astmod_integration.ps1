@@ -135,6 +135,7 @@ $requiredPaths = @(
     "addons/sourcemod/configs/astredux_profiles.cfg",
     "addons/sourcemod/extensions/imatchext.autoload",
     "addons/sourcemod/extensions/imatchext.ext.2.l4d2.so",
+    "addons/sourcemod/extensions/langparser.ext.2.l4d2.so",
     "addons/sourcemod/gamedata/imatchext.txt",
     "addons/sourcemod/scripting/include/imatchext.inc",
     "addons/sourcemod/translations/imatchext.phrases.txt",
