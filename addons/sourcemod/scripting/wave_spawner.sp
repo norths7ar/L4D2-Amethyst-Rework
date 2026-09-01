@@ -59,6 +59,7 @@ public void OnPluginStart()
     RegServerCmd("sm_ast_wave_reset_override", ResetWaveOverrideCommand, "清除玩家临时波次参数记录");
 
     HookEvent("round_end", Event_RoundEnd, EventHookMode_PostNoCopy);
+    HookEvent("round_start", Event_RoundEnd, EventHookMode_PostNoCopy);
     HookEvent("tank_spawn", Event_TankSpawn, EventHookMode_PostNoCopy);
     HookEvent("player_death", Event_PlayerDeath, EventHookMode_PostNoCopy);
     HookEvent("player_team", OnChangeTeam, EventHookMode_Post);
