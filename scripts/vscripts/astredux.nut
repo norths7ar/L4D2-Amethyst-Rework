@@ -37,18 +37,6 @@ ModeData <-{
 	g_nTime				= 0			// 0秒，保证需要时能尽快刷出
 }
 
-// 特感刷新参数
-::Waves <- {
-	Enabled				= true		// 新版特感刷新机制开关
-	MaxSILimit 			= 3			// 同场特感数量
-	SpawnTime 			= 3			// 复活间隔
-	SpawnedSICount 		= 0			// 用于脚本判断，不需要修改。当前波次刷出的特感数量
-	AliveSICount 		= 0			// 用于脚本判断，不需要修改。当前场上的特感数量
-	HasFirstDeath 		= false		// 用于脚本判断，不需要修改。当前波次是否有特感已经死亡
-	FirstDeathTime		= -1		// 用于脚本判断，不需要修改。第一只的死亡时间
-	BonusSpawnTime		= 0			// 用于脚本判断，不需要修改。击杀的奖励时间
-}
-
 // 插件修改特感刷新参数时会重新读取/执行整个脚本文件。
 // 如果这里每次都用 <- 重新创建 HUDInfo，会把正在游戏中靠事件累积的
 // si_count 直接清零，导致后续 player_death 里的 si_count[name]--
@@ -66,9 +54,7 @@ if (!("HUDInfo" in getroottable()))
 
 function update_diff()
 {
-	Waves.Enabled = Convars.GetStr("ast_wave_spawn").tointeger();
-
-	Waves.Enabled ? update_diff_new() : update_diff_old();
+	ApplyDirectorOptions();
 
 	if (HUDInfo.hud_mode == "stats") {
 		g_ModeScript.UpdateHUDStats();
@@ -80,12 +66,8 @@ function update_diff()
 //-----------------------------------------------------------------------------------------------------------------------------
 // Function
 //-----------------------------------------------------------------------------------------------------------------------------
-function update_diff_new()
+function ApplyDirectorOptions()
 {
-	local difficulty = Convars.GetStr("astredux_profile_current");
-	local timer_new = Convars.GetStr("ast_sitimer_new").tofloat();
-	local limit_new = Convars.GetStr("ast_silimit_new").tointeger();
-
 	DirectorOptions.HunterLimit = Convars.GetStr("astredux_si_hunter_limit").tointeger();
 	DirectorOptions.SmokerLimit = Convars.GetStr("astredux_si_smoker_limit").tointeger();
 	DirectorOptions.BoomerLimit = Convars.GetStr("astredux_si_boomer_limit").tointeger();
@@ -93,121 +75,6 @@ function update_diff_new()
 	DirectorOptions.JockeyLimit = Convars.GetStr("astredux_si_jockey_limit").tointeger();
 	DirectorOptions.ChargerLimit = Convars.GetStr("astredux_si_charger_limit").tointeger();
 	DirectorOptions.PreferredSpecialDirection = Convars.GetStr("astredux_si_preferred_direction").tointeger();
-
-	DirectorOptions.cm_BaseSpecialLimit 					= ModeData.g_nSI
-	DirectorOptions.cm_MaxSpecials 							= ModeData.g_nSI
-	DirectorOptions.DominatorLimit 							= ModeData.g_nSI
-	DirectorOptions.cm_SpecialRespawnInterval 				= ModeData.g_nTime
-	DirectorOptions.cm_SpecialSlotCountdownTime 			= ModeData.g_nTime
-	Waves.MaxSILimit										= limit_new
-	Waves.SpawnTime											= timer_new
-}
-
-// 旧版本刷新机制
-// 替换时注意修改 MapData 为 ModeData
-function update_diff_old()
-{
-	local difficulty = Convars.GetStr("astredux_profile_current");
-	local timer = Convars.GetStr("ast_sitimer");
-	DirectorOptions.HunterLimit = Convars.GetStr("astredux_si_hunter_limit").tointeger();
-	DirectorOptions.SmokerLimit = Convars.GetStr("astredux_si_smoker_limit").tointeger();
-	DirectorOptions.BoomerLimit = Convars.GetStr("astredux_si_boomer_limit").tointeger();
-	DirectorOptions.SpitterLimit = Convars.GetStr("astredux_si_spitter_limit").tointeger();
-	DirectorOptions.JockeyLimit = Convars.GetStr("astredux_si_jockey_limit").tointeger();
-	DirectorOptions.ChargerLimit = Convars.GetStr("astredux_si_charger_limit").tointeger();
-	DirectorOptions.PreferredSpecialDirection = Convars.GetStr("astredux_si_preferred_direction").tointeger();
-	switch (difficulty) {
-		case "1":
-			switch (timer) {
-				case "0":
-					ModeData.g_nTime = 6
-					ModeData.g_nSI = 2
-					break;
-				case "1":
-					ModeData.g_nTime = 3
-					ModeData.g_nSI = 3
-					break;
-				case "2":
-					ModeData.g_nTime = 2
-					ModeData.g_nSI = 3
-					break;
-				case "3":
-					ModeData.g_nTime = 0
-					ModeData.g_nSI = 3
-					break;
-				default:
-					ModeData.g_nTime = 3
-					ModeData.g_nSI = 3
-					break;
-			}
-			break;
-		case "2":
-			switch (timer) {
-				case "0":
-					ModeData.g_nTime = 10
-					ModeData.g_nSI = 3
-					break;
-				case "1":
-					ModeData.g_nTime = 8
-					ModeData.g_nSI = 4
-					break;
-				case "2":
-					ModeData.g_nTime = 6
-					ModeData.g_nSI = 4
-					break;
-				case "3":
-					ModeData.g_nTime = 0
-					ModeData.g_nSI = 4
-					break;
-				default:
-					ModeData.g_nTime = 8
-					ModeData.g_nSI = 4
-					break;
-			}
-			break;
-		case "3":
-			ModeData.g_nSI = 6
-			switch (timer) {
-				case "0":
-					ModeData.g_nTime = 26
-					break;
-				case "1":
-					ModeData.g_nTime = 22
-					break;
-				case "2":
-					ModeData.g_nTime = 18
-					break;
-				case "3":
-					ModeData.g_nTime = 0
-					break;
-				default:
-					ModeData.g_nTime = 22
-					break;
-			}
-			break;
-		case "4":
-			ModeData.g_nSI = 6
-			switch (timer) {
-				case "0":
-					ModeData.g_nTime = 22
-					break;
-				case "1":
-					ModeData.g_nTime = 17
-					break;
-				case "2":
-					ModeData.g_nTime = 14
-					break;
-				case "3":
-					ModeData.g_nTime = 0
-					break;
-				default:
-					ModeData.g_nTime = 17
-					break;
-			}
-			break;
-		default:
-			break;
-	}
 
 	DirectorOptions.cm_BaseSpecialLimit 					= ModeData.g_nSI
 	DirectorOptions.cm_MaxSpecials 							= ModeData.g_nSI
@@ -260,8 +127,8 @@ function UpdateHUDSI()
 function UpdateHUDStats()
 {
 	HUDInfo.hud_mode = "stats";
-	local timer_new = Convars.GetStr("ast_sitimer_new").tofloat();
-	local limit_new = Convars.GetStr("ast_silimit_new").tointeger();
+	local timer_new = Convars.GetStr("astredux_wave_interval").tofloat();
+	local limit_new = Convars.GetStr("astredux_wave_size").tointeger();
 
 	HUDInfo.si_text = format("当前特感刷新速度：%.1f秒%d特", timer_new, limit_new);
 	HUDInfo.si_text += "\n使用 !si 修改";
@@ -294,8 +161,6 @@ function UpdateHUDStats()
 
 function OnGameEvent_player_first_spawn( params )
 {
-	if (!Waves.Enabled) return;
-
 	local client = GetParamsItem(params, "userid");
 	local clientEnt = GetPlayerFromUserID(client);
 	local isBot = GetParamsItem(params, "isbot");
@@ -316,8 +181,6 @@ function OnGameEvent_player_first_spawn( params )
 
 function OnGameEvent_player_death( params )
 {
-	if (!Waves.Enabled) return;
-
 	local attacker = GetParamsItem(params, "attacker");
 	local victimname = GetParamsItem(params, "victimname");
 	if (victimname == "Infected" || victimname == "Witch") return; // 普通感染者 / Witch
@@ -338,8 +201,6 @@ function OnGameEvent_player_death( params )
 
 function OnGameEvent_round_start( params )
 {
-	if (!Waves.Enabled) return;
-
 	foreach (name in HUDInfo.si_names)
 	{
         HUDInfo.si_count[name] = 0;

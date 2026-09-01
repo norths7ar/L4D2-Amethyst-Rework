@@ -133,6 +133,14 @@ $requiredPaths = @(
     "addons/sourcemod/configs/vote_menu.txt",
     "addons/sourcemod/configs/advertisements.txt",
     "addons/sourcemod/configs/astredux_profiles.cfg",
+    "addons/sourcemod/scripting/astredux_profile_controller.sp",
+    "addons/sourcemod/scripting/astredux_wave_spawner.sp",
+    "addons/sourcemod/scripting/astredux_rules.sp",
+    "addons/sourcemod/scripting/astredux_autowipe.sp",
+    "addons/sourcemod/plugins/optional/astredux/astredux_profile_controller.smx",
+    "addons/sourcemod/plugins/optional/astredux/wave_spawner.smx",
+    "addons/sourcemod/plugins/optional/astredux/astredux_rules.smx",
+    "addons/sourcemod/plugins/optional/astredux/astredux_autowipe.smx",
     "cfg/generalfixes.cfg",
     "cfg/competitive_shared.cfg",
     "cfg/sharedplugins.cfg",
@@ -246,6 +254,25 @@ Assert-NotContains `
     "assets/astmod_vpk/scripts/gamemodes.txt" `
     '^\s*"amethyst"\s*$' `
     "The legacy amethyst mutation remains in the VPK source"
+
+Assert-Contains `
+    "cfg/cfgogl/astredux/plugins_1.cfg" `
+    '^\s*sm\s+plugins\s+load\s+optional/astredux/wave_spawner\.smx\s*$' `
+    "AstRedux does not load its own Wave Spawner"
+Assert-Contains `
+    "cfg/cfgogl/astredux/plugins_1.cfg" `
+    '^\s*sm\s+plugins\s+load\s+optional/astredux/astredux_rules\.smx\s*$' `
+    "AstRedux does not load its rules component"
+Assert-NotContains `
+    "cfg/cfgogl/astredux/plugins_1.cfg" `
+    '^\s*sm\s+plugins\s+load\s+optional/astmod/wave_spawner\.smx\s*$' `
+    "AstRedux still loads the AstMod Wave Spawner"
+foreach ($legacyPattern in @('Waves', 'update_diff_old', 'ast_wave_spawn', 'ast_sitimer(_new)?', 'ast_silimit_new')) {
+    Assert-NotContains `
+        "scripts/vscripts/astredux.nut" `
+        $legacyPattern `
+        "AstRedux VScript still contains legacy wave state: $legacyPattern"
+}
 
 $keyValuesFiles = @(
     "addons/sourcemod/configs/matchmodes.txt",

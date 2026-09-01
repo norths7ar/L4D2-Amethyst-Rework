@@ -23,7 +23,7 @@
 
 ## 仓库统一提供、三个模式共同加载的插件
 
-下面插件由三个 Ast 模式共同加载。Rework 已有功能优先使用共享版本；Wave Spawner 则保存在 AstMod 隔离目录，但由三个模式复用同一份作者源码构建产物。
+下面插件由 Ast 系列模式共享。Rework 已有功能优先使用共享版本；AstMod 和 AstFlex 使用 AstMod 隔离目录中的作者 Wave Spawner，AstRedux 使用自己的单一波次实现。
 
 | 加载路径 | 源码 |
 | --- | --- |
@@ -41,12 +41,14 @@
 
 ## AstRedux 专属、可从仓库源码重建的插件
 
-下面 3 个插件位于 `optional/astredux/`，单列于 AstMod 隔离目录的 121 个二进制之外。它们已经用仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 编译通过；本仓库直接维护其构建产物关系。
+下面 5 个插件位于 `optional/astredux/`，单列于 AstMod 隔离目录的 121 个二进制之外。它们已经用仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 编译通过；本仓库直接维护其构建产物关系。
 
 | 加载路径 | 源码 | 职责 |
 | --- | --- | --- |
-| `optional/astredux/astredux_profile_controller.smx` | `addons/sourcemod/scripting/astredux_profile_controller.sp` | 读取并应用 1–4 人声明式 profile，协调 Tank、刷特、No-Witch 和 adapter 开关 |
-| `optional/astredux/astredux_autowipe.smx` | `addons/sourcemod/scripting/astredux_autowipe.sp` | 常驻 AutoWipe adapter，由 profile cvar 控制是否生效 |
+| `optional/astredux/astredux_profile_controller.smx` | `addons/sourcemod/scripting/astredux_profile_controller.sp` | 缓存、选择，并在完整验证后下发 1–4 人声明式 profile，不执行具体玩法规则 |
+| `optional/astredux/wave_spawner.smx` | `addons/sourcemod/scripting/astredux_wave_spawner.sp` | 执行 Redux 唯一的波次刷特模型，拥有默认值、临时有效值与 `!si` |
+| `optional/astredux/astredux_rules.smx` | `addons/sourcemod/scripting/astredux_rules.sp` | 执行 profile 驱动的 Tank、Witch 和武器规则 |
+| `optional/astredux/astredux_autowipe.smx` | `addons/sourcemod/scripting/astredux_autowipe.sp` | 常驻 AutoWipe adapter，并拥有自己的 profile 开关 CVar |
 | `optional/astredux/challenge.smx` | `addons/sourcemod/scripting/astredux_challenge.sp` + `challenge.sp` | Redux 专用 `!ast` build，读取当前 Redux profile 并与旧 DAS 解耦 |
 
 ## 作者可选功能

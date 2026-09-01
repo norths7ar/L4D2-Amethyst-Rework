@@ -29,7 +29,7 @@ AstMod 是持续维护的 Baseline。它已同步到 2.8.1 的配置、VScript �
 
 - `!ast` 打开 Ast 玩法调整菜单，`!tz` 保留为兼容短命令。单人生还者直接调整，多人生还者发起投票；菜单提供当前保留的玩法项。`!vote` 从 `vote_menu.txt` 读取服务器操作，不再承担地图投票。
 - 临时玩法调整跨地图保留，最后一名真人离开后延迟恢复当前 DAS/profile 默认值；管理员可用 `!astreset` 立即走同一恢复路径。只有存在非默认调整时才周期播报，新玩家进入时会收到当前人数档和波次状态。
-- 新版刷特由作者仓库提交 `c0d829f` 的 `wave_spawner.sp` 编译；2.8.1 运行包提供加载行，本仓库补齐对应成品 SMX。Challenge 负责新旧机制投票，旧版实际刷新由 VScript 执行，新版波次 CVar 和 `!si` 由 Wave Spawner 维护。
+- AstMod Baseline 的新版刷特由作者仓库提交 `c0d829f` 的 `wave_spawner.sp` 编译，Challenge 仍保留新旧机制投票。AstRedux 不再加载这份共享插件或旧 VScript 刷特，而由 `astredux_wave_spawner.sp` 单独维护唯一波次模型、`!si` 临时值和 VScript 重载。
 - Challenge 已修正濒死生还者击杀特感回血、普通感染者事件的 `infected_id` 读取、小僵尸击杀累加和生命值链式比较；AstMod 与 AstRedux 两份 SMX 均由同一修正源码重建，回血与备弹待实机复测。
 - `versus_coop_mode.smx` 已将 Director 中相邻的一字节回合状态字段由四字节写改为 `NumberType_Int8`，避免回合重开时覆盖后续指针；海洋按原崩溃路径复测后未再出现问题。
 - `jointeam.smx` 已恢复仓库源码，补充 ReadyUp 兼容 Forward。其管理员命令 `sm_fuck <名称|all>` 使用 ban flag，只按 Bot 名称处死 AI 特感，不会处死人类感染者。

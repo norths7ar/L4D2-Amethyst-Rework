@@ -22,10 +22,10 @@ AstMod 是可玩的维护基线，持续合入接入 Competitive Rework 所需�
 | --- | --- | --- |
 | 人数规则 | `difficulty_adjustment_system.smx` 按人数选择 Easy / Normal / Hard / Impossible cfg | Profile Controller 读取 `astredux_profiles.cfg`，直接选择 1P–4P profile |
 | 人数语义 | 以仍在生还者队伍中的真人数量为准 | 保留同一语义：玩家退出会降档，玩家死亡但没有退出不会降档 |
-| 规则表达 | 每个难度 cfg 同时修改 Tank、特感、尸潮、互动时长、药品和插件状态 | 每个 profile 声明该人数档的最终规则，包括少人档的微冲换弹补偿，由常驻 Controller 和 adapter 执行 |
+| 规则表达 | 每个难度 cfg 同时修改 Tank、特感、尸潮、互动时长、药品和插件状态 | 每个 profile 声明该人数档的最终规则；Controller 只选择并应用 profile，各运行组件执行自己的规则 |
 | Tank 与近战 | Tank 基础血量、mutation 倍率、引擎百分比伤害和 `tankdamagemult` 共同决定结果 | Profile 直接声明 Tank 最终血量和固定近战伤害；当前均为每刀 300，电锯除外 |
 | 已生成的 Tank | 沿用旧 DAS 行为 | 人数变化立即覆盖新规则，但不追溯修改场上已经生成的 Tank |
-| 刷特 | 使用海洋源码仓库提交 `c0d829f` 的 `wave_spawner.sp`，保留 Challenge 中的新旧机制投票；旧机制仍由 VScript 执行 | 复用同一 Wave Spawner，由声明式 profile 提供当前人数档的波次数量与间隔 |
+| 刷特 | 使用海洋源码仓库提交 `c0d829f` 的 `wave_spawner.sp`，保留 Challenge 中的新旧机制投票；旧机制仍由 VScript 执行 | 只加载 Redux Wave Spawner；profile 提供默认波次数量与间隔，`!si` 维护独立的临时有效值 |
 | 长期方向 | 维持可玩的 Versus-backed 药役基线 | 审查波次、Tank、AutoWipe 等规则，并寻找可靠的 Coop-native 底层 |
 
 ### 为什么替换旧 DAS
@@ -37,16 +37,16 @@ AstMod 是可玩的维护基线，持续合入接入 Competitive Rework 所需�
 - `tankdamagemult` 依赖武器属性插件的具体接口和二进制行为；更换插件版本后，即使 cfg 没变，伤害链路也可能失效或改变。插件动态 load/unload 与 Rework 负责的模式生命周期也存在职责重叠。
 - 一份 cfg 同时承担“数值表”和“执行脚本”。Redux 将人数基线与运行时开关分层，让 `/tz` 投票可作为临时 override 覆盖 profile。
 
-Redux 因此把人数档改为声明式 profile：配置直接写最终 Tank 血量、固定近战伤害、微冲换弹时长、刷特参数和各项 CVar。当前 Controller 负责选择 profile、下发 CVar 和武器属性，以及执行 Tank 与 No-Witch 规则；AutoWipe 等独立 adapter 常驻加载并由 profile CVar 控制。1P/2P 分别沿用 2.8.1 的 1.4/1.5 秒和 1.74/1.85 秒 Uzi/消音微冲换弹补偿；3P/4P 采用 ZoneMod 2.9 的 1.9 秒 Uzi，并把消音微冲恢复到约 2.24 秒的原版换弹时长。完整配置以 [`addons/sourcemod/configs/astredux_profiles.cfg`](addons/sourcemod/configs/astredux_profiles.cfg) 为准。
+Redux 因此把人数档改为声明式 profile：配置直接写最终 Tank 血量、固定近战伤害、微冲换弹时长、刷特参数和各项 CVar。Profile Controller 只缓存、选择，并在完整验证后下发 CVar；Redux Rules 执行 Tank、Witch 和武器规则，Wave Spawner 执行唯一的波次刷特并拥有默认值/临时有效值分层，AutoWipe 自己拥有启用开关。1P/2P 分别沿用 2.8.1 的 1.4/1.5 秒和 1.74/1.85 秒 Uzi/消音微冲换弹补偿；3P/4P 采用 ZoneMod 2.9 的 1.9 秒 Uzi，并把消音微冲恢复到约 2.24 秒的原版换弹时长。完整配置以 [`addons/sourcemod/configs/astredux_profiles.cfg`](addons/sourcemod/configs/astredux_profiles.cfg) 为准。
 
 | Profile | Tank 最终血量 | 固定近战伤害 | Uzi / 消音微冲换弹 | 当前波次参数 |
 | --- | ---: | ---: | ---: | --- |
 | 1P | 1200 | 300 | 1.4 / 1.5 秒 | 3 特 / 10 秒 |
-| 2P | 2550 | 300 | 1.74 / 1.85 秒 | 3 特 / 15 秒 |
+| 2P | 2550 | 300 | 1.74 / 1.85 秒 | 3 特 / 10 秒 |
 | 3P | 4500 | 300 | 1.9 / 2.24 秒 | 5 特 / 26 秒 |
 | 4P | 6750 | 300 | 1.9 / 2.24 秒 | 6 特 / 22 秒 |
 
-Profile Controller 每秒检查人数，并在 `player_team` 后补做一次检查；管理员可用 `sm_astredux_profile_force 1..4` 强制诊断，使用 `0` 恢复自动选择。AstRedux 已形成“profile 基线 + 临时 override”分层：玩家死亡不降档，玩家退出后新 profile 立即成为后续规则来源，但不追溯修改场上已经生成的 Tank。临时玩法调整会跨地图保留；最后一名真人离开后延迟恢复当前人数档默认值，管理员也可用 `!astreset` 立即恢复。
+Profile Controller 每 5 秒检查人数，并将密集的 `player_team` 事件合并后补做一次检查；管理员可用 `sm_astredux_profile_force 1..4` 强制诊断，使用 `0` 恢复自动选择。AstRedux 已形成“profile 默认值 + 临时有效值”分层：玩家死亡不降档，玩家退出后新 profile 立即成为后续规则来源，但不追溯修改场上已经生成的 Tank；已生效的 `!si` 临时值不会被人数切档覆盖，`!astreset` 才清除它并重新应用当前 profile。
 
 ## 当前集成
 
@@ -71,7 +71,7 @@ Profile Controller 每秒检查人数，并在 `player_team` 后补做一次检�
 | `!mapvote` | 打开 Campaign Switcher 战役换图投票。 |
 | `!mapvotes` | 查看当前 Campaign Switcher 换图投票。 |
 | `!ast` / `!tz` | 打开 Ast 玩法调整菜单。 |
-| `!si <时间> <数量>` | 在新版刷特机制下发起特感刷新参数调整；单人生还者直接生效，多人生还者投票。 |
+| `!si <时间> <数量>` | 调整 Redux 的波次刷新参数；单人生还者直接生效，多人生还者投票。 |
 | `!votekick` | 发起玩家踢人投票。 |
 
 管理员另有 `!astreset`，立即恢复当前 Ast 模式的默认玩法设置。
@@ -80,7 +80,7 @@ Profile Controller 每秒检查人数，并在 `player_team` 后补做一次检�
 
 旧版整合已经完成 Ubuntu 22.04 Dedicated Server 冷加载、AstMod/AstRedux 模式加载与卸载、四档 Redux profile，以及 AstMod → Zonemod 的玩家连接切换验证。本轮 2.8.1 升级已经完成源码编译和静态集成校验，但尚未重新进行 Dedicated Server 运行测试。
 
-仍需真人完成完整章节与终章、`!match` / `!vote` / `!mapvote` / `!ast` / `!si` 菜单流程、新旧刷特切换、临时 override 跨图与空服重置、Redux 自动人数切档、Tank 存量边界、固定近战伤害和多轮模式往返测试。当前属于持续开发配置，不提供稳定发布包承诺。
+仍需真人完成完整章节与终章、`!match` / `!vote` / `!mapvote` / `!ast` / `!si` 菜单流程、临时 override 跨图与空服重置、Redux 自动人数切档、单一波次刷特、Tank 存量边界、固定近战伤害和多轮模式往返测试。当前属于持续开发配置，不提供稳定发布包承诺。
 
 ## 文档
 

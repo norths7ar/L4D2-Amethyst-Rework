@@ -38,6 +38,7 @@ float g_fSurvivorTempHealth[MAXPLAYERS + 1];
 
 public void OnPluginStart()
 {
+    g_cvEnabled = CreateConVar("astredux_autowipe_enable", "0", "Enable the AstRedux AutoWipe adapter.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     HookEvent("tongue_grab", Event_SurvivorDominated);
     HookEvent("jockey_ride", Event_SurvivorDominated);
     HookEvent("lunge_pounce", Event_SurvivorDominated);
@@ -213,11 +214,7 @@ void WipeSurvivors()
 
 bool IsEnabled()
 {
-    if (g_cvEnabled == null)
-    {
-        g_cvEnabled = FindConVar("astredux_autowipe_enable");
-    }
-    return g_cvEnabled != null && g_cvEnabled.BoolValue;
+    return g_cvEnabled.BoolValue;
 }
 
 void RefreshHealthSnapshots()
