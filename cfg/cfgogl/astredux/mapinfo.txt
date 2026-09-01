@@ -34,8 +34,407 @@
 			{
 				"min"		"85"
 				"max"		"100"
+	}
+
+	"lastbreath_m1"
+	{
+		"start_point"		"-400.610535 -205.761612 27.408421"
+		"start_dist"		"578.024231"
+		"start_extra_dist"		"645.695312"
+		"end_point"		"-11175.897461 8824.202148 381.280914"
+		"end_dist"		"363.297455"
+		"horde_limit"		"120"
+		"tank_ban_flow"
+		{
+			"1"
+			{
+				"min"		"51"
+				"max"		"81"
 			}
 		}
+	}
+
+	"mayuns_1"
+	{
+		"start_point"		"-458.483551 364.165771 0.031250"
+		"start_dist"		"113.338005"
+		"start_extra_dist"		"119.525375"
+		"end_point"		"-1896.119751 1519.895630 -466.772461"
+		"end_dist"		"284.319550"
+	}
+
+	"office"
+	{
+		"start_point"		"-15.594221 -288.405060 0.031250"
+		"start_dist"		"205.299881"
+		"start_extra_dist"		"526.612427"
+		"end_point"		"8221.355469 -1048.031250 -399.968750"
+		"end_dist"		"283.553009"
+		"tank_ban_flow"
+		{
+			"early map"
+			{
+				"min"		"0"
+				"max"		"41"
+			}
+		}
+	}
+
+	"mainstreet"
+	{
+		"start_point"		"-6394.382324 4998.584473 -15.968750"
+		"start_dist"		"155.587112"
+		"start_extra_dist"		"138.407486"
+		"end_point"		"4232.988770 -4766.168457 30.031239"
+		"end_dist"		"289.970306"
+	}
+
+	"dump"
+	{
+		"start_point"		"7330.670898 -5576.489746 1055.031250"
+		"start_dist"		"107.279884"
+		"start_extra_dist"		"315.996918"
+		"end_point"		"4244.818359 11047.502930 320.031250"
+		"end_dist"		"340.810547"
+	}
+
+	"datacenter"
+	{
+		"start_point"		"2646.191406 -529.901123 0.031250"
+		"start_dist"		"319.748077"
+		"start_extra_dist"		"128.676025"
+	}
+
+	"kz_m1"
+	{
+		"start_point"		"-752.031250 777.066528 1397.002319"
+		"start_dist"		"376.215973"
+		"start_extra_dist"		"683.827881"
+		"end_point"		"6040.495117 682.733521 144.220215"
+		"end_dist"		"135.178299"
+		"ItemLimits"
+		{
+			"pain_pills"		"8"
+		}
+	}
+
+	"kz_m2"
+	{
+		"start_point"		"2868.001709 771.552063 40.031250"
+		"start_dist"		"177.270264"
+		"start_extra_dist"		"239.686401"
+		"end_point"		"-1641.200928 3957.244385 528.031250"
+		"end_dist"		"335.380554"
+	}
+
+	"kz_m3"
+	{
+		"start_point"		"-5439.433594 -3556.872070 411.052917"
+		"start_dist"		"233.123306"
+		"start_extra_dist"		"457.521027"
+		"tank_ban_flow"
+		{
+			"1"
+			{
+				"min"		"0"
+				"max"		"44"
+			}
+		}
+	}
+
+	"wfp1_track"
+	{
+		"tank_ban_flow"
+		{
+			"1"
+			{
+				"min"		"1"
+				"max"		"25"
+			}
+			"2"
+			{
+				"min"		"38"
+				"max"		"58"
+			}
+		}
+		"start_point"		"504.324158 -977.433411 123.709709"
+		"start_dist"		"419.062958"
+		"start_extra_dist"		"1681.946167"
+		"end_point"		"-6030.668457 3544.658203 -1012.312866"
+		"end_dist"		"223.769974"
+	}
+
+	"wfp2_horn"
+	{
+		"tank_ban_flow"
+		{
+			"1"
+			{
+				"min"		"1"
+				"max"		"60"
+			}
+		}
+		"start_point"		"-10935.788086 -6440.031250 1341.687134"
+		"start_dist"		"259.182465"
+		"start_extra_dist"		"496.462708"
+		"end_point"		"-3599.598389 -9241.528320 154.982269"
+		"end_dist"		"513.878540"
+	}
+
+	"wfp3_mill"
+	{
+		"horde_limit"		"90"
+		"tank_ban_flow"
+		{
+			"1"
+			{
+				"min"		"30"
+				"max"		"56"
+			}
+		}
+		"start_point"		"-2455.385254 1541.472900 170.982269"
+		"start_dist"		"316.092987"
+		"start_extra_dist"		"588.659058"
+		"end_point"		"306.839783 8892.705078 417.975677"
+		"end_dist"		"202.596130"
+	}
+
+	"wfp4_commstation"
+	{
+		"start_point"		"8275 174 -2365"
+		"start_dist"		"150.000000"
+		"end_point"		"-3255 -9936 -1465"
+		"end_dist"		"50.000000"
+		"tank_ban_flow"
+		{
+			"1"
+			{
+				"min"		"1"
+				"max"		"30"
+			}
+		}
+		"ItemLimits"
+		{
+			"pain_pills"		"4"
+		}
+	}
+
+	"l4d2_deathtoll01_clam"
+	{
+		"start_point"		"-11889.109375 -15071.053711 -153.320129"
+		"start_dist"		"580.833801"
+		"start_extra_dist"		"345.640900"
+		"end_point"		"-10749.283203 -5088.669434 288.031250"
+		"end_dist"		"513.677612"
+		"tank_ban_flow"
+		{
+			"1"
+			{
+				"min"		"37"
+				"max"		"70"
+			}
+		}
+	}
+
+	"l4d2_deathtoll02_clam"
+	{
+		"start_point"		"-11064.500000 -8979.639648 -591.968750"
+		"start_dist"		"376.408142"
+		"start_extra_dist"		"177.007416"
+		"end_point"		"-8242.672852 -5543.275391 -30.968750"
+		"end_dist"		"406.581207"
+		"tank_ban_flow"
+		{
+			"1"
+			{
+				"min"		"20"
+				"max"		"38"
+			}
+		}
+	}
+
+	"l4d2_deathtoll03_clam"
+	{
+		"start_point"		"-8377.500000 -5565.372070 -24.968750"
+		"start_dist"		"273.777283"
+		"start_extra_dist"		"159.873199"
+		"end_point"		"-2567.434326 2.077358 160.031250"
+		"end_dist"		"128.276138"
+	}
+
+	"l4d2_deathtoll04_clam"
+	{
+		"start_point"		"-3143.968750 -58.244766 160.031250"
+		"start_dist"		"281.260803"
+		"start_extra_dist"		"252.407135"
+		"end_point"		"1152.695679 -5287.244141 -55.968750"
+		"end_dist"		"404.587677"
+		"tank_ban_flow"
+		{
+			"1"
+			{
+				"min"		"54"
+				"max"		"72"
+			}
+		}
+	}
+
+	"l4d2_deathtoll05_clam"
+	{
+		"start_point"		"1864.193848 4654.997070 -63.968750"
+		"start_dist"		"320.735901"
+		"start_extra_dist"		"296.133698"
+		"end_point"		"3785.794922 -4657.630371 -151.968750"
+		"end_dist"		"1254.984253"
+		"horde_limit"		"150"
+		"tank_ban_flow"
+		{
+			"1"
+			{
+				"min"		"20"
+				"max"		"99"
+			}
+		}
+		"ItemLimits"
+		{
+			"pain_pills"		"4"
+		}
+	}
+
+	"msdnew_tccity_newway"
+	{
+		"start_point"		"-12018.175781 -5161.493652 -252.968750"
+		"start_dist"		"354.049774"
+		"start_extra_dist"		"835.901306"
+		"end_point"		"7968.704102 4287.117188 -980.968750"
+		"end_dist"		"178.468765"
+		"ItemLimits"
+		{
+			"pain_pills"		"8"
+		}
+	}
+
+	"msd2_gasstation"
+	{
+		"start_point"		"-6346.468750 -1038.630371 9395.542969"
+		"start_dist"		"185.288925"
+		"start_extra_dist"		"251.041687"
+		"end_point"		"-6844.031250 -3897.128662 9356.031250"
+		"end_dist"		"191.499023"
+		"horde_limit_1"		"60"
+		"horde_limit_2"		"120"
+		"horde_limit_3"		"180"
+		"horde_limit_4"		"233"
+		"ItemLimits"
+		{
+			"pain_pills"		"8"
+		}
+	}
+
+	"msd1_town"
+	{
+		"start_point"		"-9027.218750 2129.143555 -15003.968750"
+		"start_dist"		"284.500214"
+		"start_extra_dist"		"348.082855"
+		"end_point"		"1373.072510 -649.324707 -14987.968750"
+		"end_dist"		"209.536957"
+		"horde_limit_1"		"45"
+		"horde_limit_2"		"70"
+		"horde_limit_3"		"120"
+		"horde_limit_4"		"120"
+		"tank_ban_flow"
+		{
+			"horde"
+			{
+				"min"		"70"
+				"max"		"99"
+			}
+		}
+	}
+
+	"msd3_square"
+	{
+		"start_point"		"-4518.031250 -8563.031250 -249.968750"
+		"start_dist"		"618.715576"
+		"start_extra_dist"		"1101.937500"
+		"ItemLimits"
+		{
+			"pain_pills"		"8"
+		}
+	}
+
+	"zc_m1"
+	{
+		"start_point"		"-9489.070312 9707.517578 1245.214844"
+		"start_dist"		"247.902756"
+		"start_extra_dist"		"328.000031"
+		"end_point"		"-806.114746 -3808.041016 31.031250"
+		"end_dist"		"264.825195"
+		"max_distance"		"400"
+		"tank_ban_flow"
+		{
+			"1"
+			{
+				"min"		"1"
+				"max"		"23"
+			}
+		}
+	}
+
+	"zc_m2"
+	{
+		"start_point"		"0.000000 0.000000 0.000000"
+		"start_dist"		"-1.000000"
+		"start_extra_dist"		"-1.000000"
+		"end_point"		"3596.948486 -7860.600098 -154.968750"
+		"end_dist"		"358.282928"
+		"max_distance"		"500"
+	}
+
+	"zc_m3"
+	{
+		"start_point"		"-9210.921875 7196.776855 -122.968750"
+		"start_dist"		"276.278778"
+		"start_extra_dist"		"483.717560"
+		"end_point"		"14209.080078 2461.468750 -247.968750"
+		"end_dist"		"307.141418"
+		"max_distance"		"700"
+	}
+
+	"zc_m4"
+	{
+		"start_point"		"8208.521484 -1844.729736 16.031250"
+		"start_dist"		"253.762085"
+		"start_extra_dist"		"302.986847"
+		"end_point"		"-8949.854492 3466.123779 -42.661865"
+		"end_dist"		"198.560242"
+		"max_distance"		"800"
+		"horde_limit_1"		"60"
+		"horde_limit_2"		"120"
+		"horde_limit_3"		"180"
+		"horde_limit_4"		"233"
+		"ItemLimits"
+		{
+			"pain_pills"		"6"
+		}
+		"tank_ban_flow"
+		{
+			"1"
+			{
+				"min"		"1"
+				"max"		"58"
+			}
+		}
+	}
+
+	"zc_m5"
+	{
+		"start_point"		"10472.757812 3598.424316 60.338135"
+		"start_dist"		"134.805725"
+		"start_extra_dist"		"218.475693"
+		"max_distance"		"600"
+	}
+}
 	}
 	"c1m2_streets"
 	{
