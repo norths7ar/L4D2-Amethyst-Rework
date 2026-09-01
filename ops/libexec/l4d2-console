@@ -53,9 +53,14 @@ send_line() {
 }
 
 capture_recent() {
+    local since=${1:-}
     case "$(runtime_kind)" in
         systemd)
-            journalctl -u "$SERVICE_NAME" -n 600 --no-pager -o cat
+            if [[ -n "$since" ]]; then
+                journalctl -u "$SERVICE_NAME" --since "$since" --no-pager -o cat
+            else
+                journalctl -u "$SERVICE_NAME" -n 600 --no-pager -o cat
+            fi
             ;;
         tmux)
             runuser -u "$TMUX_USER" -- tmux capture-pane -p -t "$TMUX_SESSION" -S -600
@@ -68,11 +73,13 @@ capture_recent() {
 
 query_status() {
     local marker="L4D2_MAINTAIN_$$_$(date +%s%N)"
+    local since
     local output=''
+    since=$(date '+%Y-%m-%d %H:%M:%S')
     send_line "echo ${marker}_BEGIN; status; echo ${marker}_END"
     for _ in {1..10}; do
         sleep 0.3
-        output=$(capture_recent || true)
+        output=$(capture_recent "$since" || true)
         if grep -Fq "${marker}_END" <<<"$output"; then
             awk -v begin="${marker}_BEGIN" -v end="${marker}_END" '
                 index($0, begin) { capture=1; next }
