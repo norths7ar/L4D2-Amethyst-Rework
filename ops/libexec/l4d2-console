@@ -72,13 +72,14 @@ capture_recent() {
 }
 
 query_status() {
-    local marker="L4D2_MAINTAIN_$$_$(date +%s%N)"
+    local marker="L4D2M$$_$(date +%s%N)"
     local since
     local output=''
     since=$(date '+%Y-%m-%d %H:%M:%S')
     send_line "echo ${marker}_BEGIN; status; echo ${marker}_END"
-    for _ in {1..10}; do
-        sleep 0.3
+    # A hibernating Source server may only consume the FIFO about every four seconds.
+    for _ in {1..40}; do
+        sleep 0.25
         output=$(capture_recent "$since" || true)
         if grep -Fq "${marker}_END" <<<"$output"; then
             awk -v begin="${marker}_BEGIN" -v end="${marker}_END" '
