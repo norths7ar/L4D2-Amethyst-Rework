@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-CONFIG_PATH=${L4D2_MAINTAIN_CONFIG:-/etc/l4d2-maintain.conf}
+CONFIG_PATH=${L4D2_RESTART_CONFIG:-/etc/l4d2-restart.conf}
 # shellcheck source=/dev/null
 source "$CONFIG_PATH"
 

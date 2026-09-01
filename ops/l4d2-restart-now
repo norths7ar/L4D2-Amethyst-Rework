@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 0007
+
+CONFIG_PATH=${L4D2_RESTART_CONFIG:-/etc/l4d2-restart.conf}
+LIBEXEC_DIR=${L4D2_LIBEXEC_DIR:-/usr/local/libexec/l4d2}
+CONSOLE_TOOL="$LIBEXEC_DIR/l4d2-console"
+
+[[ -r "$CONFIG_PATH" ]] || {
+    printf 'l4d2-restart-now: cannot read %s\n' "$CONFIG_PATH" >&2
+    exit 1
+}
+# shellcheck source=/dev/null
+source "$CONFIG_PATH"
+
+manifest() {
+    local destination=$1
+    {
+        if [[ -d "$GAME_DIR/addons" ]]; then
+            find "$GAME_DIR/addons" -type f -iname '*.vpk' \
+                -printf 'vpk\t%P\t%s\t%C@\n'
+        fi
+        if [[ -d "$GAME_DIR/addons/sourcemod/plugins" ]]; then
+            find "$GAME_DIR/addons/sourcemod/plugins" -type f -iname '*.smx' \
+                -printf 'smx\t%P\t%s\t%C@\n'
+        fi
+    } | LC_ALL=C sort >"$destination"
+}
+
+manifest_hash() {
+    sha256sum "$1" | awk '{ print $1 }'
+}
+
+mark_start() {
+    [[ $(id -un) == "$SERVICE_USER" || $EUID -eq 0 ]] || {
+        printf 'l4d2-restart-now: --mark-start requires %s or root\n' "$SERVICE_USER" >&2
+        exit 1
+    }
+    if [[ ! -d "$STATE_DIR" ]]; then
+        [[ $EUID -eq 0 ]] || {
+            printf 'l4d2-restart-now: state directory is missing\n' >&2
+            exit 1
+        }
+        install -d -o root -g "$SERVICE_GROUP" -m 2770 "$STATE_DIR"
+    fi
+    local current hash
+    current=$(mktemp "$STATE_DIR/.manifest.XXXXXX")
+    manifest "$current"
+    hash=$(manifest_hash "$current")
+    mv -f -- "$current" "$STATE_DIR/baseline.manifest"
+    rm -f -- "$STATE_DIR/candidate" "$STATE_DIR/last-change.diff"
+    printf '%s\n' "$hash" >"$STATE_DIR/baseline.sha256"
+    printf '%s\tstart\t%s\n' "$(date --iso-8601=seconds)" "$hash" >>"$STATE_DIR/history.log"
+    logger -t l4d2-restart "baseline recorded after start: $hash"
+}
+
+if [[ ${1:-} == --mark-start ]]; then
+    mark_start
+    exit 0
+fi
+
+[[ $EUID -eq 0 ]] || {
+    printf 'Usage: sudo l4d2-restart-now [--automatic] [reason]\n' >&2
+    exit 1
+}
+
+mode=manual
+if [[ ${1:-} == --automatic ]]; then
+    mode=automatic
+    shift
+fi
+reason=${*:-manual request}
+reason=${reason//$'\n'/ }
+reason=${reason//$'\t'/ }
+actor=${SUDO_USER:-$(id -un)}
+[[ "$mode" == automatic ]] && actor=content-watch
+
+status_output=$("$CONSOLE_TOOL" status 2>/dev/null || true)
+humans=$(sed -nE 's/^players[[:space:]]*:[[:space:]]*([0-9]+) humans.*/\1/p' \
+    <<<"$status_output" | tail -n 1)
+map=$(sed -nE 's/^map[[:space:]]*:[[:space:]]*([^[:space:]]+).*/\1/p' \
+    <<<"$status_output" | tail -n 1)
+
+current=$(mktemp "$STATE_DIR/.before.XXXXXX")
+trap 'rm -f -- "$current"' EXIT
+manifest "$current"
+before_hash=$(manifest_hash "$current")
+timestamp=$(date --iso-8601=seconds)
+printf '%s\trequest\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$timestamp" "$mode" "$actor" "${map:-unknown}" "${humans:-unknown}" \
+    "$before_hash" "$reason" >>"$STATE_DIR/history.log"
+logger -t l4d2-restart \
+    "request mode=$mode actor=$actor map=${map:-unknown} humans=${humans:-unknown} reason=$reason"
+
+systemctl restart "$SERVICE_NAME"
+
+deadline=$((SECONDS + HEALTH_STARTUP_TIMEOUT_SECONDS))
+while ((SECONDS < deadline)); do
+    if systemctl is-active --quiet "$SERVICE_NAME" \
+        && ss -lun "sport = :$PORT" | awk 'NR > 1 { found=1 } END { exit !found }' \
+        && "$CONSOLE_TOOL" status >/dev/null 2>&1; then
+        printf '%s\tsuccess\t%s\t%s\n' \
+            "$(date --iso-8601=seconds)" "$mode" "$before_hash" \
+            >>"$STATE_DIR/history.log"
+        logger -t l4d2-restart "restart complete mode=$mode"
+        printf 'l4d2-restart-now: restart complete\n'
+        exit 0
+    fi
+    sleep 1
+done
+
+logger -t l4d2-restart "restart failed health check mode=$mode"
+printf 'l4d2-restart-now: service did not become healthy within %s seconds\n' \
+    "$HEALTH_STARTUP_TIMEOUT_SECONDS" >&2
+exit 1

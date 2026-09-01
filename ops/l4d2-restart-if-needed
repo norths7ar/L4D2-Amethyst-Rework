@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 0007
+
+CONFIG_PATH=${L4D2_RESTART_CONFIG:-/etc/l4d2-restart.conf}
+LIBEXEC_DIR=${L4D2_LIBEXEC_DIR:-/usr/local/libexec/l4d2}
+CONSOLE_TOOL="$LIBEXEC_DIR/l4d2-console"
+RESTART_TOOL=/usr/local/sbin/l4d2-restart-now
+
+[[ -r "$CONFIG_PATH" ]] || {
+    printf 'l4d2-restart-if-needed: cannot read %s\n' "$CONFIG_PATH" >&2
+    exit 1
+}
+# shellcheck source=/dev/null
+source "$CONFIG_PATH"
+[[ $EUID -eq 0 ]] || {
+    printf 'l4d2-restart-if-needed: run through systemd or sudo\n' >&2
+    exit 1
+}
+
+install -d -o root -g "$SERVICE_GROUP" -m 2770 "$STATE_DIR"
+exec 9>"$STATE_DIR/watch.lock"
+flock -n 9 || exit 0
+
+manifest() {
+    local destination=$1
+    {
+        if [[ -d "$GAME_DIR/addons" ]]; then
+            find "$GAME_DIR/addons" -type f -iname '*.vpk' \
+                -printf 'vpk\t%P\t%s\t%C@\n'
+        fi
+        if [[ -d "$GAME_DIR/addons/sourcemod/plugins" ]]; then
+            find "$GAME_DIR/addons/sourcemod/plugins" -type f -iname '*.smx' \
+                -printf 'smx\t%P\t%s\t%C@\n'
+        fi
+    } | LC_ALL=C sort >"$destination"
+}
+
+current=$(mktemp "$STATE_DIR/.watch.XXXXXX")
+trap 'rm -f -- "$current"' EXIT
+manifest "$current"
+
+baseline="$STATE_DIR/baseline.manifest"
+if [[ ! -f "$baseline" ]]; then
+    install -o root -g "$SERVICE_GROUP" -m 0660 "$current" "$baseline"
+    sha256sum "$current" | awk '{ print $1 }' >"$STATE_DIR/baseline.sha256"
+    logger -t l4d2-restart 'content watch initialized without restarting'
+    exit 0
+fi
+
+if cmp -s "$baseline" "$current"; then
+    rm -f -- "$STATE_DIR/candidate" "$STATE_DIR/last-change.diff"
+    exit 0
+fi
+
+diff -u "$baseline" "$current" >"$STATE_DIR/last-change.diff" || true
+current_hash=$(sha256sum "$current" | awk '{ print $1 }')
+now=$(date +%s)
+candidate_hash=''
+candidate_since=0
+if [[ -f "$STATE_DIR/candidate" ]]; then
+    read -r candidate_hash candidate_since <"$STATE_DIR/candidate" || true
+fi
+
+if [[ "$candidate_hash" != "$current_hash" ]]; then
+    printf '%s %s\n' "$current_hash" "$now" >"$STATE_DIR/candidate"
+    logger -t l4d2-restart \
+        "content change detected; waiting ${STABILITY_SECONDS}s for uploads to settle"
+    exit 0
+fi
+
+if ((now - candidate_since < STABILITY_SECONDS)); then
+    exit 0
+fi
+
+if ! systemctl is-active --quiet "$SERVICE_NAME"; then
+    logger -t l4d2-restart 'content changed but server is intentionally stopped; leaving it stopped'
+    exit 0
+fi
+
+status_output=$("$CONSOLE_TOOL" status 2>/dev/null || true)
+humans=$(sed -nE 's/^players[[:space:]]*:[[:space:]]*([0-9]+) humans.*/\1/p' \
+    <<<"$status_output" | tail -n 1)
+if [[ ! "$humans" =~ ^[0-9]+$ ]]; then
+    logger -t l4d2-restart 'content changed but player count is unknown; restart deferred'
+    exit 0
+fi
+if ((humans > 0)); then
+    logger -t l4d2-restart "content changed but $humans human player(s) are online; restart deferred"
+    exit 0
+fi
+
+"$RESTART_TOOL" --automatic 'stable VPK/SMX content change while server was empty'

@@ -1,0 +1,16 @@
+# Installed as /etc/l4d2-restart.conf.
+SERVICE_USER=l4d2
+SERVICE_GROUP=l4d2
+OWNER_USER=ecs-user
+SERVICE_NAME=l4d2.service
+
+SERVER_ROOT=/home/l4d2/server
+GAME_DIR=/home/l4d2/server/left4dead2
+STATE_DIR=/var/lib/l4d2-restart
+RUNTIME_DIR=/run/l4d2
+
+PORT=27015
+START_MAP=c1m1_hotel
+TICKRATE=100
+STABILITY_SECONDS=60
+HEALTH_STARTUP_TIMEOUT_SECONDS=60

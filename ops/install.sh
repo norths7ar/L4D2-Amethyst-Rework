@@ -1,20 +1,15 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-umask 027
+umask 0022
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-CONFIG_PATH=/etc/l4d2-maintain.conf
-LIBEXEC_DIR=/usr/local/libexec/l4d2-maintain
-MAINTAIN_BIN=/usr/local/sbin/l4d2-maintain
-ACTIVATE=0
+CONFIG_PATH=/etc/l4d2-restart.conf
+LIBEXEC_DIR=/usr/local/libexec/l4d2
 
-if [[ ${1:-} == --activate ]]; then
-    ACTIVATE=1
-elif [[ $# -ne 0 ]]; then
-    printf 'Usage: sudo ./ops/install.sh [--activate]\n' >&2
+[[ $# -eq 0 ]] || {
+    printf 'Usage: sudo ./ops/install.sh\n' >&2
     exit 2
-fi
-
+}
 [[ $EUID -eq 0 ]] || {
     printf 'install.sh: run through sudo\n' >&2
     exit 1
@@ -24,153 +19,108 @@ id l4d2 >/dev/null 2>&1 || {
     exit 1
 }
 id ecs-user >/dev/null 2>&1 || {
-    printf 'install.sh: maintenance account ecs-user does not exist\n' >&2
+    printf 'install.sh: owner account ecs-user does not exist\n' >&2
     exit 1
 }
 
-assert_unit_ownership() {
-    local destination=$1
-    if [[ -e "$destination" ]] \
-        && ! grep -Fq '# Managed by L4D2-Amethyst-Rework ops/install.sh' "$destination"; then
-        printf 'install.sh: refusing to overwrite unowned unit %s\n' "$destination" >&2
+assert_owned_unit() {
+    local path=$1
+    if [[ -e "$path" ]] \
+        && ! grep -Fq '# Managed by L4D2-Amethyst-Rework ops/install.sh' "$path"; then
+        printf 'install.sh: refusing to overwrite unowned unit %s\n' "$path" >&2
         exit 1
     fi
 }
 
-assert_unit_ownership /etc/systemd/system/l4d2.service
-assert_unit_ownership /etc/systemd/system/l4d2-maintenance.service
-assert_unit_ownership /etc/systemd/system/l4d2-maintenance.timer
+for unit in \
+    /etc/systemd/system/l4d2.service \
+    /etc/systemd/system/l4d2-maintenance.service \
+    /etc/systemd/system/l4d2-maintenance.timer \
+    /etc/systemd/system/l4d2-content-watch.service \
+    /etc/systemd/system/l4d2-content-watch.timer; do
+    assert_owned_unit "$unit"
+done
+
+# Stop the old desired-state publisher before changing any installed files.
+systemctl disable --now l4d2-maintenance.timer 2>/dev/null || true
+systemctl stop l4d2-maintenance.service 2>/dev/null || true
 
 install -d -o root -g root -m 0755 "$LIBEXEC_DIR"
-install -o root -g root -m 0755 "$SCRIPT_DIR/l4d2-maintain" "$MAINTAIN_BIN"
-install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/l4d2-console" "$LIBEXEC_DIR/l4d2-console"
-install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/l4d2-run" "$LIBEXEC_DIR/l4d2-run"
-install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/l4d2-start-tmux" "$LIBEXEC_DIR/l4d2-start-tmux"
-install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/vpk_campaigns.py" "$LIBEXEC_DIR/vpk_campaigns.py"
+install -o root -g root -m 0755 "$SCRIPT_DIR/l4d2-restart-now" \
+    /usr/local/sbin/l4d2-restart-now
+install -o root -g root -m 0755 "$SCRIPT_DIR/l4d2-restart-if-needed" \
+    /usr/local/sbin/l4d2-restart-if-needed
+install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/l4d2-console" \
+    "$LIBEXEC_DIR/l4d2-console"
+install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/l4d2-run" \
+    "$LIBEXEC_DIR/l4d2-run"
 if [[ ! -e "$CONFIG_PATH" ]]; then
-    install -o root -g l4d2 -m 0640 "$SCRIPT_DIR/l4d2-maintain.conf.example" "$CONFIG_PATH"
+    install -o root -g l4d2 -m 0640 "$SCRIPT_DIR/l4d2-restart.conf.example" \
+        "$CONFIG_PATH"
 fi
-install -o root -g root -m 0644 "$SCRIPT_DIR/systemd/l4d2.service" /etc/systemd/system/l4d2.service
-install -o root -g root -m 0644 "$SCRIPT_DIR/systemd/l4d2-maintenance.service" /etc/systemd/system/l4d2-maintenance.service
-install -o root -g root -m 0644 "$SCRIPT_DIR/systemd/l4d2-maintenance.timer" /etc/systemd/system/l4d2-maintenance.timer
 
 # shellcheck source=/dev/null
 source "$CONFIG_PATH"
-chown root:"$SERVICE_USER" "$CONFIG_PATH"
+chown root:"$SERVICE_GROUP" "$CONFIG_PATH"
 chmod 0640 "$CONFIG_PATH"
-install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 \
-    "$RELEASES_DIR" "$OVERLAY_DIR" "$CONTENT_DIR" "$RETIRING_DIR" "$BACKUP_DIR"
-install -d -o root -g "$SERVICE_USER" -m 0750 "$STATE_DIR"
-install -d -o "$TMUX_USER" -g "$SERVICE_USER" -m 0750 "$UPLOAD_DIR"
+install -d -o root -g "$SERVICE_GROUP" -m 2770 "$STATE_DIR"
 
-seed_overlay_file() {
-    local relative=$1
-    local source="$GAME_DIR/$relative"
-    local destination="$OVERLAY_DIR/$relative"
-    if [[ -f "$source" && ! -e "$destination" ]]; then
-        install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 "$(dirname "$destination")"
-        install -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0640 "$source" "$destination"
+# The SSH/SFTP owner and the game process intentionally share the whole install.
+usermod -a -G "$SERVICE_GROUP" "$OWNER_USER"
+chgrp -R "$SERVICE_GROUP" "$SERVER_ROOT"
+chmod -R g+rwX "$SERVER_ROOT"
+find "$SERVER_ROOT" -type d -exec chmod g+s {} +
+chmod 0750 /home/l4d2
+
+retire_identical_overlay() {
+    local overlay=/home/l4d2/overlay
+    [[ -d "$overlay" ]] || return 0
+    [[ "$(realpath -e -- "$overlay")" == /home/l4d2/overlay ]] || {
+        printf 'install.sh: refusing unexpected overlay path\n' >&2
+        exit 1
+    }
+    if find "$overlay" -type l -print -quit | grep -q .; then
+        printf 'install.sh: overlay contains a symlink; refusing automatic retirement\n' >&2
+        exit 1
     fi
+    local source relative destination
+    while IFS= read -r -d '' source; do
+        relative=${source#"$overlay"/}
+        destination="$GAME_DIR/$relative"
+        [[ -f "$destination" ]] && cmp -s "$source" "$destination" || {
+            printf 'install.sh: overlay differs from game directory: %s\n' "$relative" >&2
+            exit 1
+        }
+    done < <(find "$overlay" -type f -print0)
+    rm -rf -- "$overlay"
+    printf 'Retired identical /home/l4d2/overlay; the game directory is authoritative.\n'
 }
 
-# Preserve known server-private files before the first Git-managed deployment.
-seed_overlay_file addons/sourcemod/configs/admins_simple.ini
-seed_overlay_file cfg/server.cfg
+retire_identical_overlay
+
+install -o root -g root -m 0644 "$SCRIPT_DIR/systemd/l4d2.service" \
+    /etc/systemd/system/l4d2.service
+install -o root -g root -m 0644 "$SCRIPT_DIR/systemd/l4d2-content-watch.service" \
+    /etc/systemd/system/l4d2-content-watch.service
+install -o root -g root -m 0644 "$SCRIPT_DIR/systemd/l4d2-content-watch.timer" \
+    /etc/systemd/system/l4d2-content-watch.timer
+rm -f -- \
+    /etc/systemd/system/l4d2-maintenance.service \
+    /etc/systemd/system/l4d2-maintenance.timer
+
 systemctl daemon-reload
+systemctl enable l4d2.service
+/usr/local/sbin/l4d2-restart-now --mark-start
+systemctl enable --now l4d2-content-watch.timer
 
-restore_tmux_runtime() {
-    if ! runuser -u "$TMUX_USER" -- tmux new-session -d -s "$TMUX_SESSION" \
-        "sudo -n $LIBEXEC_DIR/l4d2-start-tmux"; then
-        printf 'install.sh: failed to create fallback tmux session\n' >&2
-        return 1
-    fi
-    for _ in {1..60}; do
-        if "$LIBEXEC_DIR/l4d2-console" status >/dev/null 2>&1; then
-            printf 'install.sh: tmux runtime restored and queryable\n' >&2
-            return 0
-        fi
-        sleep 1
-    done
-    printf 'install.sh: fallback tmux runtime is not queryable\n' >&2
-    return 1
-}
+# Remove exact obsolete entrypoints. Generated releases/backups are left untouched.
+rm -f -- /usr/local/sbin/l4d2-maintain /etc/l4d2-maintain.conf
+rm -f -- \
+    /usr/local/libexec/l4d2-maintain/l4d2-console \
+    /usr/local/libexec/l4d2-maintain/l4d2-run \
+    /usr/local/libexec/l4d2-maintain/l4d2-start-tmux \
+    /usr/local/libexec/l4d2-maintain/vpk_campaigns.py
+rmdir /usr/local/libexec/l4d2-maintain 2>/dev/null || true
 
-if ((ACTIVATE == 0)); then
-    printf 'Installed without changing the running game process.\n'
-    printf 'Run sudo %s preflight, then rerun this installer with --activate during an empty window.\n' "$MAINTAIN_BIN"
-    exit 0
-fi
-
-gate_closed=0
-reopen_activation_gate_on_exit() {
-    local exit_code=$?
-    trap - EXIT
-    if ((gate_closed)); then
-        if [[ "$("$LIBEXEC_DIR/l4d2-console" runtime 2>/dev/null || true)" != stopped ]]; then
-            "$LIBEXEC_DIR/l4d2-console" gate-open >/dev/null 2>&1 \
-                || printf 'install.sh: WARNING: failed to reopen the join gate\n' >&2
-        fi
-    fi
-    exit "$exit_code"
-}
-trap reopen_activation_gate_on_exit EXIT
-
-"$MAINTAIN_BIN" preflight
-runtime=$("$LIBEXEC_DIR/l4d2-console" runtime)
-if [[ "$runtime" == stopped ]]; then
-    humans=0
-else
-    status_output=$("$LIBEXEC_DIR/l4d2-console" status)
-    humans=$(sed -nE 's/^players[[:space:]]*:[[:space:]]*([0-9]+) humans.*/\1/p' <<<"$status_output" | tail -n 1)
-fi
-[[ "$humans" == 0 ]] || {
-    printf 'install.sh: server is not confirmed empty (%s humans)\n' "${humans:-unknown}" >&2
-    exit 1
-}
-if [[ "$runtime" != stopped ]]; then
-    gate_closed=1
-    "$LIBEXEC_DIR/l4d2-console" gate-close
-fi
-sleep 2
-if [[ "$("$LIBEXEC_DIR/l4d2-console" runtime)" == stopped ]]; then
-    humans=0
-else
-    status_output=$("$LIBEXEC_DIR/l4d2-console" status)
-    humans=$(sed -nE 's/^players[[:space:]]*:[[:space:]]*([0-9]+) humans.*/\1/p' <<<"$status_output" | tail -n 1)
-fi
-[[ "$humans" == 0 ]] || {
-    "$LIBEXEC_DIR/l4d2-console" gate-open || true
-    printf 'install.sh: server stopped being empty during activation\n' >&2
-    exit 1
-}
-
-runtime=$("$LIBEXEC_DIR/l4d2-console" runtime)
-if [[ "$runtime" == tmux ]]; then
-    "$LIBEXEC_DIR/l4d2-console" quit || true
-    for _ in {1..30}; do
-        if ! pgrep -f '[s]rcds_linux' >/dev/null; then
-            break
-        fi
-        sleep 1
-    done
-    if pgrep -f '[s]rcds_linux' >/dev/null; then
-        "$LIBEXEC_DIR/l4d2-console" gate-open || true
-    fi
-    runuser -u "$TMUX_USER" -- tmux kill-session -t "$TMUX_SESSION" 2>/dev/null || true
-fi
-if pgrep -f '[s]rcds_linux' >/dev/null; then
-    "$LIBEXEC_DIR/l4d2-console" gate-open || true
-    printf 'install.sh: old srcds process did not stop; refusing a second instance\n' >&2
-    exit 1
-fi
-gate_closed=0
-
-if ! systemctl enable --now l4d2.service || ! "$MAINTAIN_BIN" health; then
-    printf 'install.sh: systemd startup failed; restoring tmux runtime\n' >&2
-    systemctl disable --now l4d2.service || true
-    restore_tmux_runtime || true
-    exit 1
-fi
-systemctl enable --now l4d2-maintenance.timer
-trap - EXIT
-printf 'Activated l4d2.service and l4d2-maintenance.timer.\n'
+printf 'Installed direct-owner L4D2 operations without restarting the game.\n'
+printf 'Reconnect SSH/SFTP once so ecs-user receives the l4d2 group.\n'

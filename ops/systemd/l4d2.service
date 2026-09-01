@@ -11,11 +11,12 @@ Group=l4d2
 WorkingDirectory=/home/l4d2/server
 RuntimeDirectory=l4d2
 RuntimeDirectoryMode=0750
-Environment=L4D2_MAINTAIN_CONFIG=/etc/l4d2-maintain.conf
-ExecStart=/usr/local/libexec/l4d2-maintain/l4d2-run
-ExecStop=-/usr/local/libexec/l4d2-maintain/l4d2-console quit
-Restart=on-failure
-RestartSec=10
+Environment=L4D2_RESTART_CONFIG=/etc/l4d2-restart.conf
+ExecStart=/usr/local/libexec/l4d2/l4d2-run
+ExecStartPost=/usr/local/sbin/l4d2-restart-now --mark-start
+ExecStop=-/usr/local/libexec/l4d2/l4d2-console quit
+Restart=always
+RestartSec=5
 TimeoutStartSec=90
 TimeoutStopSec=45
 KillMode=mixed
