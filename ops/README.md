@@ -13,7 +13,7 @@
 
 新增、删除或修改会写入 pending；同一个变化连续稳定 60 秒且服务器确认没有真人时才自动重启。未知人数或有人在线时只延期。CFG、管理员、服务器名、公告和 Stripper 文件不参与自动重启。
 
-游戏内 `!restart [原因]` 和 `!restartserver [原因]` 由 `server_restart.smx` 提供，需要 SourceMod 的 `m`（RCON）管理标志。插件记录管理员身份并广播 10 秒倒计时，然后执行正常 `quit`；systemd 的 `Restart=always` 负责重新拉起，不向游戏进程开放 sudo。
+游戏内 `!restart [原因]` 和 `!restartserver [原因]` 由 `server_restart.smx` 提供，需要 SourceMod 的 `m`（RCON）管理标志。插件记录管理员身份并广播提示，然后立即执行正常 `quit`；systemd 的 `Restart=always` 负责重新拉起，不向游戏进程开放 sudo。这里故意不用 SourceMod timer，避免空服休眠让倒计时挂起。
 
 ## 安装与检查
 

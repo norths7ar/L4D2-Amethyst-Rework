@@ -48,4 +48,4 @@ sudo cat /var/lib/l4d2-restart/last-change.diff
 !restartserver 原因
 ```
 
-服务器广播 10 秒倒计时后正常退出，systemd 自动拉起。该插件不执行 shell、不持有 sudo，也不能运行任意主机命令。
+服务器广播提示后立即正常退出，systemd 自动拉起。该插件故意不使用会受空服休眠影响的倒计时，也不执行 shell、不持有 sudo、不能运行任意主机命令。
