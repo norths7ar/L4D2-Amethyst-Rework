@@ -20,11 +20,13 @@ mkfifo -m 0600 "$fifo"
 exec 3<>"$fifo"
 
 cd "$SERVER_ROOT"
-exec "$SERVER_ROOT/srcds_run" \
+printf -v server_command '%q ' \
+    "$SERVER_ROOT/srcds_run" \
     -game left4dead2 \
     -console \
     -usercon \
     -tickrate "$TICKRATE" \
     +port "$PORT" \
     +sv_lan 0 \
-    +map "$START_MAP" <&3
+    +map "$START_MAP"
+exec /usr/bin/script --quiet --return --flush --command "$server_command" /dev/null <&3
