@@ -13,16 +13,20 @@ DirectorOptions <-
 	SpecialRespawnInterval			= 0
 	SpecialInitialSpawnDelayMin 	= 0 // 出门后多久刷特感
 	SpecialInitialSpawnDelayMax 	= 0
-	PreferredSpecialDirection 		= 4
 	cm_HeadshotOnly 				= 0
+
+	// SPAWN_NO_PREFERENCE = -1, SPAWN_BEHIND_SURVIVORS = 1, SPAWN_BATTLEFIELD = 2, SPAWN_POSITIONAL = 3, SPAWN_SPECIALS_ANYWHERE = 4
+	PreferredSpecialDirection 		= 2
 
 	RelaxMaxInterval 				= 0 // Maximum time to spend in the RELAX tempo.
 	RelaxMinInterval 				= 0 // Minimum time to spend in the RELAX tempo.
 
-
+	// 这三个参数是旧版刷新机制用的，新版不要修改！！！
 	DominatorLimit 			= 12
 	cm_BaseSpecialLimit 	= 12
 	cm_MaxSpecials 			= 12
+
+	// 这里不用管，仅初始化。
 	BoomerLimit 			= 1
 	SpitterLimit 			= 0
 	HunterLimit 			= 1
@@ -31,22 +35,16 @@ DirectorOptions <-
 	SmokerLimit 			= 0
 }
 
-// ModeData 两个值不直接控制特感刷新，可以理解成上限
-ModeData <-{
-	g_nSI				= 24		// 数值必须比所有特感 Limit 加起来都要大（包含 Tank），总之越大越好
-	g_nTime				= 0			// 0秒，保证需要时能尽快刷出
-}
-
-// 特感刷新参数
+// 新版特感刷新参数
 ::Waves <- {
 	Enabled				= true		// 新版特感刷新机制开关
-	MaxSILimit 			= 3			// 同场特感数量
-	SpawnTime 			= 3			// 复活间隔
-	SpawnedSICount 		= 0			// 用于脚本判断，不需要修改。当前波次刷出的特感数量
-	AliveSICount 		= 0			// 用于脚本判断，不需要修改。当前场上的特感数量
-	HasFirstDeath 		= false		// 用于脚本判断，不需要修改。当前波次是否有特感已经死亡
-	FirstDeathTime		= -1		// 用于脚本判断，不需要修改。第一只的死亡时间
-	BonusSpawnTime		= 0			// 用于脚本判断，不需要修改。击杀的奖励时间
+}
+
+// 旧版特感刷新参数
+// 到 update_diff_old() 中修改，此处仅初始化。
+ModeData <-{
+	g_nSI				= 24		// 特感数量
+	g_nTime				= 0			// 特感复活间隔
 }
 
 // 插件修改特感刷新参数时会重新读取/执行整个脚本文件。
@@ -83,61 +81,70 @@ function update_diff()
 function update_diff_new()
 {
 	local difficulty = Convars.GetStr("das_fakedifficulty");
-	local timer_new = Convars.GetStr("ast_sitimer_new").tofloat();
 	local limit_new = Convars.GetStr("ast_silimit_new").tointeger();
 
+	local hunterLimit = 0;
+	local smokerLimit = 0;
+	local boomerLimit = 0;
+	local spitterLimit = 0;
+	local jockeyLimit = 0;
+	local chargerLimit = 0;
+
+	// 设置特感数量基准
 	switch (difficulty) {
 		case "1":
-			DirectorOptions.HunterLimit = 1
-			DirectorOptions.SmokerLimit = 1
-			DirectorOptions.BoomerLimit = 0
-			DirectorOptions.SpitterLimit = 0
-			DirectorOptions.JockeyLimit = 1
-			DirectorOptions.ChargerLimit = 1
-			DirectorOptions.PreferredSpecialDirection = 4
+			hunterLimit = 1;
+			smokerLimit = 1;
+			boomerLimit = 0;
+			spitterLimit = 0;
+			jockeyLimit = 1;
+			chargerLimit = 1;
+			DirectorOptions.PreferredSpecialDirection = 2;
 			break;
+
 		case "2":
-			DirectorOptions.HunterLimit = 2
-			DirectorOptions.SmokerLimit = 0
-			DirectorOptions.BoomerLimit = 1
-			DirectorOptions.SpitterLimit = 0
-			DirectorOptions.JockeyLimit = 1
-			DirectorOptions.ChargerLimit = 1
-			DirectorOptions.PreferredSpecialDirection = 4
+			hunterLimit = 2;
+			smokerLimit = 0;
+			boomerLimit = 1;
+			spitterLimit = 0;
+			jockeyLimit = 1;
+			chargerLimit = 1;
+			DirectorOptions.PreferredSpecialDirection = 2;
 			break;
+
 		case "3":
-			DirectorOptions.HunterLimit = 3
-			DirectorOptions.SmokerLimit = 1
-			DirectorOptions.BoomerLimit = 1
-			DirectorOptions.SpitterLimit = 1
-			DirectorOptions.JockeyLimit = 2
-			DirectorOptions.ChargerLimit = 2
-			DirectorOptions.PreferredSpecialDirection = 1
+			hunterLimit = 3;
+			smokerLimit = 1;
+			boomerLimit = 1;
+			spitterLimit = 1;
+			jockeyLimit = 2;
+			chargerLimit = 2;
+			DirectorOptions.PreferredSpecialDirection = 2;
 			break;
+
 		case "4":
-			DirectorOptions.HunterLimit = 5
-			DirectorOptions.SpitterLimit = 1
-			DirectorOptions.SmokerLimit = 1
-			DirectorOptions.BoomerLimit = 1
-			DirectorOptions.JockeyLimit = 2
-			DirectorOptions.ChargerLimit = 2
-			DirectorOptions.PreferredSpecialDirection = 1
-			break;
-		default:
+			hunterLimit = 4;
+			smokerLimit = 1;
+			boomerLimit = 1;
+			spitterLimit = 1;
+			jockeyLimit = 2;
+			chargerLimit = 2;
+			DirectorOptions.PreferredSpecialDirection = 2;
 			break;
 	}
 
-	DirectorOptions.cm_BaseSpecialLimit 					= ModeData.g_nSI
-	DirectorOptions.cm_MaxSpecials 							= ModeData.g_nSI
-	DirectorOptions.DominatorLimit 							= ModeData.g_nSI
-	DirectorOptions.cm_SpecialRespawnInterval 				= ModeData.g_nTime
-	DirectorOptions.cm_SpecialSlotCountdownTime 			= ModeData.g_nTime
-	Waves.MaxSILimit										= limit_new
-	Waves.SpawnTime											= timer_new
+	// 按 ast_silimit_new 的目标值等比例放大每种特感的上限。
+	local baseTotal = hunterLimit + smokerLimit + boomerLimit + spitterLimit + jockeyLimit + chargerLimit;
+	local scale = baseTotal > 0 && limit_new > baseTotal ? limit_new.tofloat() / baseTotal.tofloat() : 1.0;
+	DirectorOptions.HunterLimit = hunterLimit > 0 ? ((hunterLimit * scale) + 0.999999).tointeger() : 0;
+	DirectorOptions.SmokerLimit = smokerLimit > 0 ? ((smokerLimit * scale) + 0.999999).tointeger() : 0;
+	DirectorOptions.BoomerLimit = boomerLimit > 0 ? ((boomerLimit * scale) + 0.999999).tointeger() : 0;
+	DirectorOptions.SpitterLimit = spitterLimit > 0 ? ((spitterLimit * scale) + 0.999999).tointeger() : 0;
+	DirectorOptions.JockeyLimit = jockeyLimit > 0 ? ((jockeyLimit * scale) + 0.999999).tointeger() : 0;
+	DirectorOptions.ChargerLimit = chargerLimit > 0 ? ((chargerLimit * scale) + 0.999999).tointeger() : 0;
 }
 
 // 旧版本刷新机制
-// 替换时注意修改 MapData 为 ModeData
 function update_diff_old()
 {
 	local difficulty = Convars.GetStr("das_fakedifficulty");
@@ -395,7 +402,7 @@ function OnGameEvent_round_start( params )
 	if (!Waves.Enabled) return;
 
 	foreach (name in HUDInfo.si_names)
-{
+	{
         HUDInfo.si_count[name] = 0;
     }
 
