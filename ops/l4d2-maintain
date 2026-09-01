@@ -750,21 +750,27 @@ start_runtime() {
 }
 
 health_check() {
-    local status_output humans map
-    for _ in {1..60}; do
-        if systemctl is-active --quiet "$SERVICE_NAME" \
-            && ss -lun "sport = :$PORT" | awk 'NR > 1 { found=1 } END { exit !found }'; then
-            status_output=$(query_server 2>/dev/null || true)
+    local status_output humans map reason='service is not active'
+    for _ in {1..15}; do
+        if ! systemctl is-active --quiet "$SERVICE_NAME"; then
+            reason='service is not active'
+        elif ! ss -lun "sport = :$PORT" \
+            | awk 'NR > 1 { found=1 } END { exit !found }'; then
+            reason="UDP port $PORT is not listening"
+        elif status_output=$(query_server 2>/dev/null); then
             humans=$(human_count "$status_output")
             map=$(current_map "$status_output")
             if [[ -n "$humans" && -n "$map" ]]; then
                 log "health: ok map=$map humans=$humans"
                 return 0
             fi
+            reason="status output is incomplete (map=${map:-unknown} humans=${humans:-unknown})"
+        else
+            reason='console status query timed out'
         fi
         sleep 1
     done
-    log 'health: service did not become queryable within 60 seconds'
+    log "health: failed after bounded startup window: $reason"
     return 1
 }
 
