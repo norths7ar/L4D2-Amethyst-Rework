@@ -21,13 +21,13 @@
 - `cfg/generalfixes.cfg` 放所有模式都适用的修复与通用体验调整；`l4d_skip_intro.smx` 也在此统一加载，以首关重试速度为目标。竞技模式额外执行 `cfg/competitive_shared.cfg`；Ast 系列加载 `jointeam.smx`，竞技模式加载 `playermanagement.smx`、反作弊和地图过渡插件。
 - Rework 以 `pred_unload_plugins` 完成模式关闭；其生命周期覆盖 `load_unlock`、`unload_all` 与 `load_lock`。
 - 100 多条插件加载命令拆分为 `plugins_1.cfg`、`plugins_2.cfg` 和 `plugins_3.cfg`，避免 Source engine command buffer 截断后半段命令。AstMod 的 difficulty manager 在依赖插件之后加载。
-- `cfgs.txt` 维护当前模式切换条目。ACS 与 `!vote` 会过滤首图尚未安装的战役，目录由维护者按实际战役资产更新。
+- `missioncycle.txt` 只维护 Campaign Switcher 的战役轮换，插件会过滤首图尚未安装的条目；`vote_menu.txt` 只维护 `!vote` 的服务器操作菜单。战役目录由维护者按实际资产更新。
 
 ## AstMod 运行内容
 
 AstMod 是持续维护的 Baseline。它已同步到 2.8.1 的配置、VScript 和终章需求量规则，并保留资源控制与 `versus_coop_mode.smx`：章节过程中借用 Versus 行为，回合结束时切回 Coop 以继续战役。
 
-- `!ast` 打开 Ast 玩法调整菜单，`!tz` 保留为兼容短命令。单人生还者直接调整，多人生还者发起投票；菜单提供当前保留的玩法项。`!vote` 仍是读取 `cfgs.txt` 的通用投票菜单。
+- `!ast` 打开 Ast 玩法调整菜单，`!tz` 保留为兼容短命令。单人生还者直接调整，多人生还者发起投票；菜单提供当前保留的玩法项。`!vote` 从 `vote_menu.txt` 读取服务器操作，不再承担地图投票。
 - 临时玩法调整跨地图保留，最后一名真人离开后延迟恢复当前 DAS/profile 默认值；管理员可用 `!astreset` 立即走同一恢复路径。只有存在非默认调整时才周期播报，新玩家进入时会收到当前人数档和波次状态。
 - 新版刷特由作者仓库提交 `c0d829f` 的 `wave_spawner.sp` 编译；2.8.1 运行包提供加载行，本仓库补齐对应成品 SMX。Challenge 负责新旧机制投票，旧版实际刷新由 VScript 执行，新版波次 CVar 和 `!si` 由 Wave Spawner 维护。
 - Challenge 已修正濒死生还者击杀特感回血、普通感染者事件的 `infected_id` 读取、小僵尸击杀累加和生命值链式比较；AstMod 与 AstRedux 两份 SMX 均由同一修正源码重建，回血与备弹待实机复测。
@@ -44,8 +44,8 @@ AstMod 是持续维护的 Baseline。它已同步到 2.8.1 的配置、VScript �
 - 57 份符合 `cXmY*.cfg` 的 Zonemod 官图 Stripper 已同步到 `cfg/stripper/astmod/maps/`；global filters 和第三方地图文件没有覆盖，校验脚本会比较哈希。
 - `addons/astmod.vpk` 提供 `astmod`、`astredux` 和历史 `hunter` mutation。可审阅源文件位于 `assets/astmod_vpk/`，可用 `tools/build_astmod_vpk.ps1` 重建。
 - 2026-08-16 与当时 App 222860 的官方 `gamemodes.txt` 比较，当前副本只在末尾追加自定义模式。游戏更新后仍需重新比较，其他携带同名文件的 addon 也可能产生加载顺序冲突。
-- AstMod 运行包包含模式 cfg、VScript、Stripper、VPK、`optional/astmod/` 插件池、`cfgs.txt` 及所需 data/gamedata/translations；SourceMod/MetaMod core 延续 Rework 提供的版本。当前 Baseline 以 2.8.1 为更新基准，历史二进制的源码对应关系以清单逐项记录。
-- 本项目修改并维护 ACS、vote、Challenge、AI_HardSI、jointeam 和 versus_coop_mode，并直接维护 Wave Spawner 的构建关系；其余历史二进制的源码覆盖与重建能力以 `PLUGIN_SOURCE_INVENTORY.md` 为准。
+- AstMod 运行包包含模式 cfg、VScript、Stripper、VPK、`optional/astmod/` 插件池、`missioncycle.txt`、`vote_menu.txt` 及所需 data/gamedata/translations；SourceMod/MetaMod core 延续 Rework 提供的版本。当前 Baseline 以 2.8.1 为更新基准，历史二进制的源码对应关系以清单逐项记录。
+- 本项目修改并维护 Campaign Switcher、vote、Challenge、AI_HardSI、jointeam 和 versus_coop_mode，并直接维护 Wave Spawner 的构建关系；其余历史二进制的源码覆盖与重建能力以 `PLUGIN_SOURCE_INVENTORY.md` 为准。
 - `server.smx` 已移除；空服换图和服务器进程重启由 systemd 等宿主服务管理。避免以插件触发 `sv_crash` 作为重启方式。
 - `tls_restore_vocalize.smx` 已更新为不再需要 `sceneprocessor.smx` 的版本；后者保留在插件池中但不加载，仍需实机确认笑声等 vocalize 功能。
 
@@ -62,12 +62,12 @@ pwsh -File tools/validate_astmod_integration.ps1
 已在 WSL2 Ubuntu 22.04 Dedicated Server 验证：
 
 - AstMod 冷加载及核心 CVar/plugin 状态；
-- 有客户端连接时从 AstMod 切换到 Zonemod，确认 `versus_coop_mode.smx`、ACS、AstMod AI 和投票插件卸载；
+- 有客户端连接时从 AstMod 切换到 Zonemod，确认 `versus_coop_mode.smx`、Campaign Switcher、AstMod AI 和投票插件卸载；
 - 当前武器参数不再触发旧插件接口报错。
 
 仍需真人验证：
 
 - 完整 `!match`、`!rmatch`、`!vote`、`!mapvote`、`!ast`、`!tz` 和 `!si` 流程；
 - 新旧刷特切换、临时调整跨图保留、最后一名真人离开后的自动重置和 `!astreset`；
-- 正常完成章节、终章与 ACS 战役切换；
+- 正常完成章节、终章与 Campaign Switcher 战役切换；
 - 至少三轮 AstMod / Zonemod 往返切换。

@@ -129,7 +129,8 @@ $requiredPaths = @(
     "assets/astmod_vpk/addoninfo.txt",
     "assets/astmod_vpk/scripts/gamemodes.txt",
     "addons/sourcemod/configs/matchmodes.txt",
-    "addons/sourcemod/configs/cfgs.txt",
+    "addons/sourcemod/configs/missioncycle.txt",
+    "addons/sourcemod/configs/vote_menu.txt",
     "addons/sourcemod/configs/advertisements.txt",
     "addons/sourcemod/configs/astredux_profiles.cfg",
     "cfg/generalfixes.cfg",
@@ -248,7 +249,8 @@ Assert-NotContains `
 
 $keyValuesFiles = @(
     "addons/sourcemod/configs/matchmodes.txt",
-    "addons/sourcemod/configs/cfgs.txt",
+    "addons/sourcemod/configs/missioncycle.txt",
+    "addons/sourcemod/configs/vote_menu.txt",
     "addons/sourcemod/configs/advertisements.txt",
     "addons/sourcemod/configs/astredux_profiles.cfg"
 )

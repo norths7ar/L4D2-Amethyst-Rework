@@ -206,13 +206,13 @@
 
 ## 2. 本地修改或新增的当前二进制（8）
 
-这八个插件由本仓库修改、新增或更新。`challenge.smx` 与 `wave_spawner.smx` 已用随仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 重建；`jointeam.smx` 与 `versus_coop_mode.smx` 随对应仓库源码一同更新，构建复现列为后续工作；ACS、AI_HardSI 与 vote 延续此前的本地修改二进制，构建链列为待锁定；`tls_restore_vocalize.smx` 记录为海洋提供的更新二进制。
+这八个插件由本仓库修改、新增或更新。`campaign_switcher.smx`、`vote.smx`、`challenge.smx` 与 `wave_spawner.smx` 已用随仓库保存的 SourceMod 1.12.0.7230 compiler 和 include 重建；`jointeam.smx` 与 `versus_coop_mode.smx` 随对应仓库源码一同更新，构建复现列为后续工作；AI_HardSI 延续此前的本地修改二进制，构建链列为待锁定；`tls_restore_vocalize.smx` 记录为海洋提供的更新二进制。
 
 ### 已加载（8）
 
 #### 有本仓库维护源码（7）
 
-- `ACS.smx` → `repo:ACS.sp` / `AstSrc:ACS.sp`
+- `campaign_switcher.smx` → `repo:campaign_switcher.sp` / `AstSrc:ACS.sp`（从 ACS 历史名称改名并拆出独立 `missioncycle.txt`）
 - `AI_HardSI.smx` → `repo:AI_HardSI.sp` / `AstSrc:AI_HardSI.sp`
 - `challenge.smx` → `repo:challenge.sp`（本次重建使用） / `AstSrc:challenge.sp`（上游参考）
 - `jointeam.smx` → `repo:jointeam.sp` / `AstSrc:jointeam.sp`（增加 ReadyUp 兼容 Forward；`sm_fuck` 使用 ban flag，只按名称处死 AI 特感）
@@ -230,4 +230,4 @@
 
 ## 构建边界
 
-静态校验覆盖文件、加载路径和部分配置约束。完整可重建状态需要逐项保存 `.sp`、编译器、include、参数和产物比较；仅二进制插件、外部参考源码、ACS、AI_HardSI、vote、`jointeam` 与 `versus_coop_mode` 的构建状态均在本清单中如实标注。
+静态校验覆盖文件、加载路径和部分配置约束。完整可重建状态需要逐项保存 `.sp`、编译器、include、参数和产物比较；仅二进制插件、外部参考源码、AI_HardSI、`jointeam` 与 `versus_coop_mode` 的构建状态均在本清单中如实标注。

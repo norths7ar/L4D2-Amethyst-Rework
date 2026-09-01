@@ -3,21 +3,20 @@
 #include <sourcemod>
 #include <builtinvotes>
 
-#define FILE_PATH		"configs/cfgs.txt"
+#define VOTE_MENU_PATH "configs/vote_menu.txt"
 
 Handle g_hVote = INVALID_HANDLE;
 Handle g_hVoteKick = INVALID_HANDLE;
-Handle g_hCfgsKV = INVALID_HANDLE;
+KeyValues g_hVoteMenu;
 char g_sCfg[64];
-char g_sType[64];
 char kickplayername[MAX_NAME_LENGTH];
 
 public Plugin myinfo = 
 {
-	name = "投票读取cfg文件",
+	name = "服务器投票菜单",
 	author = "HazukiYuro, 海洋空氣",
-	description = "!vote投票",
-	version = "1.3-integration",
+	description = "!vote服务器操作投票",
+	version = "1.4-integration",
 	url = ""
 }
 
@@ -29,11 +28,11 @@ public void OnPluginStart()
 	{
 		SetFailState("该插件只支持 求生之路2!");
 	}
-	g_hCfgsKV = CreateKeyValues("Cfgs");
-	BuildPath(Path_SM, sBuffer, sizeof(sBuffer), FILE_PATH);
-	if (!FileToKeyValues(g_hCfgsKV, sBuffer))
+	g_hVoteMenu = new KeyValues("VoteMenu");
+	BuildPath(Path_SM, sBuffer, sizeof(sBuffer), VOTE_MENU_PATH);
+	if (!g_hVoteMenu.ImportFromFile(sBuffer))
 	{
-		SetFailState("无法加载cfgs.txt文件!");
+		SetFailState("无法加载%s!", VOTE_MENU_PATH);
 	}
 
 	RegConsoleCmd("sm_vote", CommondVote);
@@ -78,17 +77,17 @@ public Action CommondVote(int client, int args)
 
 bool FindConfigName(const char[] cfg, char[] message, int maxlength)
 {
-	KvRewind(g_hCfgsKV);
-	if (KvGotoFirstSubKey(g_hCfgsKV))
+	g_hVoteMenu.Rewind();
+	if (g_hVoteMenu.GotoFirstSubKey())
 	{
 		do
 		{
-			if (KvJumpToKey(g_hCfgsKV, cfg))
+			if (g_hVoteMenu.JumpToKey(cfg))
 			{
-				KvGetString(g_hCfgsKV, "message", message, maxlength);
+				g_hVoteMenu.GetString("label", message, maxlength);
 				return true;
 			}
-		} while (KvGotoNextKey(g_hCfgsKV));
+		} while (g_hVoteMenu.GotoNextKey());
 	}
 	return false;
 }
@@ -98,14 +97,14 @@ void ShowVoteMenu(int client)
 	Handle hMenu = CreateMenu(VoteMenuHandler);
 	SetMenuTitle(hMenu, "选择:");
 	char sSectionName[64];
-	KvRewind(g_hCfgsKV);
-	if (KvGotoFirstSubKey(g_hCfgsKV))
+	g_hVoteMenu.Rewind();
+	if (g_hVoteMenu.GotoFirstSubKey())
 	{
 		do
 		{
-			KvGetSectionName(g_hCfgsKV, sSectionName, sizeof(sSectionName));
+			g_hVoteMenu.GetSectionName(sSectionName, sizeof(sSectionName));
 			AddMenuItem(hMenu, sSectionName, sSectionName);
-		} while (KvGotoNextKey(g_hCfgsKV));
+		} while (g_hVoteMenu.GotoNextKey());
 	}
 	DisplayMenu(hMenu, client, 20);
 }
@@ -116,23 +115,18 @@ public int VoteMenuHandler(Handle menu, MenuAction action, int client, int itemP
 	{
 		char sSectionName[64], sBuffer[64];
 		GetMenuItem(menu, itemPos, sSectionName, sizeof(sSectionName));
-		KvRewind(g_hCfgsKV);
-		if (KvJumpToKey(g_hCfgsKV, sSectionName) && KvGotoFirstSubKey(g_hCfgsKV))
+		g_hVoteMenu.Rewind();
+		if (g_hVoteMenu.JumpToKey(sSectionName) && g_hVoteMenu.GotoFirstSubKey())
 		{
 			Handle hMenu = CreateMenu(ConfigsMenuHandler);
 			Format(sBuffer, sizeof(sBuffer), "选择 %s :", sSectionName);
 			SetMenuTitle(hMenu, sBuffer);
 			do
 			{
-				KvGetSectionName(g_hCfgsKV, sSectionName, sizeof(sSectionName));
-				KvGetString(g_hCfgsKV, "type", g_sType, sizeof(g_sType));
-				KvGetString(g_hCfgsKV, "message", sBuffer, sizeof(sBuffer));
-				if (StrEqual(g_sType, "map") && !IsMapValid(sSectionName))
-				{
-					continue;
-				}
+				g_hVoteMenu.GetSectionName(sSectionName, sizeof(sSectionName));
+				g_hVoteMenu.GetString("label", sBuffer, sizeof(sBuffer));
 				AddMenuItem(hMenu, sSectionName, sBuffer);
-			} while (KvGotoNextKey(g_hCfgsKV));
+			} while (g_hVoteMenu.GotoNextKey());
 			DisplayMenu(hMenu, client, 20);
 		}
 		else
@@ -152,10 +146,17 @@ public int ConfigsMenuHandler(Handle menu, MenuAction action, int client, int it
 {
 	if (action == MenuAction_Select)
 	{
-		char sSectionName[64], sMessage[64];
+		char sSectionName[64], sMessage[64], sType[64];
 		GetMenuItem(menu, itemPos, sSectionName, sizeof(sSectionName), _, sMessage, sizeof(sMessage));
-		
-		if (StrEqual(g_sType, "command"))
+
+		if (!FindVoteItem(sSectionName, sType, sizeof(sType)))
+		{
+			PrintToChat(client, "投票菜单项不存在.");
+			ShowVoteMenu(client);
+			return 1;
+		}
+
+		if (StrEqual(sType, "command"))
 		{
 			if (StartVote(client, sMessage))
 			{
@@ -167,20 +168,7 @@ public int ConfigsMenuHandler(Handle menu, MenuAction action, int client, int it
 				ShowVoteMenu(client);
 			}
 		}
-		else if (StrEqual(g_sType, "map"))
-		{
-			Format(sSectionName, sizeof(sSectionName), "changelevel %s", sSectionName);
-			if (StartVote(client, sMessage))
-			{
-				strcopy(g_sCfg, sizeof(g_sCfg), sSectionName);
-				FakeClientCommand(client, "Vote Yes");
-			}
-			else
-			{
-				ShowVoteMenu(client);
-			}
-		}
-		else if (StrEqual(g_sType, "panel"))
+		else if (StrEqual(sType, "panel"))
 		{
 			FakeClientCommand(client, sSectionName);
 		}
@@ -195,6 +183,23 @@ public int ConfigsMenuHandler(Handle menu, MenuAction action, int client, int it
 	}
 
 	return 1;
+}
+
+bool FindVoteItem(const char[] itemName, char[] itemType, int maxlength)
+{
+	g_hVoteMenu.Rewind();
+	if (g_hVoteMenu.GotoFirstSubKey())
+	{
+		do
+		{
+			if (g_hVoteMenu.JumpToKey(itemName))
+			{
+				g_hVoteMenu.GetString("type", itemType, maxlength);
+				return true;
+			}
+		} while (g_hVoteMenu.GotoNextKey());
+	}
+	return false;
 }
 
 bool StartVote(int client, const char[] cfgname)
