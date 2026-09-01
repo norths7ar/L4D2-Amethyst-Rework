@@ -9,7 +9,7 @@
 - `/home/l4d2/overlay` 保存服务器私有覆盖；它在 release 之后合入 staging。密钥、SteamID、管理员和个人数据不进入仓库。
 - `/home/ecs-user/l4d2-addons` 是 SFTP 可见的用户 VPK 期望集合。加入稳定的 `.vpk` 表示安装，删除表示退役，上传中的文件应使用 `.part` 后缀。
 - `/home/l4d2/content/addons` 是已激活用户 VPK 集合；`/home/l4d2/retiring` 保留替换或删除的可恢复副本。
-- `addons/sourcemod/configs/missioncycle.txt` 是 Campaign Switcher 唯一运行时战役清单。工具保留官方段和已有显示名，只双向重建“第三方战役”段。
+- `addons/sourcemod/configs/missioncycle.txt` 是 Campaign Switcher 唯一 Map 策略文件，负责白名单、顺序和显示名；实际 Mission/Chapter 可用性来自 imatchext Mission Cache。工具保留官方段和已有显示名，只双向重建“第三方战役”段。
 - 不开放 RCON。本机维护工具通过 systemd 的 FIFO 或迁移期 tmux 控制台执行固定的 `status`、addon reload 和 `quit`。
 
 首次安装会把现有的 `admins_simple.ini` 和 `cfg/server.cfg` 种入 overlay，避免第一次 Git 发布覆盖服务器身份。SourceMod 的 SQLite 运行数据不纳入 Git 同步；自动更新的 gamedata/GeoIP 文件仍会发布，但不作为“工作区漂移”阻塞下一次维护。

@@ -78,7 +78,7 @@ sudo ./ops/install.sh --activate
 update_addon_paths; mission_reload
 ```
 
-热加载后仍保留冷重启标记。删除时先从 `addons/sourcemod/configs/missioncycle.txt` 的“第三方战役”段移除，实际 VPK 等到空服窗口再退役和冷重启。该 `missioncycle.txt` 是 Campaign Switcher 唯一运行时清单；`vote_menu.txt` 只负责通用投票入口。
+热加载后仍保留冷重启标记。删除时先从 `addons/sourcemod/configs/missioncycle.txt` 的“第三方战役”段移除，实际 VPK 等到空服窗口再退役和冷重启。该文件是 Campaign Switcher 唯一 Map 策略文件，负责白名单、顺序和显示名；实际 Mission/Chapter 可用性来自 imatchext Mission Cache，`mission_reload` 后插件会随 `OnMissionCacheReload` 重建注册表。`vote_menu.txt` 只负责通用投票入口。
 
 ## 管理员与私有 overlay
 
