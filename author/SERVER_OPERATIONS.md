@@ -62,7 +62,7 @@ sudo ./ops/install.sh --activate
 2. 在 `/home/l4d2/releases/<commit>/` 构建 release，随后合入私有 overlay；
 3. 拒绝脏工作区和已纳管文件的未知漂移，备份当前版本；
 4. 只同步 Git/overlay 纳管路径，并按旧 manifest 删除仓库中已经删除的文件；
-5. 重启并通过 service、UDP 端口和控制台 `status` 健康检查；Git、overlay、missioncycle 和 content 失败时只自动恢复一次纳管状态。
+5. 重启并在默认 60 秒启动窗口内通过 service、UDP 端口和控制台 `status` 健康检查；Git、overlay、missioncycle 和 content 失败时只自动恢复一次纳管状态。
 
 服务器不会在游戏目录内运行 Git，也不会自动 reset 本地改动。功能分支或固定 commit 只能通过显式 `sudo l4d2-maintain converge <ref>` 发布；日常 timer 始终回到 `origin/main`。
 
