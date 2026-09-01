@@ -20,21 +20,15 @@ DirectorOptions <-
 	RelaxMinInterval 				= 0 // Minimum time to spend in the RELAX tempo.
 
 
-	DominatorLimit 			= 12
-	cm_BaseSpecialLimit 	= 12
-	cm_MaxSpecials 			= 12
+	DominatorLimit 			= 7
+	cm_BaseSpecialLimit 	= 7
+	cm_MaxSpecials 			= 7
 	BoomerLimit 			= 1
 	SpitterLimit 			= 0
 	HunterLimit 			= 1
 	JockeyLimit 			= 1
 	ChargerLimit 			= 1
 	SmokerLimit 			= 0
-}
-
-// ModeData 两个值不直接控制特感刷新，可以理解成上限
-ModeData <-{
-	g_nSI				= 24		// 数值必须比所有特感 Limit 加起来都要大（包含 Tank），总之越大越好
-	g_nTime				= 0			// 0秒，保证需要时能尽快刷出
 }
 
 // 插件修改特感刷新参数时会重新读取/执行整个脚本文件。
@@ -68,19 +62,42 @@ function update_diff()
 //-----------------------------------------------------------------------------------------------------------------------------
 function ApplyDirectorOptions()
 {
-	DirectorOptions.HunterLimit = Convars.GetStr("astredux_si_hunter_limit").tointeger();
-	DirectorOptions.SmokerLimit = Convars.GetStr("astredux_si_smoker_limit").tointeger();
-	DirectorOptions.BoomerLimit = Convars.GetStr("astredux_si_boomer_limit").tointeger();
-	DirectorOptions.SpitterLimit = Convars.GetStr("astredux_si_spitter_limit").tointeger();
-	DirectorOptions.JockeyLimit = Convars.GetStr("astredux_si_jockey_limit").tointeger();
-	DirectorOptions.ChargerLimit = Convars.GetStr("astredux_si_charger_limit").tointeger();
+	local limits = [
+		Convars.GetStr("astredux_si_hunter_limit").tointeger(),
+		Convars.GetStr("astredux_si_smoker_limit").tointeger(),
+		Convars.GetStr("astredux_si_boomer_limit").tointeger(),
+		Convars.GetStr("astredux_si_spitter_limit").tointeger(),
+		Convars.GetStr("astredux_si_jockey_limit").tointeger(),
+		Convars.GetStr("astredux_si_charger_limit").tointeger()
+	];
+	local waveSize = Convars.GetStr("astredux_wave_size").tointeger();
+	local baseTotal = 0;
+	foreach (limit in limits) {
+		baseTotal += limit;
+	}
+
+	// 基础阵容只定义起点。超过基础总数的名额在六种特感间等概率独立分配，
+	// 不继承基础阵容的 Hunter 权重，也不使用等比例放大。
+	for (local extra = baseTotal; extra < waveSize; extra++) {
+		limits[RandomInt(0, limits.len() - 1)]++;
+	}
+
+	DirectorOptions.HunterLimit = limits[0];
+	DirectorOptions.SmokerLimit = limits[1];
+	DirectorOptions.BoomerLimit = limits[2];
+	DirectorOptions.SpitterLimit = limits[3];
+	DirectorOptions.JockeyLimit = limits[4];
+	DirectorOptions.ChargerLimit = limits[5];
 	DirectorOptions.PreferredSpecialDirection = Convars.GetStr("astredux_si_preferred_direction").tointeger();
 
-	DirectorOptions.cm_BaseSpecialLimit 					= ModeData.g_nSI
-	DirectorOptions.cm_MaxSpecials 							= ModeData.g_nSI
-	DirectorOptions.DominatorLimit 							= ModeData.g_nSI
-	DirectorOptions.cm_SpecialRespawnInterval 				= ModeData.g_nTime
-	DirectorOptions.cm_SpecialSlotCountdownTime 			= ModeData.g_nTime
+	// Wave Spawner owns the exact SI wave size. Keep the Director ceilings one slot
+	// above it so a Tank cannot make the script-level cap the limiting mechanism.
+	local directorLimit = waveSize + 1;
+	DirectorOptions.cm_BaseSpecialLimit = directorLimit;
+	DirectorOptions.cm_MaxSpecials = directorLimit;
+	DirectorOptions.DominatorLimit = directorLimit;
+	DirectorOptions.cm_SpecialRespawnInterval = 0;
+	DirectorOptions.cm_SpecialSlotCountdownTime = 0;
 }
 
 function InitHUD() {
