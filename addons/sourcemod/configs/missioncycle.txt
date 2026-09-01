@@ -1,0 +1,129 @@
+"MissionCycle"
+{
+	"官方战役"
+	{
+		"c1m1_hotel"
+		{
+			"name" "C1-死亡中心"
+		}
+		"c2m1_highway"
+		{
+			"name" "C2-黑色狂欢节"
+		}
+		"c3m1_plankcountry"
+		{
+			"name" "C3-沼泽激战"
+		}
+		"c4m1_milltown_a"
+		{
+			"name" "C4-暴风骤雨"
+		}
+		"c5m1_waterfront"
+		{
+			"name" "C5-教区"
+		}
+		"c6m1_riverbank"
+		{
+			"name" "C6-短暂时刻"
+		}
+		"c7m1_docks"
+		{
+			"name" "C7-牺牲"
+		}
+		"c8m1_apartment"
+		{
+			"name" "C8-毫不留情"
+		}
+		"c9m1_alleys"
+		{
+			"name" "C9-坠机险途"
+		}
+		"c10m1_caves"
+		{
+			"name" "C10-死亡丧钟"
+		}
+		"c11m1_greenhouse"
+		{
+			"name" "C11-静寂时分"
+		}
+		"c12m1_hilltop"
+		{
+			"name" "C12-血腥收获"
+		}
+		"c13m1_alpinecreek"
+		{
+			"name" "C13-刺骨寒溪"
+		}
+		"c14m1_junkyard"
+		{
+			"name" "C14-临死一搏"
+		}
+	}
+	"第三方战役"
+	{
+		"dkr_m1_motel"
+		{
+			"name" "Dark Carnival: Remix"
+		}
+		"dprm1_milltown_a"
+		{
+			"name" "Hard Rain: Downpour"
+		}
+		"cdta_01detour"
+		{
+			"name" "Detour Ahead  (迂回前进)"
+		}
+		"l4d2_diescraper1_apartment_361"
+		{
+			"name" "Diescraper (喋血蜃楼)"
+		}
+		"cwm1_intro"
+		{
+			"name" "Carried off (绝境逢生)"
+		}
+		"l4d2_stadium1_apartment"
+		{
+			"name" "Suicide Blitz 2 (闪电突袭2)"
+		}
+		"l4d_dbd2dc_anna_is_gone"
+		{
+			"name" "Dead Before Dawn DC (活死人黎明)"
+		}
+		"aircrash"
+		{
+			"name" "Heaven Can Wait Ⅱ (天堂可待 Ⅱ)"
+		}
+		"l4d_ihm01_forest"
+		{
+			"name" "I Hate Mountains 2 (我爱大山 2)"
+		}
+		"l4d_tbm_1"
+		{
+			"name" "The Bloody Moors (血腥荒野)"
+		}
+		"l4d2_bts01_forest"
+		{
+			"name" "Back to School (回到学校)"
+		}
+		"uz_crash"
+		{
+			"name" "Undead Zone (亡灵区)"
+		}
+		"l4d2_city17_01"
+		{
+			"name" "City 17 (17 城)"
+		}
+		"wfp1_track"
+		{
+			"name" "White Forest (白森林)"
+		}
+		"srocchurch"
+		{
+			"name" "Warcelona (巴塞罗那)"
+		}
+		"uf1_boulevard"
+		{
+			"name" "Urban Flight (城市航班)"
+		}
+	}
+}

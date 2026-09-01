@@ -5,7 +5,8 @@
 #include <sdktools>
 #include <left4dhooks>
 
-#define PLUGIN_VERSION	"v1.2.7-integration"
+#define PLUGIN_VERSION	"v1.2.8-integration"
+#define MISSION_CYCLE_PATH "configs/missioncycle.txt"
 
 //Define the wait time after round before changing to the next map in each game mode
 #define WAIT_TIME_BEFORE_SWITCH_COOP			6.0
@@ -32,7 +33,7 @@ ArrayList g_arrayDisplayName;
 int g_iCampaignCount = 0;
 
 //Voting Variables
-float g_fNextMapAdInterval = 300.0;						//Interval for ACS next map advertisement
+float g_fNextMapAdInterval = 300.0;						//Interval for next campaign advertisement
 bool g_bClientShownVoteAd[MAXPLAYERS + 1];				//If the client has seen the ad already
 bool g_bClientVoted[MAXPLAYERS + 1];					//If the client has voted on a map
 int g_iClientVote[MAXPLAYERS + 1];							//The value of the clients vote
@@ -40,63 +41,60 @@ int g_iWinningMapIndex;										//Winning map/campaign's index
 int g_iWinningMapVotes;										//Winning map/campaign's number of votes
 Handle g_hMenu_Vote[MAXPLAYERS + 1]	= {INVALID_HANDLE, ...};	//Handle for each players vote menu
 
-// KeyValues
-KeyValues g_hKvMaps;
+// Campaign rotation
+KeyValues g_hMissionCycle;
 
-void SetupMapKvStrings()
+void LoadMissionCycle()
 {
-	char sBuffer[64];
-	g_hKvMaps = CreateKeyValues("Cfgs");
-	BuildPath(Path_SM, sBuffer, sizeof(sBuffer), "configs/cfgs.txt");
-	if (!FileToKeyValues(g_hKvMaps, sBuffer))
+	char sBuffer[PLATFORM_MAX_PATH];
+	g_hMissionCycle = new KeyValues("MissionCycle");
+	BuildPath(Path_SM, sBuffer, sizeof(sBuffer), MISSION_CYCLE_PATH);
+	if (!g_hMissionCycle.ImportFromFile(sBuffer))
 	{
-		SetFailState("Couldn't load configs/cfgs.txt!");
+		SetFailState("Couldn't load %s!", MISSION_CYCLE_PATH);
 	}
 
 	g_arrayCampaignFirstMap = new ArrayList(STRING_MAX_LENGTH);
 	g_arrayDisplayName = new ArrayList(STRING_MAX_LENGTH);
-	
-	GetMapsList(g_arrayCampaignFirstMap, g_arrayDisplayName);
+	g_iCampaignCount = 0;
+
+	ReadMissionCycle(g_arrayCampaignFirstMap, g_arrayDisplayName);
 }
 
-bool GetMapsList(ArrayList arrayCampaignFirstMap, ArrayList arrayDisplayName)
+void ReadMissionCycle(ArrayList arrayCampaignFirstMap, ArrayList arrayDisplayName)
 {
-	KvRewind(g_hKvMaps);
-	if (KvGotoFirstSubKey(g_hKvMaps))
+	g_hMissionCycle.Rewind();
+	if (g_hMissionCycle.GotoFirstSubKey())
 	{
-		do {
+		do
+		{
 			char strCampaignFirstMap[STRING_MAX_LENGTH];
-			char strType[STRING_MAX_LENGTH];
 			char strDisplayName[STRING_MAX_LENGTH];
-			g_hKvMaps.GetSectionName(strCampaignFirstMap, STRING_MAX_LENGTH);
-			g_hKvMaps.GetString("type", strType, STRING_MAX_LENGTH);
-			g_hKvMaps.GetString("message", strDisplayName, STRING_MAX_LENGTH);
 
-			if (StrEqual(strType, "") && StrEqual(strDisplayName, "")) {
-				if (KvGotoFirstSubKey(g_hKvMaps)) {
-					do {
-						g_hKvMaps.GetSectionName(strCampaignFirstMap, STRING_MAX_LENGTH);
-						g_hKvMaps.GetString("type", strType, STRING_MAX_LENGTH);
-						g_hKvMaps.GetString("message", strDisplayName, STRING_MAX_LENGTH);
+			if (g_hMissionCycle.GotoFirstSubKey())
+			{
+				do
+				{
+					g_hMissionCycle.GetSectionName(strCampaignFirstMap, sizeof(strCampaignFirstMap));
+					g_hMissionCycle.GetString("name", strDisplayName, sizeof(strDisplayName));
 
-						if (StrEqual(strType, "map")) {
-							if (!IsMapValid(strCampaignFirstMap)) {
-								LogMessage("Skipping unavailable campaign map: %s (%s)", strCampaignFirstMap, strDisplayName);
-								continue;
-							}
-							// PrintToServer("g_iCampaignCount: %i, strCampaignFirstMap: %s, strDisplayName: %s, strType: %s", g_iCampaignCount, strCampaignFirstMap, strDisplayName, strType);
-							arrayCampaignFirstMap.PushString(strCampaignFirstMap);
-							arrayDisplayName.PushString(strDisplayName);
-							g_iCampaignCount++;
-						}
+					if (!IsMapValid(strCampaignFirstMap))
+					{
+						LogMessage("Skipping unavailable campaign map: %s (%s)", strCampaignFirstMap, strDisplayName);
+						continue;
 					}
-					while (KvGotoNextKey(g_hKvMaps));
+
+					arrayCampaignFirstMap.PushString(strCampaignFirstMap);
+					arrayDisplayName.PushString(strDisplayName);
+					g_iCampaignCount++;
 				}
+				while (g_hMissionCycle.GotoNextKey());
 			}
-			KvGoBack(g_hKvMaps);
-		} while (KvGotoNextKey(g_hKvMaps));
+
+			g_hMissionCycle.GoBack();
+		}
+		while (g_hMissionCycle.GotoNextKey());
 	}
-	return false;
 }
 
 /*======================================================================================
@@ -105,7 +103,7 @@ bool GetMapsList(ArrayList arrayCampaignFirstMap, ArrayList arrayDisplayName)
 
 public Plugin myinfo =
 {
-	name = "Automatic Campaign Switcher (ACS)",
+	name = "Campaign Switcher",
 	author = "Chris Pringle, 海洋空氣",
 	description = "Automatically switches to the next campaign when the previous campaign is over",
 	version = PLUGIN_VERSION,
@@ -119,10 +117,10 @@ public Plugin myinfo =
 public void OnPluginStart()
 {
 	//Get the strings for all of the maps that are in rotation
-	SetupMapKvStrings();
+	LoadMissionCycle();
 
 	//Create custom console variables
-	CreateConVar("acs_version", PLUGIN_VERSION, "Version of Automatic Campaign Switcher (ACS) on this server", FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_DONTRECORD);
+	CreateConVar("campaign_switcher_version", PLUGIN_VERSION, "Version of Campaign Switcher on this server", FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_DONTRECORD);
 
 	HookEvent("finale_win", Event_FinaleWin);
 	HookEvent("player_disconnect", Event_PlayerDisconnect);
@@ -282,7 +280,7 @@ void CheckMapForChange()
 			g_arrayDisplayName.GetString(g_iWinningMapIndex, strDisplayName, STRING_MAX_LENGTH);
 			if(IsMapValid(strCampaignFirstMap) == true)
 			{
-				PrintToChatAll("\x03[ACS] \x05切换至票数最多的地图: \x04%s", strDisplayName);
+				PrintToChatAll("\x03[战役切换] \x05切换至票数最多的地图: \x04%s", strDisplayName);
 
 				if(g_iGameMode == GAMEMODE_VERSUS)
 					CreateTimer(WAIT_TIME_BEFORE_SWITCH_VERSUS, Timer_ChangeCampaign, g_iWinningMapIndex);
@@ -307,7 +305,7 @@ void CheckMapForChange()
 
 		if(IsMapValid(strCampaignFirstMap) == true)
 		{
-			PrintToChatAll("\x03[ACS] \x05无人投票，切换至地图 \x04%s", strDisplayName);
+			PrintToChatAll("\x03[战役切换] \x05无人投票，切换至地图 \x04%s", strDisplayName);
 
 			if(g_iGameMode == GAMEMODE_VERSUS)
 				CreateTimer(WAIT_TIME_BEFORE_SWITCH_VERSUS, Timer_ChangeCampaign, iMapIndex);
@@ -364,11 +362,11 @@ void DisplayNextMapToAll()
 	if(g_iWinningMapIndex >= 0) {
 		char strDisplayName[STRING_MAX_LENGTH];
 		g_arrayDisplayName.GetString(g_iWinningMapIndex, strDisplayName, STRING_MAX_LENGTH);
-		PrintToChatAll("\x03[ACS] \x05下一张地图是 \x04%s", strDisplayName);
+		PrintToChatAll("\x03[战役切换] \x05下一张地图是 \x04%s", strDisplayName);
 	}
 	else
 	{
-		PrintToChatAll("\x03[ACS] \x05无人投票，章节结束将更换至\x04随机官图");
+		PrintToChatAll("\x03[战役切换] \x05无人投票，章节结束将更换至\x04随机官图");
 	}
 }
 
@@ -385,7 +383,7 @@ public Action MapVote(int iClient, int args)
 {
 	if(L4D_IsMissionFinalMap() == false)
 	{
-		PrintToChat(iClient, "\x03[ACS] \x05只能在救援关投票哦~");
+		PrintToChat(iClient, "\x03[战役切换] \x05只能在救援关投票哦~");
 		return Plugin_Handled;
 	}
 
@@ -402,7 +400,7 @@ public Action DisplayCurrentVotes(int iClient, int args)
 {
 	if(L4D_IsMissionFinalMap() == false)
 	{
-		PrintToChat(iClient, "\x03[ACS] \x05只能在救援关投票哦~");
+		PrintToChat(iClient, "\x03[战役切换] \x05只能在救援关投票哦~");
 		return Plugin_Handled;
 	}
 
@@ -416,10 +414,10 @@ public Action DisplayCurrentVotes(int iClient, int args)
 	{
 		char strDisplayName[STRING_MAX_LENGTH];
 		g_arrayDisplayName.GetString(g_iWinningMapIndex, strDisplayName, STRING_MAX_LENGTH);
-		PrintToChat(iClient, "\x03[ACS] \x05当前票数最多: \x04%s.", strDisplayName);
+		PrintToChat(iClient, "\x03[战役切换] \x05当前票数最多: \x04%s.", strDisplayName);
 	}
 	else
-		PrintToChat(iClient, "\x03[ACS] \x05还没有人投票，输入 \x04!mapvote \x05进行投票.");
+		PrintToChat(iClient, "\x03[战役切换] \x05还没有人投票，输入 \x04!mapvote \x05进行投票.");
 
 	//Loop through all maps and display the ones that have votes
 	int[] iMapVotes = new int[g_iCampaignCount];
@@ -508,11 +506,11 @@ public int VoteMenuHandler(Handle hMenu, MenuAction maAction, int iClient, int i
 
 		//Display the appropriate message to the voter
 		if(iItemNum == -1)
-			PrintToChat(iClient, "\x03[ACS] \x05你还没有投票. 请输入: \x04!mapvote \x05进行投票");
+			PrintToChat(iClient, "\x03[战役切换] \x05你还没有投票. 请输入: \x04!mapvote \x05进行投票");
 		else {
 			char strDisplayName[STRING_MAX_LENGTH];
 			g_arrayDisplayName.GetString(iItemNum, strDisplayName, STRING_MAX_LENGTH);
-			PrintToChat(iClient, "\x03[ACS] \x05你已经投票:  \x04%s.\n           \x05更改投票请输入: \x04!mapvote\n           \x05查看目前票数请输入: \x04!mapvotes", strDisplayName);
+			PrintToChat(iClient, "\x03[战役切换] \x05你已经投票:  \x04%s.\n           \x05更改投票请输入: \x04!mapvote\n           \x05查看目前票数请输入: \x04!mapvotes", strDisplayName);
 		}
 	}
 	return 1;
@@ -611,6 +609,6 @@ void SetTheCurrentVoteWinner()
 		//Show message to all the players of the new vote winner
 		char strDisplayName[STRING_MAX_LENGTH];
 		g_arrayDisplayName.GetString(g_iWinningMapIndex, strDisplayName, STRING_MAX_LENGTH);
-		PrintToChatAll("\x03[ACS] \x04%s \x05当前票数最多.", strDisplayName);
+		PrintToChatAll("\x03[战役切换] \x04%s \x05当前票数最多.", strDisplayName);
 	}
 }
