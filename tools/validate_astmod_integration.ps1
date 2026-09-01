@@ -137,6 +137,8 @@ $requiredPaths = @(
     "addons/sourcemod/scripting/astredux_wave_spawner.sp",
     "addons/sourcemod/scripting/astredux_rules.sp",
     "addons/sourcemod/scripting/astredux_autowipe.sp",
+    "addons/sourcemod/scripting/script_reloader.sp",
+    "addons/sourcemod/scripting/include/script_reloader.inc",
     "addons/sourcemod/plugins/optional/astredux/astredux_profile_controller.smx",
     "addons/sourcemod/plugins/optional/astredux/wave_spawner.smx",
     "addons/sourcemod/plugins/optional/astredux/astredux_rules.smx",
@@ -267,11 +269,54 @@ Assert-NotContains `
     "cfg/cfgogl/astredux/plugins_1.cfg" `
     '^\s*sm\s+plugins\s+load\s+optional/astmod/wave_spawner\.smx\s*$' `
     "AstRedux still loads the AstMod Wave Spawner"
-foreach ($legacyPattern in @('Waves', 'update_diff_old', 'ast_wave_spawn', 'ast_sitimer(_new)?', 'ast_silimit_new')) {
+foreach ($legacyPattern in @('\bWaves\b', 'update_diff_old', 'ast_wave_spawn', 'ast_sitimer(_new)?', 'ast_silimit_new')) {
     Assert-NotContains `
         "scripts/vscripts/astredux.nut" `
         $legacyPattern `
         "AstRedux VScript still contains legacy wave state: $legacyPattern"
+}
+
+foreach ($nativeCaller in @(
+    "addons/sourcemod/scripting/astredux_wave_spawner.sp",
+    "addons/sourcemod/scripting/wave_spawner.sp",
+    "addons/sourcemod/scripting/challenge.sp"
+)) {
+    Assert-NotContains `
+        $nativeCaller `
+        'ServerCommand\("sm_reloadscript"\)' `
+        "VScript reload caller still uses the console-command bridge"
+    Assert-Contains `
+        $nativeCaller `
+        'VScript_Reload\(' `
+        "VScript reload caller does not use the script_reloader native"
+}
+
+Assert-Contains `
+    "addons/sourcemod/scripting/script_reloader.sp" `
+    'CreateNative\("VScript_Reload"' `
+    "script_reloader does not publish its reload native"
+Assert-Contains `
+    "addons/sourcemod/scripting/script_reloader.sp" `
+    'GlobalForward\("VScript_OnReloaded"' `
+    "script_reloader does not publish its completion forward"
+Assert-Contains `
+    "scripts/vscripts/astredux.nut" `
+    'RandomInt\(0, limits\.len\(\) - 1\)' `
+    "AstRedux does not distribute overflow slots equally across all SI classes"
+Assert-NotContains `
+    "scripts/vscripts/astredux.nut" `
+    '\bscale\b' `
+    "AstRedux still uses proportional SI limit scaling"
+
+foreach ($mode in $modes) {
+    $pluginList = Join-Path $Root "cfg/cfgogl/$mode/plugins_1.cfg"
+    $pluginText = Get-Content -LiteralPath $pluginList -Raw -Encoding utf8
+    $reloaderIndex = $pluginText.IndexOf('sm plugins load optional/astmod/script_reloader.smx', [StringComparison]::Ordinal)
+    $wavePath = if ($mode -eq 'astredux') { 'optional/astredux/wave_spawner.smx' } else { 'optional/astmod/wave_spawner.smx' }
+    $waveIndex = $pluginText.IndexOf("sm plugins load $wavePath", [StringComparison]::Ordinal)
+    if ($reloaderIndex -lt 0 -or $waveIndex -lt 0 -or $reloaderIndex -gt $waveIndex) {
+        Add-Failure "$mode does not load script_reloader before its wave spawner"
+    }
 }
 
 $keyValuesFiles = @(

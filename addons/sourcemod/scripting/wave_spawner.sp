@@ -5,6 +5,7 @@
 #include <sdktools>
 #include <builtinvotes>
 #include <left4dhooks>
+#include <script_reloader>
 
 #define TEAM_SPECTATORS         1
 #define TEAM_SURVIVORS          2
@@ -190,7 +191,10 @@ public void OnSIParamChange(ConVar convar, const char[] oldvalue, const char[] n
     g_fSISpawnTime = GetConVarFloat(g_hSITimer);
     g_iMaxSILimit = GetConVarInt(g_hSILimit);
 
-    ServerCommand("sm_reloadscript");
+    if (!VScript_Reload())
+    {
+        LogError("[AstMod] Could not apply SI parameters through script_reloader.");
+    }
 }
 
 public Action forceSpawnCommand(int client, int args) {
