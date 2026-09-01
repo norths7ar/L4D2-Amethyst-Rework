@@ -97,7 +97,7 @@ restore_tmux_runtime() {
 
 if ((ACTIVATE == 0)); then
     printf 'Installed without changing the running game process.\n'
-    printf 'Run sudo %s preflight, then rerun with --activate during an empty window.\n' "$SCRIPT_DIR/install.sh"
+    printf 'Run sudo %s preflight, then rerun this installer with --activate during an empty window.\n' "$MAINTAIN_BIN"
     exit 0
 fi
 
