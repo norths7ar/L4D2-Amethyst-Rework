@@ -73,14 +73,33 @@ capture_recent() {
 
 query_status() {
     local marker="L4D2M$$_$(date +%s%N)"
-    local since
+    local since runtime
     local output=''
     since=$(date '+%Y-%m-%d %H:%M:%S')
+    runtime=$(runtime_kind)
     send_line "echo ${marker}_BEGIN; status; echo ${marker}_END"
-    # This server has shown up to roughly 23 seconds of FIFO latency while hibernating.
-    for _ in {1..120}; do
+
+    if [[ "$runtime" == systemd ]]; then
+        if (
+            set +o pipefail
+            timeout 35 journalctl -u "$SERVICE_NAME" --since "$since" --follow \
+                --no-pager -o cat \
+                | awk -v begin="${marker}_BEGIN" -v end="${marker}_END" '
+                    index($0, begin) { capture=1; next }
+                    index($0, end) { if (capture) { done=1; exit } }
+                    capture { print }
+                    END { if (!done) exit 1 }
+                '
+        ); then
+            return 0
+        fi
+        printf 'l4d2-console: timed out waiting for status output\n' >&2
+        return 1
+    fi
+
+    for _ in {1..40}; do
         sleep 0.25
-        output=$(capture_recent "$since" || true)
+        output=$(capture_recent || true)
         if grep -Fq "${marker}_END" <<<"$output"; then
             awk -v begin="${marker}_BEGIN" -v end="${marker}_END" '
                 index($0, begin) { capture=1; next }
