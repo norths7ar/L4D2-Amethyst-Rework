@@ -1,0 +1,26 @@
+# Managed by L4D2-Amethyst-Rework ops/install.sh
+[Unit]
+Description=Left 4 Dead 2 dedicated server
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=l4d2
+Group=l4d2
+WorkingDirectory=/home/l4d2/server
+RuntimeDirectory=l4d2
+RuntimeDirectoryMode=0750
+Environment=L4D2_MAINTAIN_CONFIG=/etc/l4d2-maintain.conf
+ExecStart=/usr/local/libexec/l4d2-maintain/l4d2-run
+ExecStop=-/usr/local/libexec/l4d2-maintain/l4d2-console quit
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=90
+TimeoutStopSec=45
+KillMode=mixed
+LimitNOFILE=65536
+UMask=0002
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+CONFIG_PATH=${L4D2_MAINTAIN_CONFIG:-/etc/l4d2-maintain.conf}
+# shellcheck source=/dev/null
+source "$CONFIG_PATH"
+
+if pgrep -f '[s]rcds_linux' >/dev/null; then
+    printf 'l4d2-run: another srcds_linux process already exists\n' >&2
+    exit 1
+fi
+if ss -lun "sport = :$PORT" | awk 'NR > 1 { found=1 } END { exit !found }'; then
+    printf 'l4d2-run: UDP port %s is already in use\n' "$PORT" >&2
+    exit 1
+fi
+
+fifo="$RUNTIME_DIR/console.fifo"
+rm -f -- "$fifo"
+mkfifo -m 0600 "$fifo"
+exec 3<>"$fifo"
+
+cd "$SERVER_ROOT"
+exec "$SERVER_ROOT/srcds_run" \
+    -game left4dead2 \
+    -console \
+    -usercon \
+    -tickrate "$TICKRATE" \
+    +port "$PORT" \
+    +sv_lan 0 \
+    +map "$START_MAP" <&3

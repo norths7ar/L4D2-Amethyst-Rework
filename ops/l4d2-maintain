@@ -1,0 +1,1019 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 027
+
+CONFIG_PATH=${L4D2_MAINTAIN_CONFIG:-/etc/l4d2-maintain.conf}
+LIBEXEC_DIR=${L4D2_MAINTAIN_LIBEXEC:-/usr/local/libexec/l4d2-maintain}
+CONSOLE_TOOL="$LIBEXEC_DIR/l4d2-console"
+VPK_TOOL="$LIBEXEC_DIR/vpk_campaigns.py"
+
+if [[ ! -r "$CONFIG_PATH" ]]; then
+    printf 'l4d2-maintain: cannot read %s\n' "$CONFIG_PATH" >&2
+    exit 1
+fi
+# shellcheck source=/dev/null
+source "$CONFIG_PATH"
+
+PENDING_FILE="$STATE_DIR/pending"
+MANAGED_MANIFEST="$STATE_DIR/managed_manifest.sha256"
+BASELINE_MANIFEST="$STATE_DIR/baseline_managed_manifest.sha256"
+CONTENT_MANIFEST="$STATE_DIR/content_manifest.sha256"
+DESIRED_MANIFEST="$STATE_DIR/desired_content.sha256"
+DESIRED_INVENTORY="$STATE_DIR/desired_campaigns.json"
+DESIRED_SNAPSHOT="$STATE_DIR/desired-content"
+DEPLOYED_COMMIT_FILE="$STATE_DIR/deployed_commit"
+TARGET_COMMIT_FILE="$STATE_DIR/target_commit"
+BASELINE_COMMIT_FILE="$STATE_DIR/baseline_commit"
+MAINTENANCE_GATE_CLOSED=0
+
+log() {
+    printf '%s %s\n' "$(date --iso-8601=seconds)" "$*"
+}
+
+die() {
+    log "ERROR: $*" >&2
+    exit 1
+}
+
+require_root() {
+    [[ $EUID -eq 0 ]] || die 'run through sudo or systemd'
+}
+
+run_as_service() {
+    runuser -u "$SERVICE_USER" -- "$@"
+}
+
+ensure_directories() {
+    install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 \
+        "$RELEASES_DIR" "$OVERLAY_DIR" "$CONTENT_DIR" "$RETIRING_DIR" "$BACKUP_DIR"
+    install -d -o root -g "$SERVICE_USER" -m 0750 "$STATE_DIR"
+    install -d -o "$TMUX_USER" -g "$SERVICE_USER" -m 0750 "$UPLOAD_DIR"
+}
+
+acquire_lock() {
+    exec 9>"$STATE_DIR/maintenance.lock"
+    flock -n 9 || die 'another maintenance run is active'
+}
+
+add_pending() {
+    local reason=$1
+    touch "$PENDING_FILE"
+    if ! grep -Fxq "$reason" "$PENDING_FILE"; then
+        printf '%s\n' "$reason" >>"$PENDING_FILE"
+    fi
+}
+
+remove_pending() {
+    local reason=$1
+    local temporary
+    temporary=$(mktemp "$STATE_DIR/.pending.XXXXXX")
+    if [[ -f "$PENDING_FILE" ]]; then
+        grep -Fxv "$reason" "$PENDING_FILE" >"$temporary" || true
+    fi
+    mv -f -- "$temporary" "$PENDING_FILE"
+}
+
+pending_summary() {
+    if [[ -s "$PENDING_FILE" ]]; then
+        paste -sd, "$PENDING_FILE"
+    else
+        printf 'none\n'
+    fi
+}
+
+runtime_kind() {
+    "$CONSOLE_TOOL" runtime
+}
+
+query_server() {
+    "$CONSOLE_TOOL" status
+}
+
+human_count() {
+    local status_output=$1
+    sed -nE 's/^players[[:space:]]*:[[:space:]]*([0-9]+) humans.*/\1/p' <<<"$status_output" | tail -n 1
+}
+
+current_map() {
+    local status_output=$1
+    sed -nE 's/^map[[:space:]]*:[[:space:]]*([^[:space:]]+).*/\1/p' <<<"$status_output" | tail -n 1
+}
+
+server_pid() {
+    pgrep -o -f '[s]rcds_linux' || true
+}
+
+server_uptime_hours() {
+    local pid elapsed
+    pid=$(server_pid)
+    [[ -n "$pid" ]] || {
+        printf '0\n'
+        return
+    }
+    elapsed=$(ps -o etimes= -p "$pid" | tr -d ' ')
+    printf '%s\n' "$((elapsed / 3600))"
+}
+
+validate_relative_path() {
+    local relative=$1
+    [[ -n "$relative" && "$relative" != /* && "$relative" != *'..'* ]] || die "unsafe managed path: $relative"
+}
+
+safe_remove_tree() {
+    local root=$1
+    local target=$2
+    local resolved_root resolved_target
+    resolved_root=$(realpath -m -- "$root")
+    resolved_target=$(realpath -m -- "$target")
+    [[ "$resolved_target" == "$resolved_root/"* && "$resolved_target" != "$resolved_root" ]] \
+        || die "refusing unsafe tree removal: $resolved_target"
+    rm -rf -- "$resolved_target"
+}
+
+manifest_path() {
+    local line=$1
+    printf '%s\n' "${line#*  }"
+}
+
+is_volatile_managed_path() {
+    local relative=$1
+    case "$relative" in
+        addons/sourcemod/gamedata/*|addons/sourcemod/configs/geoip/*.mmdb)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+write_directory_manifest() {
+    local directory=$1
+    local output=$2
+    (
+        cd "$directory"
+        find . -maxdepth 1 -type f -name '*.vpk' -printf '%P\0' \
+            | sort -z \
+            | xargs -0 -r sha256sum
+    ) >"$output"
+}
+
+status_command() {
+    require_root
+    local runtime pid port_state status_output humans map branch head dirty deployed target pending free_gib uptime
+    runtime=$(runtime_kind)
+    pid=$(server_pid)
+    port_state=$(ss -lun "sport = :$PORT" | awk 'NR > 1 { found=1 } END { print found ? "listening" : "closed" }')
+    status_output=''
+    humans='unknown'
+    map='unknown'
+    if [[ "$runtime" == systemd || "$runtime" == tmux ]]; then
+        status_output=$(query_server 2>/dev/null || true)
+        humans=$(human_count "$status_output")
+        map=$(current_map "$status_output")
+        [[ -n "$humans" ]] || humans='unknown'
+        [[ -n "$map" ]] || map='unknown'
+    fi
+
+    branch=$(run_as_service git -C "$INTEGRATION_DIR" branch --show-current 2>/dev/null || printf 'unknown')
+    head=$(run_as_service git -C "$INTEGRATION_DIR" rev-parse --short=12 HEAD 2>/dev/null || printf 'unknown')
+    dirty=$(run_as_service git -C "$INTEGRATION_DIR" status --porcelain 2>/dev/null || printf 'unknown')
+    [[ -n "$dirty" ]] && dirty=yes || dirty=no
+    deployed=$(cat "$DEPLOYED_COMMIT_FILE" 2>/dev/null || printf 'unknown')
+    target=$(cat "$TARGET_COMMIT_FILE" 2>/dev/null || printf 'unknown')
+    pending=$(pending_summary)
+    free_gib=$(df --output=avail -BG "$SERVER_ROOT" | tail -n 1 | tr -dc '0-9')
+    uptime=$(server_uptime_hours)
+
+    printf 'runtime=%s\n' "$runtime"
+    printf 'service=%s\n' "$(systemctl is-active "$SERVICE_NAME" 2>/dev/null || true)"
+    printf 'pid=%s\n' "${pid:-none}"
+    printf 'port_%s=%s\n' "$PORT" "$port_state"
+    printf 'humans=%s\n' "$humans"
+    printf 'map=%s\n' "$map"
+    printf 'uptime_hours=%s\n' "$uptime"
+    printf 'git_branch=%s\n' "$branch"
+    printf 'git_head=%s\n' "$head"
+    printf 'git_dirty=%s\n' "$dirty"
+    printf 'deployed_commit=%s\n' "$deployed"
+    printf 'target_commit=%s\n' "$target"
+    printf 'pending=%s\n' "$pending"
+    printf 'desired_vpks=%s\n' "$(find "$UPLOAD_DIR" -maxdepth 1 -type f -name '*.vpk' 2>/dev/null | wc -l)"
+    printf 'active_vpks=%s\n' "$(find "$CONTENT_DIR" -maxdepth 1 -type f -name '*.vpk' 2>/dev/null | wc -l)"
+    printf 'free_gib=%s\n' "$free_gib"
+    local latest_error
+    latest_error=$(find "$GAME_DIR/addons/sourcemod/logs" -maxdepth 1 -type f -name 'errors_*.log' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n 1 | cut -d' ' -f2- || true)
+    printf 'latest_sourcemod_error=%s\n' "${latest_error:-none}"
+}
+
+preflight_command() {
+    require_root
+    local failed=0 free_gib runtime status_output humans process_count
+    for executable in git rsync flock jq python3 sha256sum tar systemctl runuser ss sudo tmux; do
+        if ! command -v "$executable" >/dev/null; then
+            log "preflight: missing executable $executable"
+            failed=1
+        fi
+    done
+    if [[ ! -x "$STEAMCMD_PATH" ]]; then
+        log "preflight: missing executable $STEAMCMD_PATH"
+        failed=1
+    fi
+    if ! runuser -u "$TMUX_USER" -- sudo -n "$LIBEXEC_DIR/l4d2-start-tmux" --check; then
+        log "preflight: $TMUX_USER cannot run the passwordless tmux fallback helper"
+        failed=1
+    fi
+    for path in "$SERVER_ROOT/srcds_run" "$GAME_DIR" "$INTEGRATION_DIR/.git" "$CONSOLE_TOOL" "$VPK_TOOL"; do
+        if [[ ! -e "$path" ]]; then
+            log "preflight: missing $path"
+            failed=1
+        fi
+    done
+    free_gib=$(df --output=avail -BG "$SERVER_ROOT" | tail -n 1 | tr -dc '0-9')
+    if ((free_gib < MIN_FREE_GIB)); then
+        log "preflight: only ${free_gib} GiB free; ${MIN_FREE_GIB} GiB required"
+        failed=1
+    fi
+    if [[ -n "$(run_as_service git -C "$INTEGRATION_DIR" status --porcelain 2>/dev/null || true)" ]]; then
+        log 'preflight: integration worktree is dirty'
+        failed=1
+    fi
+    process_count=$( (pgrep -f '[s]rcds_linux' || true) | wc -l)
+    if ((process_count > 1)); then
+        log "preflight: multiple srcds_linux processes found ($process_count)"
+        failed=1
+    fi
+    runtime=$(runtime_kind)
+    if [[ "$runtime" == systemd || "$runtime" == tmux ]]; then
+        status_output=$(query_server 2>/dev/null || true)
+        humans=$(human_count "$status_output")
+        if [[ -z "$humans" ]]; then
+            log 'preflight: player count is unknown; mutations will fail closed'
+            failed=1
+        fi
+    elif [[ "$runtime" == unmanaged ]]; then
+        log 'preflight: srcds exists without a controllable systemd/tmux console'
+        failed=1
+    fi
+    ((failed == 0)) || return 1
+    log 'preflight: ok'
+}
+
+ensure_release() {
+    local commit=$1
+    local release="$RELEASES_DIR/$commit"
+    if [[ ! -d "$release" ]]; then
+        local temporary archive
+        temporary=$(mktemp -d "$RELEASES_DIR/.release.XXXXXX")
+        chown "$SERVICE_USER:$SERVICE_USER" "$temporary"
+        archive="$temporary/release.tar"
+        run_as_service git -C "$INTEGRATION_DIR" archive --format=tar --output="$archive" "$commit"
+        run_as_service tar -xf "$archive" -C "$temporary"
+        rm -f -- "$archive"
+        mv -- "$temporary" "$release"
+    fi
+    printf '%s\n' "$release"
+}
+
+prepare_release() {
+    local requested_ref=${1:-}
+    local remote_ref="refs/remotes/$GIT_REMOTE/$GIT_BRANCH"
+    local current_branch baseline_commit branch_head remote_head
+    [[ -z "$(run_as_service git -C "$INTEGRATION_DIR" status --porcelain)" ]] \
+        || die 'integration worktree is dirty; refusing to fetch or switch releases'
+    if [[ ! -f "$MANAGED_MANIFEST" && ! -f "$BASELINE_COMMIT_FILE" ]]; then
+        baseline_commit=$(run_as_service git -C "$INTEGRATION_DIR" rev-parse HEAD)
+        printf '%s\n' "$baseline_commit" >"$BASELINE_COMMIT_FILE"
+    fi
+    log "fetching $GIT_REMOTE/$GIT_BRANCH"
+    run_as_service git -C "$INTEGRATION_DIR" fetch --prune "$GIT_REMOTE" \
+        "+refs/heads/$GIT_BRANCH:$remote_ref"
+    if [[ -z "$requested_ref" ]]; then
+        current_branch=$(run_as_service git -C "$INTEGRATION_DIR" branch --show-current)
+        if [[ "$current_branch" != "$GIT_BRANCH" ]]; then
+            if run_as_service git -C "$INTEGRATION_DIR" show-ref --verify --quiet "refs/heads/$GIT_BRANCH"; then
+                run_as_service git -C "$INTEGRATION_DIR" switch "$GIT_BRANCH"
+            else
+                run_as_service git -C "$INTEGRATION_DIR" switch --create "$GIT_BRANCH" \
+                    --track "$GIT_REMOTE/$GIT_BRANCH"
+            fi
+        fi
+        run_as_service git -C "$INTEGRATION_DIR" merge --ff-only "$remote_ref"
+        branch_head=$(run_as_service git -C "$INTEGRATION_DIR" rev-parse HEAD)
+        remote_head=$(run_as_service git -C "$INTEGRATION_DIR" rev-parse "$remote_ref")
+        [[ "$branch_head" == "$remote_head" ]] \
+            || die "$GIT_BRANCH has unpublished local commits; refusing to publish a different tree"
+        requested_ref="$remote_ref"
+    fi
+    TARGET_COMMIT=$(run_as_service git -C "$INTEGRATION_DIR" rev-parse "${requested_ref}^{commit}")
+    printf '%s\n' "$TARGET_COMMIT" >"$TARGET_COMMIT_FILE"
+    TARGET_RELEASE=$(ensure_release "$TARGET_COMMIT")
+    baseline_commit=$(cat "$BASELINE_COMMIT_FILE" 2>/dev/null || printf '%s' "$TARGET_COMMIT")
+    BASELINE_RELEASE=$(ensure_release "$baseline_commit")
+    [[ -d "$TARGET_RELEASE/addons" && -d "$TARGET_RELEASE/cfg" ]] \
+        || die "release $TARGET_COMMIT is missing addons or cfg"
+}
+
+stage_release() {
+    TARGET_STAGE=$(mktemp -d "$STATE_DIR/.stage.XXXXXX")
+    local managed_dir
+    for managed_dir in $MANAGED_DIRS; do
+        validate_relative_path "$managed_dir"
+        if [[ -d "$TARGET_RELEASE/$managed_dir" ]]; then
+            install -d -m 0750 "$TARGET_STAGE/$managed_dir"
+            rsync -a "$TARGET_RELEASE/$managed_dir/" "$TARGET_STAGE/$managed_dir/"
+        fi
+        if [[ -d "$OVERLAY_DIR/$managed_dir" ]]; then
+            install -d -m 0750 "$TARGET_STAGE/$managed_dir"
+            rsync -a "$OVERLAY_DIR/$managed_dir/" "$TARGET_STAGE/$managed_dir/"
+        fi
+    done
+    rm -f -- "$TARGET_STAGE/$MISSIONCYCLE_PATH"
+    if [[ -d "$TARGET_STAGE/addons/sourcemod/data/sqlite" ]]; then
+        safe_remove_tree "$TARGET_STAGE" "$TARGET_STAGE/addons/sourcemod/data/sqlite"
+    fi
+    TARGET_MANIFEST="$STATE_DIR/target_managed_manifest.sha256"
+    (
+        cd "$TARGET_STAGE"
+        find . -type f -printf '%P\0' | sort -z | xargs -0 -r sha256sum
+    ) >"$TARGET_MANIFEST"
+    write_release_manifest "$BASELINE_RELEASE" "$BASELINE_MANIFEST"
+}
+
+write_release_manifest() {
+    local release=$1
+    local output=$2
+    local managed_dir relative
+    (
+        cd "$release"
+        for managed_dir in $MANAGED_DIRS; do
+            [[ -d "$managed_dir" ]] || continue
+            find "$managed_dir" -type f -print0
+        done | sort -z | while IFS= read -r -d '' relative; do
+            if [[ "$relative" == "$MISSIONCYCLE_PATH" \
+                || "$relative" == addons/sourcemod/data/sqlite/* ]]; then
+                continue
+            fi
+            sha256sum -- "$relative"
+        done
+    ) >"$output"
+}
+
+check_managed_drift() {
+    [[ -f "$MANAGED_MANIFEST" ]] || return 0
+    local line expected relative actual failed=0
+    while IFS= read -r line; do
+        expected=${line%% *}
+        relative=$(manifest_path "$line")
+        validate_relative_path "$relative"
+        if is_volatile_managed_path "$relative"; then
+            continue
+        fi
+        if [[ ! -f "$GAME_DIR/$relative" ]]; then
+            log "managed drift: missing $relative"
+            failed=1
+            continue
+        fi
+        actual=$(sha256sum "$GAME_DIR/$relative" | cut -d' ' -f1)
+        if [[ "$actual" != "$expected" ]]; then
+            log "managed drift: modified $relative"
+            failed=1
+        fi
+    done <"$MANAGED_MANIFEST"
+    ((failed == 0)) || die 'managed files changed outside Git/overlay; import them into overlay or resolve manually'
+}
+
+manifest_contains_path() {
+    local manifest=$1
+    local relative=$2
+    [[ -f "$manifest" ]] \
+        && awk -v wanted="$relative" 'substr($0, 67) == wanted { found=1 } END { exit !found }' "$manifest"
+}
+
+check_new_path_collisions() {
+    local line expected relative actual baseline_hash failed=0
+    while IFS= read -r line; do
+        expected=${line%% *}
+        relative=$(manifest_path "$line")
+        validate_relative_path "$relative"
+        [[ -f "$GAME_DIR/$relative" ]] || continue
+        manifest_contains_path "$MANAGED_MANIFEST" "$relative" && continue
+        is_volatile_managed_path "$relative" && continue
+        actual=$(sha256sum "$GAME_DIR/$relative" | cut -d' ' -f1)
+        [[ "$actual" == "$expected" ]] && continue
+        if [[ ! -f "$MANAGED_MANIFEST" && -f "$BASELINE_RELEASE/$relative" ]]; then
+            baseline_hash=$(sha256sum "$BASELINE_RELEASE/$relative" | cut -d' ' -f1)
+            [[ "$actual" == "$baseline_hash" ]] && continue
+        fi
+        log "ownership collision: target would overwrite unowned $relative"
+        failed=1
+    done <"$TARGET_MANIFEST"
+    ((failed == 0)) || die 'adopt colliding files into Git/overlay before deployment'
+}
+
+check_baseline_retirements() {
+    [[ -f "$MANAGED_MANIFEST" ]] && return 0
+    [[ -f "$BASELINE_MANIFEST" ]] || die 'baseline manifest is unavailable'
+    local line expected relative actual failed=0
+    while IFS= read -r line; do
+        expected=${line%% *}
+        relative=$(manifest_path "$line")
+        validate_relative_path "$relative"
+        manifest_contains_path "$TARGET_MANIFEST" "$relative" && continue
+        [[ -f "$GAME_DIR/$relative" ]] || continue
+        actual=$(sha256sum "$GAME_DIR/$relative" | cut -d' ' -f1)
+        if [[ "$actual" != "$expected" ]]; then
+            log "ownership collision: baseline file changed locally and cannot be retired: $relative"
+            failed=1
+        fi
+    done <"$BASELINE_MANIFEST"
+    ((failed == 0)) || die 'resolve changed baseline files before the first managed deployment'
+}
+
+backup_current() {
+    local label=${1:-maintenance}
+    local timestamp file_list relative line manifest
+    timestamp=$(date +%Y%m%dT%H%M%S)
+    CURRENT_BACKUP="$BACKUP_DIR/${timestamp}-${label}"
+    install -d -o root -g "$SERVICE_USER" -m 0750 "$CURRENT_BACKUP/state"
+    cp -a "$STATE_DIR"/*.sha256 "$STATE_DIR"/*.json "$STATE_DIR"/*commit "$PENDING_FILE" \
+        "$CURRENT_BACKUP/state/" 2>/dev/null || true
+    file_list="$CURRENT_BACKUP/game-files.txt"
+    : >"$file_list"
+    if [[ -f "$MANAGED_MANIFEST" ]]; then
+        while IFS= read -r line; do
+            relative=$(manifest_path "$line")
+            [[ -f "$GAME_DIR/$relative" ]] && printf '%s\n' "$relative" >>"$file_list"
+        done <"$MANAGED_MANIFEST"
+    else
+        for manifest in "$BASELINE_MANIFEST" "$TARGET_MANIFEST"; do
+            [[ -f "$manifest" ]] || continue
+            while IFS= read -r line; do
+                relative=$(manifest_path "$line")
+                [[ -f "$GAME_DIR/$relative" ]] && printf '%s\n' "$relative" >>"$file_list"
+            done <"$manifest"
+        done
+    fi
+    [[ -f "$GAME_DIR/$MISSIONCYCLE_PATH" ]] && printf '%s\n' "$MISSIONCYCLE_PATH" >>"$file_list"
+    sort -u -o "$file_list" "$file_list"
+    if [[ -s "$file_list" ]]; then
+        tar -C "$GAME_DIR" -czf "$CURRENT_BACKUP/game-files.tar.gz" -T "$file_list"
+    fi
+    if [[ -d "$CONTENT_DIR" ]]; then
+        cp -al -- "$CONTENT_DIR" "$CURRENT_BACKUP/content"
+    fi
+    printf '%s\n' "$CURRENT_BACKUP" >"$STATE_DIR/latest_backup"
+    log "backup: $CURRENT_BACKUP"
+}
+
+apply_release() {
+    check_managed_drift
+    check_new_path_collisions
+    check_baseline_retirements
+    local managed_dir line relative deletion_manifest
+    for managed_dir in $MANAGED_DIRS; do
+        if [[ -d "$TARGET_STAGE/$managed_dir" ]]; then
+            install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0775 "$GAME_DIR/$managed_dir"
+            rsync -a --chown="$SERVICE_USER:$SERVICE_USER" \
+                "$TARGET_STAGE/$managed_dir/" "$GAME_DIR/$managed_dir/"
+        fi
+    done
+    deletion_manifest=$MANAGED_MANIFEST
+    [[ -f "$deletion_manifest" ]] || deletion_manifest=$BASELINE_MANIFEST
+    if [[ -f "$deletion_manifest" ]]; then
+        while IFS= read -r line; do
+            relative=$(manifest_path "$line")
+            validate_relative_path "$relative"
+            if ! manifest_contains_path "$TARGET_MANIFEST" "$relative"; then
+                rm -f -- "$GAME_DIR/$relative"
+            fi
+        done <"$deletion_manifest"
+    fi
+    cp -f -- "$TARGET_MANIFEST" "$MANAGED_MANIFEST"
+    printf '%s\n' "$TARGET_COMMIT" >"$DEPLOYED_COMMIT_FILE"
+    remove_pending git
+    log "deployed Git commit $TARGET_COMMIT"
+}
+
+uploads_are_stable() {
+    local now path modified
+    now=$(date +%s)
+    while IFS= read -r -d '' path; do
+        modified=$(stat -c %Y "$path")
+        if ((now - modified < MIN_UPLOAD_AGE_SECONDS)); then
+            log "content: waiting for stable upload $(basename "$path")"
+            return 1
+        fi
+    done < <(find "$UPLOAD_DIR" -maxdepth 1 -type f -name '*.vpk' -print0)
+}
+
+install_atomic() {
+    local source=$1
+    local destination=$2
+    local temporary="${destination}.new.$$"
+    cp --reflink=auto -- "$source" "$temporary"
+    chown "$SERVICE_USER:$SERVICE_USER" "$temporary"
+    chmod 0640 "$temporary"
+    mv -f -- "$temporary" "$destination"
+}
+
+reconcile_missioncycle() {
+    local source=${1:-$GAME_DIR/$MISSIONCYCLE_PATH}
+    local template="$TARGET_RELEASE/$MISSIONCYCLE_PATH"
+    local temporary="$STATE_DIR/missioncycle.new"
+    if [[ ! -f "$source" ]]; then
+        source="$template"
+    fi
+    [[ -f "$source" ]] || die 'no missioncycle.txt source is available'
+    python3 "$VPK_TOOL" reconcile \
+        --source "$source" \
+        --inventory "$DESIRED_INVENTORY" \
+        --output "$temporary" \
+        --section "$MANAGED_CAMPAIGN_SECTION"
+    install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0775 "$(dirname "$GAME_DIR/$MISSIONCYCLE_PATH")"
+    install_atomic "$temporary" "$GAME_DIR/$MISSIONCYCLE_PATH"
+}
+
+prepare_content() {
+    uploads_are_stable || {
+        add_pending content-upload
+        return 0
+    }
+    remove_pending content-upload
+    local inventory_tmp manifest_tmp upload_manifest snapshot_tmp old_snapshot
+    local line expected relative active_hash live_hash changed=0
+    inventory_tmp=$(mktemp "$STATE_DIR/.inventory.XXXXXX")
+    manifest_tmp=$(mktemp "$STATE_DIR/.desired.XXXXXX")
+    upload_manifest=$(mktemp "$STATE_DIR/.upload.XXXXXX")
+    snapshot_tmp=$(mktemp -d "$STATE_DIR/.desired-content.XXXXXX")
+    while IFS= read -r -d '' path; do
+        cp --reflink=auto -- "$path" "$snapshot_tmp/$(basename "$path")"
+    done < <(find "$UPLOAD_DIR" -maxdepth 1 -type f -name '*.vpk' -print0)
+    python3 "$VPK_TOOL" inventory "$snapshot_tmp" --output "$inventory_tmp"
+    write_directory_manifest "$snapshot_tmp" "$manifest_tmp"
+    write_directory_manifest "$UPLOAD_DIR" "$upload_manifest"
+    if ! cmp -s "$manifest_tmp" "$upload_manifest"; then
+        log 'content: upload set changed while snapshotting; deferring it to the next run'
+        safe_remove_tree "$STATE_DIR" "$snapshot_tmp"
+        rm -f -- "$inventory_tmp" "$manifest_tmp" "$upload_manifest"
+        add_pending content-upload
+        return 0
+    fi
+    rm -f -- "$upload_manifest"
+
+    while IFS= read -r line; do
+        relative=$(manifest_path "$line")
+        validate_relative_path "$relative"
+        if grep -Fq "  addons/$relative" "$TARGET_MANIFEST"; then
+            die "uploaded VPK conflicts with repository-managed addons/$relative"
+        fi
+    done <"$manifest_tmp"
+
+    old_snapshot="$STATE_DIR/.desired-content.old.$$"
+    if [[ -d "$DESIRED_SNAPSHOT" ]]; then
+        mv -- "$DESIRED_SNAPSHOT" "$old_snapshot"
+    fi
+    mv -- "$snapshot_tmp" "$DESIRED_SNAPSHOT"
+    [[ ! -d "$old_snapshot" ]] || safe_remove_tree "$STATE_DIR" "$old_snapshot"
+    cp -f -- "$inventory_tmp" "$DESIRED_INVENTORY"
+    cp -f -- "$manifest_tmp" "$DESIRED_MANIFEST"
+    rm -f -- "$inventory_tmp" "$manifest_tmp"
+
+    while IFS= read -r line; do
+        expected=${line%% *}
+        relative=$(manifest_path "$line")
+        active_hash=''
+        if [[ -f "$CONTENT_DIR/$relative" ]]; then
+            active_hash=$(sha256sum "$CONTENT_DIR/$relative" | cut -d' ' -f1)
+            if [[ -f "$GAME_DIR/addons/$relative" ]]; then
+                live_hash=$(sha256sum "$GAME_DIR/addons/$relative" | cut -d' ' -f1)
+                [[ "$live_hash" == "$active_hash" ]] \
+                    || die "content drift: live addons/$relative differs from managed content"
+            else
+                install_atomic "$DESIRED_SNAPSHOT/$relative" "$GAME_DIR/addons/$relative"
+                changed=1
+                log "content: repaired missing live addons/$relative; cold restart remains pending"
+            fi
+        elif [[ -f "$GAME_DIR/addons/$relative" ]]; then
+            live_hash=$(sha256sum "$GAME_DIR/addons/$relative" | cut -d' ' -f1)
+            [[ "$live_hash" == "$expected" ]] \
+                || die "content ownership collision: addons/$relative already exists outside content management"
+        fi
+        if [[ "$active_hash" != "$expected" ]]; then
+            if [[ -f "$CONTENT_DIR/$relative" ]]; then
+                cp --reflink=auto -- "$CONTENT_DIR/$relative" "$RETIRING_DIR/$(date +%Y%m%dT%H%M%S)-$relative"
+            fi
+            install_atomic "$DESIRED_SNAPSHOT/$relative" "$CONTENT_DIR/$relative"
+            install_atomic "$DESIRED_SNAPSHOT/$relative" "$GAME_DIR/addons/$relative"
+            changed=1
+            log "content: activated $relative; cold restart remains pending"
+        fi
+    done <"$DESIRED_MANIFEST"
+
+    reconcile_missioncycle
+    write_directory_manifest "$CONTENT_DIR" "$CONTENT_MANIFEST"
+    if ! cmp -s "$CONTENT_MANIFEST" "$DESIRED_MANIFEST"; then
+        add_pending content-removal
+        changed=1
+    else
+        remove_pending content-removal
+    fi
+    if ((changed)); then
+        add_pending restart
+        if [[ "$(runtime_kind)" == systemd || "$(runtime_kind)" == tmux ]]; then
+            "$CONSOLE_TOOL" reload-addons || log 'content: live addon reload failed; cold restart remains pending'
+        fi
+    fi
+}
+
+apply_content_desired_state() {
+    local line relative desired_names="$STATE_DIR/.desired-names.$$"
+    : >"$desired_names"
+    while IFS= read -r line; do
+        relative=$(manifest_path "$line")
+        printf '%s\n' "$relative" >>"$desired_names"
+        install_atomic "$DESIRED_SNAPSHOT/$relative" "$CONTENT_DIR/$relative"
+        install_atomic "$DESIRED_SNAPSHOT/$relative" "$GAME_DIR/addons/$relative"
+    done <"$DESIRED_MANIFEST"
+
+    while IFS= read -r -d '' path; do
+        relative=$(basename "$path")
+        if ! grep -Fxq "$relative" "$desired_names"; then
+            local retired="$RETIRING_DIR/$(date +%Y%m%dT%H%M%S)-$relative"
+            mv -- "$path" "$retired"
+            rm -f -- "$GAME_DIR/addons/$relative"
+            log "content: retired $relative"
+        fi
+    done < <(find "$CONTENT_DIR" -maxdepth 1 -type f -name '*.vpk' -print0)
+    rm -f -- "$desired_names"
+    cp -f -- "$DESIRED_MANIFEST" "$CONTENT_MANIFEST"
+    reconcile_missioncycle
+    remove_pending content-removal
+    remove_pending restart
+}
+
+check_uptime_pending() {
+    local uptime
+    uptime=$(server_uptime_hours)
+    if ((uptime >= MAX_UPTIME_HOURS)); then
+        add_pending uptime
+    fi
+}
+
+local_steam_build() {
+    sed -nE 's/^[[:space:]]*"buildid"[[:space:]]*"([0-9]+)".*/\1/p' \
+        "$SERVER_ROOT/steamapps/appmanifest_${STEAM_APP_ID}.acf" | head -n 1
+}
+
+check_steam_update() {
+    ((STEAM_UPDATE_ENABLED)) || return 0
+    local stamp="$STATE_DIR/last_steam_check" now last interval output local_build remote_build
+    now=$(date +%s)
+    last=$(cat "$stamp" 2>/dev/null || printf '0')
+    interval=$((STEAM_CHECK_INTERVAL_HOURS * 3600))
+    ((now - last >= interval)) || return 0
+    output=$(mktemp "$STATE_DIR/.steam-info.XXXXXX")
+    if ! run_as_service "$STEAMCMD_PATH" +login anonymous +app_info_update 1 \
+        +app_info_print "$STEAM_APP_ID" +quit >"$output" 2>&1; then
+        log 'steam: update check failed; leaving runtime unchanged'
+        rm -f -- "$output"
+        return 0
+    fi
+    local_build=$(local_steam_build)
+    remote_build=$(awk '
+        /"branches"/ { branches=1 }
+        branches && /"public"/ { public=1; next }
+        public && /"buildid"/ {
+            gsub(/[^0-9]/, "", $0)
+            print
+            exit
+        }
+    ' "$output")
+    rm -f -- "$output"
+    if [[ ! "$local_build" =~ ^[0-9]+$ || ! "$remote_build" =~ ^[0-9]+$ ]]; then
+        log "steam: invalid build comparison local=${local_build:-missing} remote=${remote_build:-missing}; retrying next run"
+        return 0
+    fi
+    printf '%s\n' "$now" >"$stamp"
+    if [[ -n "$local_build" && -n "$remote_build" && "$local_build" != "$remote_build" ]]; then
+        printf '%s\n' "$remote_build" >"$STATE_DIR/target_steam_build"
+        add_pending steam
+        log "steam: build $local_build -> $remote_build pending"
+    fi
+}
+
+apply_steam_update() {
+    grep -Fxq steam "$PENDING_FILE" 2>/dev/null || return 0
+    local target_build installed_build
+    target_build=$(cat "$STATE_DIR/target_steam_build" 2>/dev/null || true)
+    [[ "$target_build" =~ ^[0-9]+$ ]] || die 'steam: pending update has no valid target build'
+    log "steam: updating app $STEAM_APP_ID"
+    run_as_service "$STEAMCMD_PATH" +force_install_dir "$SERVER_ROOT" +login anonymous \
+        +app_update "$STEAM_APP_ID" +quit
+    installed_build=$(local_steam_build)
+    [[ "$installed_build" == "$target_build" ]] \
+        || die "steam: update returned without reaching target build $target_build (installed ${installed_build:-missing})"
+    remove_pending steam
+    rm -f -- "$STATE_DIR/target_steam_build"
+}
+
+stop_runtime() {
+    local runtime
+    runtime=$(runtime_kind)
+    case "$runtime" in
+        systemd)
+            systemctl stop "$SERVICE_NAME"
+            ;;
+        tmux)
+            "$CONSOLE_TOOL" quit || true
+            for _ in {1..30}; do
+                [[ -z "$(server_pid)" ]] && break
+                sleep 1
+            done
+            runuser -u "$TMUX_USER" -- tmux kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+            ;;
+        stopped)
+            ;;
+        *)
+            die 'cannot stop unmanaged srcds process safely'
+            ;;
+    esac
+    for _ in {1..30}; do
+        [[ -z "$(server_pid)" ]] && break
+        sleep 1
+    done
+    [[ -z "$(server_pid)" ]] || die 'srcds did not stop within 30 seconds'
+}
+
+start_runtime() {
+    systemctl start "$SERVICE_NAME"
+}
+
+health_check() {
+    local status_output humans map
+    for _ in {1..60}; do
+        if systemctl is-active --quiet "$SERVICE_NAME" \
+            && ss -lun "sport = :$PORT" | awk 'NR > 1 { found=1 } END { exit !found }'; then
+            status_output=$(query_server 2>/dev/null || true)
+            humans=$(human_count "$status_output")
+            map=$(current_map "$status_output")
+            if [[ -n "$humans" && -n "$map" ]]; then
+                log "health: ok map=$map humans=$humans"
+                return 0
+            fi
+        fi
+        sleep 1
+    done
+    log 'health: service did not become queryable within 60 seconds'
+    return 1
+}
+
+gate_and_confirm_empty() {
+    local runtime status_output humans
+    runtime=$(runtime_kind)
+    [[ "$runtime" == stopped ]] && return 0
+    MAINTENANCE_GATE_CLOSED=1
+    if ! "$CONSOLE_TOOL" gate-close; then
+        log 'maintenance gate: failed to block new joins'
+        return 1
+    fi
+    sleep 2
+    status_output=$(query_server 2>/dev/null || true)
+    humans=$(human_count "$status_output")
+    if [[ "$humans" != 0 ]]; then
+        if "$CONSOLE_TOOL" gate-open; then
+            MAINTENANCE_GATE_CLOSED=0
+        else
+            log 'ERROR: failed to reopen the join gate'
+        fi
+        log "maintenance gate: server is not empty (${humans:-unknown} humans)"
+        return 1
+    fi
+    log 'maintenance gate: new joins blocked and server confirmed empty'
+}
+
+reopen_maintenance_gate_on_exit() {
+    local exit_code=$?
+    trap - EXIT
+    if ((MAINTENANCE_GATE_CLOSED)); then
+        if [[ "$(runtime_kind 2>/dev/null || true)" != stopped ]]; then
+            "$CONSOLE_TOOL" gate-open >/dev/null 2>&1 \
+                || log 'ERROR: failed to reopen the maintenance join gate during cleanup'
+        fi
+    fi
+    exit "$exit_code"
+}
+
+restore_backup() {
+    local backup=$1 line relative manifest
+    log "rollback: restoring $backup"
+    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    for manifest in "$MANAGED_MANIFEST" "$TARGET_MANIFEST"; do
+        [[ -f "$manifest" ]] || continue
+        while IFS= read -r line; do
+            relative=$(manifest_path "$line")
+            validate_relative_path "$relative"
+            rm -f -- "$GAME_DIR/$relative"
+        done <"$manifest"
+    done
+    if [[ -f "$backup/game-files.tar.gz" ]]; then
+        tar -C "$GAME_DIR" -xzf "$backup/game-files.tar.gz"
+    fi
+    while IFS= read -r -d '' path; do
+        rm -f -- "$GAME_DIR/addons/$(basename "$path")"
+    done < <(find "$CONTENT_DIR" -maxdepth 1 -type f -name '*.vpk' -print0)
+    rm -f -- "$CONTENT_DIR"/*.vpk
+    if [[ -d "$backup/content" ]]; then
+        while IFS= read -r -d '' path; do
+            install_atomic "$path" "$CONTENT_DIR/$(basename "$path")"
+            install_atomic "$path" "$GAME_DIR/addons/$(basename "$path")"
+        done < <(find "$backup/content" -maxdepth 1 -type f -name '*.vpk' -print0)
+    fi
+    rm -f -- "$MANAGED_MANIFEST" "$CONTENT_MANIFEST" "$DESIRED_MANIFEST" \
+        "$DESIRED_INVENTORY" "$DEPLOYED_COMMIT_FILE" "$TARGET_COMMIT_FILE" "$PENDING_FILE"
+    cp -a "$backup/state/"* "$STATE_DIR/" 2>/dev/null || true
+    start_runtime
+    health_check
+}
+
+handle_converge_error() {
+    local exit_code=$1
+    trap - ERR
+    log "converge: cold transaction failed with exit code $exit_code; restoring managed state"
+    if ! restore_backup "$CURRENT_BACKUP"; then
+        log 'ERROR: automatic rollback also failed; manual recovery is required'
+    fi
+    if [[ -n "${TARGET_STAGE:-}" && -d "$TARGET_STAGE" ]]; then
+        safe_remove_tree "$STATE_DIR" "$TARGET_STAGE"
+    fi
+    exit "$exit_code"
+}
+
+prune_history() {
+    local expired
+    while IFS= read -r -d '' expired; do
+        safe_remove_tree "$BACKUP_DIR" "$expired"
+    done < <(find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -mtime +14 -print0)
+    find "$RETIRING_DIR" -mindepth 1 -maxdepth 1 -type f -mtime +30 -delete
+    local deployed target release
+    deployed=$(cat "$DEPLOYED_COMMIT_FILE" 2>/dev/null || true)
+    target=$(cat "$TARGET_COMMIT_FILE" 2>/dev/null || true)
+    while IFS= read -r -d '' release; do
+        [[ "$(basename "$release")" == "$deployed" || "$(basename "$release")" == "$target" ]] && continue
+        [[ $(find "$release" -maxdepth 0 -mtime +14 -print) ]] && safe_remove_tree "$RELEASES_DIR" "$release"
+    done < <(find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d -print0)
+}
+
+converge_command() {
+    require_root
+    ensure_directories
+    acquire_lock
+    trap reopen_maintenance_gate_on_exit EXIT
+    local requested_ref=${1:-}
+    local deployed status_output humans runtime
+    prepare_release "$requested_ref"
+    stage_release
+    deployed=$(cat "$DEPLOYED_COMMIT_FILE" 2>/dev/null || true)
+    if [[ "$deployed" != "$TARGET_COMMIT" ]]; then
+        add_pending git
+    fi
+    prepare_content
+    check_uptime_pending
+    check_steam_update
+    if [[ ! -s "$PENDING_FILE" ]]; then
+        log 'converge: already at desired state'
+        safe_remove_tree "$STATE_DIR" "$TARGET_STAGE"
+        return 0
+    fi
+
+    runtime=$(runtime_kind)
+    if [[ "$runtime" == stopped ]]; then
+        humans=0
+    else
+        status_output=$(query_server 2>/dev/null || true)
+        humans=$(human_count "$status_output")
+    fi
+    [[ -n "$humans" ]] || die 'player count unknown; refusing maintenance'
+    if ((humans > 0)); then
+        log "converge: deferred; $humans human player(s), pending=$(pending_summary)"
+        safe_remove_tree "$STATE_DIR" "$TARGET_STAGE"
+        return 0
+    fi
+    if [[ "$runtime" == tmux ]]; then
+        log 'converge: cold changes remain pending until ops/install.sh --activate migrates tmux to systemd'
+        safe_remove_tree "$STATE_DIR" "$TARGET_STAGE"
+        return 0
+    fi
+    backup_current converge
+    if ! gate_and_confirm_empty; then
+        log "converge: deferred after join gate; pending=$(pending_summary)"
+        safe_remove_tree "$STATE_DIR" "$TARGET_STAGE"
+        return 0
+    fi
+    trap 'handle_converge_error $?' ERR
+    stop_runtime
+    MAINTENANCE_GATE_CLOSED=0
+    apply_steam_update
+    if grep -Fxq git "$PENDING_FILE" 2>/dev/null; then
+        apply_release
+    fi
+    apply_content_desired_state
+    remove_pending uptime
+    start_runtime
+    health_check
+    trap - ERR
+    : >"$PENDING_FILE"
+    date +%s >"$STATE_DIR/last_restart"
+    prune_history
+    safe_remove_tree "$STATE_DIR" "$TARGET_STAGE"
+    trap - EXIT
+    log 'converge: complete'
+}
+
+content_sync_command() {
+    require_root
+    ensure_directories
+    acquire_lock
+    prepare_release
+    stage_release
+    prepare_content
+    safe_remove_tree "$STATE_DIR" "$TARGET_STAGE"
+    log "content-sync: pending=$(pending_summary)"
+}
+
+steam_check_command() {
+    require_root
+    ensure_directories
+    acquire_lock
+    rm -f -- "$STATE_DIR/last_steam_check"
+    check_steam_update
+    log "steam-check: pending=$(pending_summary)"
+}
+
+rollback_command() {
+    require_root
+    ensure_directories
+    acquire_lock
+    trap reopen_maintenance_gate_on_exit EXIT
+    local backup=${1:-}
+    if [[ -z "$backup" ]]; then
+        backup=$(cat "$STATE_DIR/latest_backup" 2>/dev/null || true)
+    fi
+    [[ -n "$backup" && -d "$backup" ]] || die 'no valid backup selected'
+    [[ "$(runtime_kind)" != tmux ]] || die 'rollback requires the systemd runtime; migrate first'
+    gate_and_confirm_empty || die 'rollback deferred because the server is occupied or unknown'
+    stop_runtime
+    MAINTENANCE_GATE_CLOSED=0
+    restore_backup "$backup"
+    trap - EXIT
+}
+
+health_command() {
+    require_root
+    health_check
+}
+
+usage() {
+    cat >&2 <<'EOF'
+Usage: l4d2-maintain COMMAND [ARG]
+
+Commands:
+  status                 Show process, players, Git, content and health state.
+  preflight              Validate prerequisites without publishing or restarting.
+  converge [git-ref]     Reconcile Git, VPKs, Steam and uptime at the next empty window.
+  content-sync           Validate VPK desired state and hot-add stable uploads.
+  steam-check            Refresh the Steam build comparison.
+  health                 Require an active, listening and queryable service.
+  rollback [backup-dir]  Restore the latest or selected maintenance backup.
+EOF
+    exit 2
+}
+
+case ${1:-} in
+    status)
+        status_command
+        ;;
+    preflight)
+        preflight_command
+        ;;
+    converge)
+        shift
+        converge_command "${1:-}"
+        ;;
+    content-sync)
+        content_sync_command
+        ;;
+    steam-check)
+        steam_check_command
+        ;;
+    health)
+        health_command
+        ;;
+    rollback)
+        shift
+        rollback_command "${1:-}"
+        ;;
+    *)
+        usage
+        ;;
+esac
