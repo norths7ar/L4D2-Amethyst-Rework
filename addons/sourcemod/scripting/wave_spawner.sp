@@ -132,6 +132,10 @@ public void Event_PlayerDeath(Handle event, const char[] name, bool dontBroadcas
             // 轨迹注：CreateTimer 的第三参数是 data，TIMER_FLAG_NO_MAPCHANGE 应放在第四参数。
             CreateTimer(g_fSISpawnTime, Timer_ResetWave, _, TIMER_FLAG_NO_MAPCHANGE);
         } else { // 后面死的
+            // g_fSISpawnTime 为 0 时，跳过奖励时间计算，避免除以 0 错误
+            if (g_fSISpawnTime == 0.0) {
+                return;
+            }
             // 减去第一只死的时间，计算还有多久下一波
             float interval = time - g_fFirstDeathTime;
             // 剩余复活时间 = 设定复活时间 - 当前时间 + 奖励时间
@@ -163,6 +167,11 @@ public void Event_PlayerDeath(Handle event, const char[] name, bool dontBroadcas
 
 public Action Timer_ResetWave(Handle timer)
 {
+    // Map shutdown and round transitions can fire this while no map is active.
+    if (!IsServerProcessing() || FindEntityByClassname(-1, "worldspawn") == -1) {
+        return Plugin_Handled;
+    }
+
     if (g_fBonusSpawnTime > 0.0) {
         // 等待奖励时间
         // PrintToChatAll("Bonus Time: %.1f", g_fBonusSpawnTime);
