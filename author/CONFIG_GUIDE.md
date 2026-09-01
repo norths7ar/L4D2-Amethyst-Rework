@@ -32,7 +32,7 @@ addons/sourcemod/configs/matchmodes.txt
 | `cfg/cfgogl/<mode>/plugins_1.cfg` 至 `plugins_3.cfg` | 具体加载哪些插件？ | Source 引擎命令缓冲限制下的有序切分。 |
 | `cfg/cfgogl/<mode>/confogl.cfg` / `confogl_off.cfg` | 进入与退出模式各做什么？ | 分别写 on/off 行为；收尾仍由 Rework 生命周期统一处理。 |
 | `cfg/cfgogl/<mode>/mapinfo.txt` | 哪些规则必须按地图覆写？ | 地图例外与物资限制。 |
-| `addons/sourcemod/configs/astredux_profiles.cfg` | Redux 在 1–4 人时的最终规则是什么？ | Redux 的人数基线，由 Profile Controller 读取并应用。 |
+| `addons/sourcemod/configs/astredux_profiles.cfg` | Redux 在 1–4 人时的最终规则是什么？ | Redux 的唯一人数基线；Controller 应用 CVar，规则、刷特和 AutoWipe 组件各自执行。 |
 
 ## 插件加载的职责
 
@@ -59,7 +59,7 @@ sm plugins refresh
 ## 修改规则时的阅读顺序
 
 - 想改 AstMod 的玩法数值：`cfg/cfgogl/astmod/shared_cvars.cfg`、`confogl.cfg` 与相关插件配置。
-- 想改 Redux 的人数、Tank、刷特或临时 override：`astredux_profiles.cfg` 与 `astredux_profile_controller`。
+- 想改 Redux 的人数基线：`astredux_profiles.cfg`；想改执行方式：分别看 `astredux_profile_controller`、`astredux_rules`、`astredux_wave_spawner` 和 `astredux_autowipe`。`!si` 临时值由 Wave Spawner 单独维护。
 - 想改武器：先找当前加载的武器属性插件与该模式的加载清单，再确认这项属性没有被模式 cfg 或 mutation 覆盖。
 - 想改某张地图：该模式的 `cfg/stripper/<mode>/maps/` 与 `mapinfo.txt`。
 - 想排查“切模式后残留”：`confogl_off.cfg` 与 Rework 的 `pred_unload_plugins` 路径。

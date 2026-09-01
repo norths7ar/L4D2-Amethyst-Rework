@@ -46,7 +46,9 @@ char SI_Names[][] =
 };
 
 int tempTankDmg = -1;
+#if !defined ASTREDUX_BUILD
 int tempSITimer = -1;
+#endif
 int tempTankBhop = -1;
 int tempTankRock = -1;
 int tempPlayerInfected = -1;
@@ -54,7 +56,9 @@ int tempPlayerTank = -1;
 int tempM2HunterFlag = -1;
 int tempMorePills = -1;
 int tempKillMapPills = -1;
+#if !defined ASTREDUX_BUILD
 int tempWaveSpawnEnabled = -1;
+#endif
 int tempHardSI = -1;
 int tempRatioDamage = -1;
 int tempRehealth = -1;
@@ -77,7 +81,9 @@ ConVar hReammoSG;
 ConVar hReammoSMG;
 ConVar hReammoSniper;
 
+#if !defined ASTREDUX_BUILD
 ConVar hSITimer;
+#endif
 Handle g_hVote;
 
 ConVar hDmgModifyEnable;
@@ -128,7 +134,9 @@ public void OnPluginStart()
 	hReammoSMG = CreateConVar("ast_reammo_count_SMG",			"100", "冲锋枪回复备弹数量", FCVAR_NOTIFY, true, 1.0);
 	hReammoSniper = CreateConVar("ast_reammo_count_Sniper",		"15", "狙击枪回复备弹数量", FCVAR_NOTIFY, true, 1.0);
 
+#if !defined ASTREDUX_BUILD
 	hSITimer = CreateConVar("ast_sitimer",						"1", "特感刷新速率（旧版）", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+#endif
 	
 	hDmgModifyEnable = CreateConVar("ast_dmgmodify",			"1", "伤害修改总开关", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 	hDmgThreshold = CreateConVar("ast_dma_dmg",					"12.0", "被控扣血数值", FCVAR_NOTIFY, true, 1.0, true, 100.0);
@@ -136,7 +144,9 @@ public void OnPluginStart()
 	hFastGetup = CreateConVar("ast_fast_getup",					"1", "快速起身开关", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 	hFastUseAction = CreateConVar("ast_fast_use_action",		"1", "快速机关读条", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 
+#if !defined ASTREDUX_BUILD
 	HookConVarChange(hSITimer, ReloadVScript);
+#endif
 	g_hReminderTimer = CreateTimer(300.0, Timer_RemindOverrides, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 }
 
@@ -152,8 +162,13 @@ public Action OnRoundStart(Handle event, const char[] name, bool dontBroadcast)
 public void L4D_OnFirstSurvivorLeftSafeArea_Post(int client)
 {
 	// 出门输出特感刷新参数
+#if defined ASTREDUX_BUILD
+	float fTimerCurrent = GetConVarFloat(FindConVar("astredux_wave_interval"));
+	int iLimitCurrent = GetConVarInt(FindConVar("astredux_wave_size"));
+#else
 	float fTimerCurrent = GetConVarFloat(FindConVar("ast_sitimer_new"));
 	int iLimitCurrent = GetConVarInt(FindConVar("ast_silimit_new"));
+#endif
 	PrintToChatAll("\x04[Ast] \x01当前刷新速率：\x03%.1f秒%i特\x01.", fTimerCurrent, iLimitCurrent);
 }
 
@@ -532,8 +547,10 @@ void ReapplyGameplayOverrides()
 	if ((g_iOverrideMask & (1 << 12)) && tempRehealth >= 0) ApplyGameplaySetting(12, tempRehealth, false);
 	if ((g_iOverrideMask & (1 << 13)) && tempReammo >= 0) ApplyGameplaySetting(13, tempReammo, false);
 	if ((g_iOverrideMask & (1 << 15)) && tempSIDamage >= 0) ApplyGameplaySetting(15, tempSIDamage, false);
+#if !defined ASTREDUX_BUILD
 	if ((g_iOverrideMask & (1 << 16)) && tempSITimer >= 0) SetConVarInt(hSITimer, tempSITimer);
 	if ((g_iOverrideMask & (1 << 17)) && tempWaveSpawnEnabled >= 0) SetConVarInt(FindConVar("ast_wave_spawn"), tempWaveSpawnEnabled);
+#endif
 }
 
 public Action Timer_ReapplyGameplayOverrides(Handle timer)
@@ -804,6 +821,33 @@ public void VoteHandler(Handle vote, BuiltinVoteAction action, int param1, int p
 }
 
 
+#if defined ASTREDUX_BUILD
+public Action Menu_SITimer(int client, int args)
+{
+	Menu menu = new Menu(Menu_SITimerHandler);
+	ConVar waveTimer = FindConVar("astredux_wave_interval");
+	ConVar waveLimit = FindConVar("astredux_wave_size");
+	if (waveTimer != null && waveLimit != null) {
+		menu.SetTitle("当前刷新速率：%.1f秒%i特", waveTimer.FloatValue, waveLimit.IntValue);
+	} else {
+		menu.SetTitle("特感刷新参数尚未就绪");
+	}
+	menu.ExitBackButton = true;
+	menu.AddItem("", "使用 !si 修改刷新参数", ITEMDRAW_DISABLED);
+	menu.Display(client, MENU_DISPLAY_TIME);
+	return Plugin_Handled;
+}
+
+public int Menu_SITimerHandler(Menu menu, MenuAction action, int client, int param)
+{
+	if (action == MenuAction_Cancel && param == MenuCancel_ExitBack) {
+		drawPanel(client, 0);
+	} else if (action == MenuAction_End) {
+		delete menu;
+	}
+	return 0;
+}
+#else
 static const char timerOptions[4][] = {
 	"较慢", "默认", "较快", "特感速递！"
 };
@@ -950,6 +994,7 @@ public int WaveSpawnVoteResultHandler(Handle vote, int num_votes, int num_client
 	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
 	return 0;
 }
+#endif
 
 int SIDamageOptions[] = {8, 12, 24};
 
@@ -994,8 +1039,10 @@ public void ResetSettings(bool announce)
 	SetConVarBool(hRatioDamage, false);
 	SIDamage(12.0);
 	SetConVarInt(FindConVar("vs_tank_damage"), 24);
+#if !defined ASTREDUX_BUILD
 	SetConVarInt(hSITimer, 1);
 	SetConVarBool(FindConVar("ast_wave_spawn"), true);
+#endif
 	SetConVarBool(hRehealth, false);
 	SetConVarBool(hReammo, false);
 	ConVar hHardSIEnable = FindConVar("ai_hardsi_enable");
@@ -1012,11 +1059,11 @@ public void ResetSettings(bool announce)
 		SetConVarInt(FindConVar("ast_maxinfected"), 0);
 		SetConVarBool(FindConVar("ast_allowhumantank"), false);
 	}
-	ServerCommand("sm_ast_wave_reset_override");
-
 #if defined ASTREDUX_BUILD
+	ServerCommand("sm_astredux_wave_reset_override");
 	ServerCommand("sm_astredux_profile_reapply");
 #else
+	ServerCommand("sm_ast_wave_reset_override");
 	ConVar hDifficulty = FindConVar("das_fakedifficulty");
 	if (hDifficulty != null) {
 		int iDifficulty = GetConVarInt(hDifficulty);
@@ -1575,7 +1622,11 @@ int CountOverrides()
 		count += mask & 1;
 		mask >>>= 1;
 	}
+#if defined ASTREDUX_BUILD
+	ConVar waveOverride = FindConVar("astredux_wave_override_active");
+#else
 	ConVar waveOverride = FindConVar("ast_wave_override_active");
+#endif
 	if (waveOverride != null && waveOverride.BoolValue) count++;
 	return count;
 }
@@ -1591,8 +1642,13 @@ void PrintGameplayStatus(int client)
 {
 	char status[64];
 	GetGameplayStatus(status, sizeof(status));
+#if defined ASTREDUX_BUILD
+	ConVar waveTimer = FindConVar("astredux_wave_interval");
+	ConVar waveLimit = FindConVar("astredux_wave_size");
+#else
 	ConVar waveTimer = FindConVar("ast_sitimer_new");
 	ConVar waveLimit = FindConVar("ast_silimit_new");
+#endif
 	if (waveTimer != null && waveLimit != null) {
 		PrintToChat(client, "\x04[Ast] \x01当前：\x03%s\x01，刷新 %.1f 秒 / %d 特.", status, waveTimer.FloatValue, waveLimit.IntValue);
 	} else {
