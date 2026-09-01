@@ -24,7 +24,7 @@
 4. 删除的 VPK 立即从 `missioncycle.txt` 隐藏，但有人时保留实际文件。
 5. 从控制台读取真人数。未知时失败关闭；有人时只保留 pending。冷维护前先设置临时服务器密码阻止新连接，再确认空服；中止时解除，成功重启后由 `server.cfg` 恢复正常密码。
 6. 备份、停服、Steam 更新、Git 发布、VPK 退役、重建清单、启动和健康检查。
-7. Git、overlay、missioncycle 或 content 发布失败时只自动恢复一次纳管状态。Steam 本体不做虚假的文件级回滚；更新后的二进制若无法启动，需要使用 Steam/主机快照人工恢复。日志进入 journal，失败的 timer 可由 systemd 直接审计。
+7. Git、overlay、missioncycle 或 content 发布失败时只自动恢复一次纳管状态。启动健康检查默认等待 60 秒，避免 srcds 正常冷启动被四秒级探测误判为失败；Steam 本体不做虚假的文件级回滚，更新后的二进制若无法启动，需要使用 Steam/主机快照人工恢复。日志进入 journal，失败的 timer 可由 systemd 直接审计。
 
 连续运行超过 `MAX_UPTIME_HOURS`（默认 36 小时）只会增加一次待重启理由，不会在有人时强退。timer 每十分钟检查一次；Git、VPK、Steam 或 uptime 任一 pending 都在下一次空服窗口合并处理。
 

@@ -14,6 +14,12 @@ fi
 # shellcheck source=/dev/null
 source "$CONFIG_PATH"
 
+HEALTH_STARTUP_TIMEOUT_SECONDS=${HEALTH_STARTUP_TIMEOUT_SECONDS:-60}
+if [[ ! "$HEALTH_STARTUP_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+    printf 'l4d2-maintain: HEALTH_STARTUP_TIMEOUT_SECONDS must be a positive integer\n' >&2
+    exit 1
+fi
+
 PENDING_FILE="$STATE_DIR/pending"
 MANAGED_MANIFEST="$STATE_DIR/managed_manifest.sha256"
 BASELINE_MANIFEST="$STATE_DIR/baseline_managed_manifest.sha256"
@@ -751,7 +757,8 @@ start_runtime() {
 
 health_check() {
     local status_output humans map reason='service is not active'
-    for _ in {1..4}; do
+    local deadline=$((SECONDS + HEALTH_STARTUP_TIMEOUT_SECONDS))
+    while ((SECONDS < deadline)); do
         if ! systemctl is-active --quiet "$SERVICE_NAME"; then
             reason='service is not active'
         elif ! ss -lun "sport = :$PORT" \
@@ -770,7 +777,7 @@ health_check() {
         fi
         sleep 1
     done
-    log "health: failed after bounded startup window: $reason"
+    log "health: failed after ${HEALTH_STARTUP_TIMEOUT_SECONDS}s startup window: $reason"
     return 1
 }
 
