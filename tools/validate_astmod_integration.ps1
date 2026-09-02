@@ -136,7 +136,12 @@ $requiredPaths = @(
     "addons/sourcemod/extensions/imatchext.autoload",
     "addons/sourcemod/extensions/imatchext.ext.2.l4d2.so",
     "addons/sourcemod/extensions/langparser.ext.2.l4d2.so",
+    "addons/sourcemod/gamedata/fix_exec_config_unicode.txt",
     "addons/sourcemod/gamedata/imatchext.txt",
+    "addons/sourcemod/plugins/fix_exec_config_unicode.smx",
+    "addons/sourcemod/plugins/server_restart.smx",
+    "addons/sourcemod/scripting/fix_exec_config_unicode.sp",
+    "addons/sourcemod/scripting/server_restart.sp",
     "addons/sourcemod/scripting/include/imatchext.inc",
     "addons/sourcemod/translations/imatchext.phrases.txt",
     "addons/sourcemod/translations/chi/imatchext.phrases.txt",
@@ -198,6 +203,15 @@ $pluginListPaths = $pluginListPaths | Sort-Object -Unique
 foreach ($pluginListPath in $pluginListPaths) {
     Assert-PluginListCommands $pluginListPath
 }
+
+Assert-Contains `
+    "cfg/generalfixes.cfg" `
+    '^\s*sm\s+plugins\s+load\s+fix_exec_config_unicode\.smx\s*$' `
+    "Unicode cfg parsing is not restored after a Confogl reload"
+Assert-Contains `
+    "cfg/generalfixes.cfg" `
+    '^\s*sm\s+plugins\s+load\s+server_restart\.smx\s*$' `
+    "server_restart.smx is not in the all-mode generalfixes chain"
 
 $loadPattern = '^\s*sm\s+plugins\s+load\s+([^\s]+)'
 $activeLoads = 0
@@ -340,6 +354,28 @@ Assert-NotContains `
     "addons/sourcemod/scripting/campaign_switcher.sp" `
     'sm_mapvotes' `
     "Campaign Switcher still exposes the retired sm_mapvotes command"
+Assert-Contains `
+    "addons/sourcemod/configs/vote_menu.txt" `
+    '^\s*"sm_mapvote"\s*$' `
+    "The flat !vote menu does not expose !mapvote"
+Assert-Contains `
+    "addons/sourcemod/configs/vote_menu.txt" `
+    '^\s*"sm_chaptervote"\s*$' `
+    "The flat !vote menu does not expose !chaptervote"
+Assert-NotContains `
+    "addons/sourcemod/configs/vote_menu.txt" `
+    '"sm_slots"' `
+    "The no-argument !slots item is still present in !vote"
+Assert-NotContains `
+    "addons/sourcemod/scripting/challenge.sp" `
+    'weapon_allow_m2_hunter|推 Hunter 设定|特感加智' `
+    "The supported !ast menu still contains deferred AstFlex controls"
+foreach ($mode in @("astmod", "astredux", "astflex")) {
+    Assert-NotContains `
+        "cfg/cfgogl/$mode/$mode.cfg" `
+        'weapon_allow_m2_hunter' `
+        "$mode still configures a CVar not provided by the active Hunter plugin"
+}
 Assert-Contains `
     "addons/sourcemod/scripting/pause_coop.sp" `
     'CreateGlobalForward\("OnPause"' `

@@ -78,16 +78,10 @@ public Action CommondVote(int client, int args)
 bool FindConfigName(const char[] cfg, char[] message, int maxlength)
 {
 	g_hVoteMenu.Rewind();
-	if (g_hVoteMenu.GotoFirstSubKey())
+	if (g_hVoteMenu.JumpToKey(cfg))
 	{
-		do
-		{
-			if (g_hVoteMenu.JumpToKey(cfg))
-			{
-				g_hVoteMenu.GetString("label", message, maxlength);
-				return true;
-			}
-		} while (g_hVoteMenu.GotoNextKey());
+		g_hVoteMenu.GetString("label", message, maxlength);
+		return true;
 	}
 	return false;
 }
@@ -103,46 +97,15 @@ void ShowVoteMenu(int client)
 		do
 		{
 			g_hVoteMenu.GetSectionName(sSectionName, sizeof(sSectionName));
-			AddMenuItem(hMenu, sSectionName, sSectionName);
+			char sLabel[64];
+			g_hVoteMenu.GetString("label", sLabel, sizeof(sLabel), sSectionName);
+			AddMenuItem(hMenu, sSectionName, sLabel);
 		} while (g_hVoteMenu.GotoNextKey());
 	}
 	DisplayMenu(hMenu, client, 20);
 }
 
 public int VoteMenuHandler(Handle menu, MenuAction action, int client, int itemPos)
-{
-	if (action == MenuAction_Select)
-	{
-		char sSectionName[64], sBuffer[64];
-		GetMenuItem(menu, itemPos, sSectionName, sizeof(sSectionName));
-		g_hVoteMenu.Rewind();
-		if (g_hVoteMenu.JumpToKey(sSectionName) && g_hVoteMenu.GotoFirstSubKey())
-		{
-			Handle hMenu = CreateMenu(ConfigsMenuHandler);
-			Format(sBuffer, sizeof(sBuffer), "选择 %s :", sSectionName);
-			SetMenuTitle(hMenu, sBuffer);
-			do
-			{
-				g_hVoteMenu.GetSectionName(sSectionName, sizeof(sSectionName));
-				g_hVoteMenu.GetString("label", sBuffer, sizeof(sBuffer));
-				AddMenuItem(hMenu, sSectionName, sBuffer);
-			} while (g_hVoteMenu.GotoNextKey());
-			DisplayMenu(hMenu, client, 20);
-		}
-		else
-		{
-			PrintToChat(client, "没有相关的文件存在1.");
-			ShowVoteMenu(client);
-		}
-	}
-	else if (action == MenuAction_End)
-	{
-		delete menu;
-	}
-	return 1;
-}
-
-public int ConfigsMenuHandler(Handle menu, MenuAction action, int client, int itemPos)
 {
 	if (action == MenuAction_Select)
 	{
@@ -177,10 +140,6 @@ public int ConfigsMenuHandler(Handle menu, MenuAction action, int client, int it
 	{
 		delete menu;
 	}
-	else if (action == MenuAction_Cancel)
-	{
-		ShowVoteMenu(client);
-	}
 
 	return 1;
 }
@@ -188,16 +147,10 @@ public int ConfigsMenuHandler(Handle menu, MenuAction action, int client, int it
 bool FindVoteItem(const char[] itemName, char[] itemType, int maxlength)
 {
 	g_hVoteMenu.Rewind();
-	if (g_hVoteMenu.GotoFirstSubKey())
+	if (g_hVoteMenu.JumpToKey(itemName))
 	{
-		do
-		{
-			if (g_hVoteMenu.JumpToKey(itemName))
-			{
-				g_hVoteMenu.GetString("type", itemType, maxlength);
-				return true;
-			}
-		} while (g_hVoteMenu.GotoNextKey());
+		g_hVoteMenu.GetString("type", itemType, maxlength);
+		return true;
 	}
 	return false;
 }
