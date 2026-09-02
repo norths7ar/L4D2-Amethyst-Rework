@@ -13,7 +13,6 @@ RuntimeDirectory=l4d2
 RuntimeDirectoryMode=0750
 Environment=L4D2_RESTART_CONFIG=/etc/l4d2-restart.conf
 ExecStart=/usr/local/libexec/l4d2/l4d2-run
-ExecStartPost=/usr/local/sbin/l4d2-restart-now --mark-start
 ExecStop=-/usr/local/libexec/l4d2/l4d2-console quit
 Restart=always
 RestartSec=5

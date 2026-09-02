@@ -261,11 +261,16 @@ static void RM_Match_Unload(bool bForced = false)
 	}
 	else
 	{
-		// if we are using chmatch, don't let predictable_unloader unload confogl itself.
-		// all plugins will be unload and load when the new config excuted.
+		// A match change must keep Confogl alive long enough to queue the reload.
+		// The regular off cfg ends with pred_unload_plugins, which unloads Confogl
+		// itself and prevents Timer_DelayToLoadMatchMode from ever running. Reset
+		// mode state here, then let RM_Match_Load perform the single unload_all and
+		// load the newly selected config after the delay.
+		ServerCommand("reset_static_maps");
+		ServerCommand("confogl_resetclientcvars");
+		ServerCommand("confogl_resetcvars");
 		ServerCommand("sm plugins load_unlock");
 		ServerCommand("sm plugins unload optional/predictable_unloader.smx");
-		ExecuteCfg(sBuffer);
 	}
 
 	if (RM_bDebugEnabled || IsDebugEnabled())
@@ -476,25 +481,9 @@ static Action RM_CMD_ChangeMatch(int client, int args)
 
 	RM_Match_Unload(true);
 
-	// give time to fully finish unloading.
-	CreateTimer(1.0, Timer_DelayToLoadMatchMode);
-
-	return Plugin_Handled;
-}
-
-static Action Timer_DelayToLoadMatchMode(Handle timer)
-{
-	// Load
-	if (RM_bIsMatchModeLoaded)
-	{
-		return Plugin_Handled;
-	}
-
-	if (RM_bDebugEnabled || IsDebugEnabled())
-	{
-		LogMessage("[%s] Match mode forced to load! [Change in this case!]", RM_MODULE_NAME);
-	}
-
+	// The change branch above deliberately skips the asynchronous predictable
+	// unloader. Queue the normal load path immediately so reset commands,
+	// unload_all and the new mode cfg execute once in the same command stream.
 	RM_Match_Load();
 
 	return Plugin_Handled;
