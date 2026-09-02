@@ -6,7 +6,7 @@
 
 - 主清单范围是 `addons/sourcemod/plugins/optional/astmod/*.smx`，共 91 个；“当前加载”表示 `astmod`、`astredux` 或 `astflex` 至少有一个模式启用该插件。另有 31 个通用插件已收敛到 Rework 的 `optional/*.smx` 共享版本，不再保留 Ast 隔离副本。
 - “AstMod 2.7.1 一致”表示当前 SMX 与原包同名二进制哈希一致；源码关系另按本清单中的构建状态记录。
-- `repo:` 指本仓库 `addons/sourcemod/scripting/`；`AstSrc:` 指外部参考克隆 `../../repos/L4D2-AstMod-Scriptings-upstream/`。
+- `repo:` 指本仓库直接维护的 `addons/sourcemod/scripting/` 源码；`AstSrc:` 指本仓库保存的上游源码快照 `addons/sourcemod/scripting/upstream/astmod-scriptings/`。两者都不自动证明现有 SMX 由对应源码构建。
 - “源码线索”列出值得核对的文件；可重建关系同时记录源码、编译器、include、参数和产物比较。
 
 ## 总数
