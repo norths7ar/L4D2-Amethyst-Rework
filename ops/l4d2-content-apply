@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 0007
+
+CONFIG_PATH=${L4D2_RESTART_CONFIG:-/etc/l4d2-restart.conf}
+LIBEXEC_DIR=${L4D2_LIBEXEC_DIR:-/usr/local/libexec/l4d2}
+VPK_TOOL="$LIBEXEC_DIR/vpk_campaigns.py"
+RESTART_TOOL=${L4D2_RESTART_TOOL:-/usr/local/sbin/l4d2-restart-now}
+
+usage() {
+    printf 'Usage: sudo l4d2-content-apply [--check]\n' >&2
+    exit 2
+}
+
+mode=apply
+if [[ ${1:-} == --check ]]; then
+    mode=check
+    shift
+fi
+[[ $# -eq 0 ]] || usage
+[[ -r "$CONFIG_PATH" ]] || {
+    printf 'l4d2-content-apply: cannot read %s\n' "$CONFIG_PATH" >&2
+    exit 1
+}
+# shellcheck source=/dev/null
+source "$CONFIG_PATH"
+[[ $EUID -eq 0 ]] || {
+    printf 'l4d2-content-apply: run through sudo\n' >&2
+    exit 1
+}
+[[ -x "$VPK_TOOL" ]] || {
+    printf 'l4d2-content-apply: VPK validator is missing: %s\n' "$VPK_TOOL" >&2
+    exit 1
+}
+
+missioncycle="$GAME_DIR/addons/sourcemod/configs/missioncycle.txt"
+[[ -f "$missioncycle" ]] || {
+    printf 'l4d2-content-apply: mission cycle is missing: %s\n' "$missioncycle" >&2
+    exit 1
+}
+
+exec 9>/run/lock/l4d2-content-apply.lock
+flock -n 9 || {
+    printf 'l4d2-content-apply: another apply is already running\n' >&2
+    exit 1
+}
+
+work_dir=$(mktemp -d /tmp/l4d2-content-apply.XXXXXX)
+candidate=$(mktemp "$(dirname -- "$missioncycle")/.missioncycle.XXXXXX")
+cleanup() {
+    rm -rf -- "$work_dir"
+    rm -f -- "$candidate"
+}
+trap cleanup EXIT
+
+inventory="$work_dir/inventory.json"
+"$VPK_TOOL" inventory "$GAME_DIR/addons" --output "$inventory"
+"$VPK_TOOL" reconcile \
+    --source "$missioncycle" \
+    --inventory "$inventory" \
+    --output "$candidate" \
+    --section '第三方战役'
+
+campaign_count=$(python3 -c \
+    'import json,sys; print(len(json.load(open(sys.argv[1], encoding="utf-8"))["campaigns"]))' \
+    "$inventory")
+printf 'Validated all addon VPK entries; found %s third-party campaign(s).\n' \
+    "$campaign_count"
+
+if cmp -s "$missioncycle" "$candidate"; then
+    printf 'missioncycle.txt is already current.\n'
+else
+    diff -u --label missioncycle.txt.current --label missioncycle.txt.generated \
+        "$missioncycle" "$candidate" || true
+fi
+
+if [[ "$mode" == check ]]; then
+    printf 'Check complete; no files changed and no restart requested.\n'
+    exit 0
+fi
+
+if ! cmp -s "$missioncycle" "$candidate"; then
+    chown "$OWNER_USER:$SERVICE_GROUP" "$candidate"
+    chmod 0660 "$candidate"
+    mv -f -- "$candidate" "$missioncycle"
+    printf 'Updated missioncycle.txt atomically.\n'
+fi
+
+"$RESTART_TOOL" 'validated VPK/SMX content apply'
