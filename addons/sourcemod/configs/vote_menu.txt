@@ -1,31 +1,33 @@
 "VoteMenu"
 {
-	"服务器操作"
+	"sm_votekick"
 	{
-		"sm_votekick"
-		{
-			"type" "panel"
-			"label" "踢人(!votekick)"
-		}
-		"sm_votespec"
-		{
-			"type" "panel"
-			"label" "将人移至旁观(!votespec)"
-		}
-		"sm_slots"
-		{
-			"type" "panel"
-			"label" "开位(!slots)"
-		}
-		"sm_bossvote"
-		{
-			"type" "panel"
-			"label" "Boss Vote(!bossvote)"
-		}
-		"sm_ast"
-		{
-			"type" "panel"
-			"label" "Ast 玩法调整(!ast / !tz)"
-		}
+		"type" "panel"
+		"label" "踢人 (!votekick)"
+	}
+	"sm_votespec"
+	{
+		"type" "panel"
+		"label" "将人移至旁观 (!votespec)"
+	}
+	"sm_mapvote"
+	{
+		"type" "panel"
+		"label" "立即换图 (!mapvote)"
+	}
+	"sm_chaptervote"
+	{
+		"type" "panel"
+		"label" "同战役换关 (!chaptervote)"
+	}
+	"sm_bossvote"
+	{
+		"type" "panel"
+		"label" "Boss 投票 (!bossvote)"
+	}
+	"sm_ast"
+	{
+		"type" "panel"
+		"label" "Ast 玩法调整 (!ast / !tz)"
 	}
 }

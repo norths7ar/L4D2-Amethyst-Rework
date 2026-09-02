@@ -34,6 +34,17 @@ AstMod/AstRedux 只定义进入 Ast 模式后如何游玩。某项功能是否�
 
 运行时 Baseline 使用 `astmod`，Redux 使用独立的 `astredux` matchmode、mutation、cfg、VScript 和插件；`amethyst` 仅用于说明上游历史。
 
+## 待定决策（AstFlex，暂停开发）
+
+AstFlex 当前只保留预览配置，不为它继续拆分插件或扩展菜单。恢复开发时再统一决定：
+
+- 是否允许玩家按房间情况投票开关 Hunter deadstop，以及默认值。
+- 是否允许玩家投票开关 Hard SI，以及默认值。
+- AstFlex 的玩法菜单应使用独立编译产物，还是由共享插件在运行时识别模式。
+- AstMod、AstRedux、AstFlex 之间哪些玩法插件继续复用，哪些应由各模式独立持有。
+
+这些问题不影响当前支持模式：AstMod 与 AstRedux 固定启用 Hunter no-deadstop 和 Hard SI，`!ast` 不提供对应开关。
+
 ## 入口与维护
 
 - `!match` / `!chmatch` / `!rmatch`：由 Rework 统一进入、切换或重置模式。
