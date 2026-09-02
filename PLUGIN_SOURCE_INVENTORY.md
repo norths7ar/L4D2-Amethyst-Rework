@@ -83,6 +83,7 @@
 #### 找到单一源码线索（32）
 
 - `all4dead2.smx` → `AstSrc:all4dead2.sp`
+- `advertisements.smx` → `repo:advertisements.sp`（配置为 `addons/sourcemod/configs/advertisements.txt` 的 `chat`、`center` 等字段格式）
 - `blocktrolls.smx` → `repo:blocktrolls.sp`
 - `difficulty_adjustment_system.smx` → `AstSrc:difficulty_adjustment_system.sp`
 - `HunterSkeetSound.smx` → `AstSrc:HunterSkeetSound.sp`
@@ -122,7 +123,6 @@
 
 #### 仅有二进制（10）
 
-- `advertisements.smx`（海洋说明【确定】：广告插件；运行二进制与 AstMod 2.7.1、2.8.1 包内文件完全一致，配置文件实际为 `addons/sourcemod/configs/advertisements.txt`；其行为与配置格式参见上游 [sm-advertisements](https://github.com/ErikMinekus/sm-advertisements)）
 - `cannounce.smx`（海洋说明【确定】：进服欢迎提示）
 - `enhancedsprays.smx`（海洋说明【确定】：无冷却喷漆、旁观喷漆）
 - `healer_witch.smx`（海洋说明【确定】：秒妹回血）

@@ -1,4 +1,4 @@
-// Advertisements 2.0
+// Advertisements 2.1.2
 // by Tsunami
 //
 // Types
@@ -19,52 +19,34 @@
 {
 	"1"
 	{
-		"type"		"S"
-		"text"		"{GREEN}[公告] {LIGHTGREEN}更新了刷特机制, 只能通过指令修改, 如 !si 0 10, 即 0秒10特."
+		"chat"		"{olive}[刷特] {lightgreen}刷特现在只能用 {green}!si{lightgreen} 调整；例如 {green}!si 0 10{lightgreen}，就是 0 秒 10 特。"
 	}
 	"2"
 	{
-		"type"		"S"
-		"text"		"{GREEN}[公告] {LIGHTGREEN}tz 菜单可更改为旧版刷特."
+		"chat"		"{green}AstMod{lightgreen} 的一代图部分长按机关会按人数档缩短；进度条没坏，大家也别急着催。"
 	}
 	"3"
 	{
-		"type"		"S"
-		"text"		"{GREEN}[公告] {LIGHTGREEN}一代图的长按读条机关时长根据人数有所减少."
+		"chat"		"{green}!ast{lightgreen} 可打开玩法调整菜单；多人时会发起投票，少数服从多数，友尽另算。"
 	}
+	// "4"
+	// {
+	// 	"chat"		"{green}[公告] {lightgreen}本服非长期服, 仅测试使用, 随时关闭。"
+	// }
 	"4"
 	{
-		"type"		"S"
-		"text"		"{GREEN}[公告] {LIGHTGREEN}本服非长期服, 仅测试使用, 随时关闭."
+		"chat"		"{lightgreen}默认难度不一定适合所有人；输入 {olive}!si{lightgreen}，按自己的手感调。"
 	}
 	"5"
 	{
-		"type"		"S"
-		"text"		"{GREEN}[公告] {LIGHTGREEN}地图上默认不刷药, 用完自动发."
+		"chat"		"{olive}[赞助]{lightgreen} 服务器续费全靠爱发电；愿意搭把手的话，服主会很开心。"
 	}
 	"6"
 	{
-		"type"		"S"
-		"text"		"{GREEN}[公告] {LIGHTGREEN}垃圾群: 819906811."
+		"chat"		"{green}[反馈]{lightgreen} 遇到 BUG 请联系服主，并尽量提供地图、模式和发生时间。"
 	}
 	"7"
 	{
-		"type"		"S"
-		"text"		"{GREEN}[公告] {LIGHTGREEN} 默认难度必然不适合所有人, 使用 {OLIVE}!si {LIGHTGREEN}修改难度."
-	}
-	// "8"
-	// {
-	// 	"type"		"S"
-	// 	"text"		"{GREEN}[公告] {LIGHTGREEN} 服务器赞助: {OLIVE}名字没想好{LIGHTGREEN}."
-	// }
-	"9"
-	{
-		"type"		"S"
-		"text"		"{GREEN}[反馈] {LIGHTGREEN}遇到 BUG 请联系服主, 并尽量提供地图、模式和发生时间."
-	}
-	"10"
-	{
-		"type"		"S"
-		"text"		"{GREEN}[好友] {LIGHTGREEN}欢迎添加服主好友, 约人开黑或反馈问题都可以."
+		"chat"		"{green}[服主]{lightgreen} Steam 好友码：{olive}462385728{lightgreen}。欢迎反馈，也欢迎约人开黑。"
 	}
 }
