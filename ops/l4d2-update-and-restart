@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 0007
+
+CONFIG_PATH=${L4D2_RESTART_CONFIG:-/etc/l4d2-restart.conf}
+APPLY_TOOL=${L4D2_CONTENT_APPLY_TOOL:-/usr/local/sbin/l4d2-content-apply}
+
+usage() {
+    printf 'Usage: sudo l4d2-update-and-restart\n' >&2
+    exit 2
+}
+[[ $# -eq 0 ]] || usage
+[[ -r "$CONFIG_PATH" ]] || { printf 'l4d2-update-and-restart: cannot read %s\n' "$CONFIG_PATH" >&2; exit 1; }
+[[ $EUID -eq 0 ]] || { printf 'l4d2-update-and-restart: run through sudo\n' >&2; exit 1; }
+# shellcheck source=/dev/null
+source "$CONFIG_PATH"
+
+CHECKOUT_ROOT=${CHECKOUT_ROOT:-/home/l4d2/integration}
+CHECKOUT_BRANCH=${CHECKOUT_BRANCH:-main}
+CHECKOUT_OWNER=${CHECKOUT_OWNER:-$OWNER_USER}
+CHECKOUT_REMOTE=${CHECKOUT_REMOTE:-origin}
+CONTENT_ROOT=$GAME_DIR
+MARKER_PATH=${L4D2_DEPLOY_MARKER:-/var/lib/l4d2/last-deployed-revision}
+[[ -x "$APPLY_TOOL" ]] || { printf 'l4d2-update-and-restart: apply tool is missing: %s\n' "$APPLY_TOOL" >&2; exit 1; }
+
+is_abs_dir() { [[ $1 == /* && $1 != / && $1 != *'/..'* && $1 != *$'\n'* && $1 != *$'\r'* ]]; }
+is_runtime_path() {
+    local p=$1
+    [[ $p != /* && $p != *$'\n'* && $p != *$'\r'* && $p != .. && $p != ../* && $p != */../* \
+        && ( $p == addons || $p == addons/* || $p == cfg || $p == cfg/* || $p == scripts || $p == scripts/* ) ]]
+}
+is_valid_rev() { [[ $1 =~ ^[0-9a-f]{40}$ ]]; }
+
+is_abs_dir "$CHECKOUT_ROOT" || { printf 'l4d2-update-and-restart: invalid CHECKOUT_ROOT\n' >&2; exit 1; }
+is_abs_dir "$CONTENT_ROOT" || { printf 'l4d2-update-and-restart: invalid CONTENT_ROOT\n' >&2; exit 1; }
+[[ "${CHECKOUT_ROOT%/}" != "${CONTENT_ROOT%/}" ]] || { printf 'l4d2-update-and-restart: checkout and content root must differ\n' >&2; exit 1; }
+[[ $MARKER_PATH == /* && $MARKER_PATH != / && $MARKER_PATH != *'/..'* && $MARKER_PATH != *$'\n'* && $MARKER_PATH != *$'\r'* ]] || {
+    printf 'l4d2-update-and-restart: invalid L4D2_DEPLOY_MARKER\n' >&2
+    exit 1
+}
+[[ -d "$CHECKOUT_ROOT/.git" && -d "$CONTENT_ROOT" ]] || { printf 'l4d2-update-and-restart: checkout or content root is missing\n' >&2; exit 1; }
+id "$CHECKOUT_OWNER" >/dev/null 2>&1 || { printf 'l4d2-update-and-restart: unknown checkout owner: %s\n' "$CHECKOUT_OWNER" >&2; exit 1; }
+for required_command in flock git rsync sudo; do
+    command -v "$required_command" >/dev/null 2>&1 || {
+        printf 'l4d2-update-and-restart: required command is missing: %s\n' "$required_command" >&2
+        exit 1
+    }
+done
+
+exec 9>/run/lock/l4d2-update-and-restart.lock
+flock -n 9 || { printf 'l4d2-update-and-restart: another update is already running\n' >&2; exit 1; }
+
+git_owner() { sudo -H -u "$CHECKOUT_OWNER" -- git -C "$CHECKOUT_ROOT" "$@"; }
+git_owner remote get-url "$CHECKOUT_REMOTE" >/dev/null || { printf 'l4d2-update-and-restart: unknown Git remote: %s\n' "$CHECKOUT_REMOTE" >&2; exit 1; }
+git_owner check-ref-format --branch "$CHECKOUT_BRANCH" >/dev/null || { printf 'l4d2-update-and-restart: invalid checkout branch\n' >&2; exit 1; }
+branch=$(git_owner symbolic-ref --quiet --short HEAD) || { printf 'l4d2-update-and-restart: detached HEAD\n' >&2; exit 1; }
+[[ "$branch" == "$CHECKOUT_BRANCH" ]] || { printf 'l4d2-update-and-restart: expected branch %s, found %s\n' "$CHECKOUT_BRANCH" "$branch" >&2; exit 1; }
+[[ -z "$(git_owner status --porcelain)" ]] || { printf 'l4d2-update-and-restart: checkout is dirty\n' >&2; exit 1; }
+checkout_rev=$(git_owner rev-parse HEAD)
+is_valid_rev "$checkout_rev" || { printf 'l4d2-update-and-restart: invalid checkout revision\n' >&2; exit 1; }
+
+git_owner fetch --prune "$CHECKOUT_REMOTE"
+remote_ref="refs/remotes/$CHECKOUT_REMOTE/$CHECKOUT_BRANCH"
+git_owner rev-parse --verify "$remote_ref^{commit}" >/dev/null || {
+    printf 'l4d2-update-and-restart: remote branch is missing: %s/%s\n' "$CHECKOUT_REMOTE" "$CHECKOUT_BRANCH" >&2
+    exit 1
+}
+git_owner merge-base --is-ancestor HEAD "$remote_ref" || {
+    printf 'l4d2-update-and-restart: local branch is not behind or equal to remote\n' >&2
+    exit 1
+}
+git_owner merge --ff-only "$remote_ref"
+[[ -z "$(git_owner status --porcelain)" ]] || { printf 'l4d2-update-and-restart: checkout became dirty\n' >&2; exit 1; }
+new_rev=$(git_owner rev-parse HEAD)
+is_valid_rev "$new_rev" || { printf 'l4d2-update-and-restart: invalid resulting revision\n' >&2; exit 1; }
+
+old_rev=$checkout_rev
+if [[ -e "$MARKER_PATH" ]]; then
+    old_rev=$(<"$MARKER_PATH")
+    old_rev=${old_rev//$'\n'/}
+    is_valid_rev "$old_rev" || { printf 'l4d2-update-and-restart: invalid deployment marker\n' >&2; exit 1; }
+else
+    printf 'No deployment marker; using pre-update checkout %s as the initial baseline.\n' "$old_rev"
+fi
+git_owner cat-file -e "$old_rev^{commit}"
+git_owner merge-base --is-ancestor "$old_rev" "$new_rev" || {
+    printf 'l4d2-update-and-restart: deployed revision is not an ancestor of the update\n' >&2
+    exit 1
+}
+
+work_dir=$(mktemp -d /tmp/l4d2-update-and-restart.XXXXXX)
+cleanup() { rm -rf -- "$work_dir"; }
+trap cleanup EXIT
+files="$work_dir/files"
+git_owner ls-files -z -- addons/ cfg/ scripts/ >"$files"
+while IFS= read -r -d '' path; do
+    is_runtime_path "$path" || { printf 'l4d2-update-and-restart: unsafe tracked path\n' >&2; exit 1; }
+done <"$files"
+
+if [[ "$old_rev" != "$new_rev" ]]; then
+    deleted="$work_dir/deleted"
+    git_owner diff --name-status -M -z "$old_rev" "$new_rev" -- addons/ cfg/ scripts/ >"$deleted"
+    while IFS= read -r -d '' status && IFS= read -r -d '' old_path; do
+        if [[ "$status" == R* || "$status" == C* ]]; then
+            IFS= read -r -d '' new_path || { printf 'l4d2-update-and-restart: malformed Git diff\n' >&2; exit 1; }
+            [[ "$status" == R* ]] || continue
+            is_runtime_path "$old_path" || { printf 'l4d2-update-and-restart: unsafe deleted path\n' >&2; exit 1; }
+            printf '%s\0' "$old_path" >>"$work_dir/remove"
+        elif [[ "$status" == D* ]]; then
+            is_runtime_path "$old_path" || { printf 'l4d2-update-and-restart: unsafe deleted path\n' >&2; exit 1; }
+            printf '%s\0' "$old_path" >>"$work_dir/remove"
+        fi
+    done <"$deleted"
+fi
+
+rsync -a --delay-updates --chown="$OWNER_USER:$SERVICE_GROUP" \
+    --from0 --files-from="$files" "$CHECKOUT_ROOT/" "$CONTENT_ROOT/"
+if [[ -s "$work_dir/remove" ]]; then
+    while IFS= read -r -d '' path; do
+        rm -f -- "$CONTENT_ROOT/$path"
+    done <"$work_dir/remove"
+fi
+"$APPLY_TOOL"
+install -d -o root -g "${SERVICE_GROUP:-l4d2}" -m 0770 "$(dirname -- "$MARKER_PATH")"
+printf '%s\n' "$new_rev" >"$MARKER_PATH"
+chown root:"${SERVICE_GROUP:-l4d2}" "$MARKER_PATH"
+chmod 0660 "$MARKER_PATH"
+printf 'Updated %s and applied content successfully.\n' "$new_rev"

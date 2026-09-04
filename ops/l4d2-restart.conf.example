@@ -8,6 +8,11 @@ SERVER_ROOT=/home/l4d2/server
 GAME_DIR=/home/l4d2/server/left4dead2
 RUNTIME_DIR=/run/l4d2
 
+# Checkout B is updated by l4d2-update-and-restart and deployed into GAME_DIR (A).
+CHECKOUT_ROOT=/home/l4d2/integration
+CHECKOUT_BRANCH=main
+CHECKOUT_REMOTE=origin
+
 PORT=27015
 START_MAP=c1m1_hotel
 TICKRATE=100

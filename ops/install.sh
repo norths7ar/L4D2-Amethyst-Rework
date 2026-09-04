@@ -39,6 +39,8 @@ install -o root -g root -m 0755 "$SCRIPT_DIR/l4d2-restart-now" \
     /usr/local/sbin/l4d2-restart-now
 install -o root -g root -m 0755 "$SCRIPT_DIR/l4d2-content-apply" \
     /usr/local/sbin/l4d2-content-apply
+install -o root -g root -m 0755 "$SCRIPT_DIR/l4d2-update-and-restart" \
+    /usr/local/sbin/l4d2-update-and-restart
 install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/l4d2-console" \
     "$LIBEXEC_DIR/l4d2-console"
 install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/l4d2-run" \
@@ -68,4 +70,5 @@ systemctl daemon-reload
 systemctl enable l4d2.service
 
 printf 'Installed direct-owner L4D2 operations with explicit content apply.\n'
+printf 'The update helper requires git, rsync, flock, and sudo on the host.\n'
 printf 'Reconnect SSH/SFTP once so ecs-user receives the l4d2 group.\n'

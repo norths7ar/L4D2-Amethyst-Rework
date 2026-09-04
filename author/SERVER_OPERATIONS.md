@@ -1,6 +1,6 @@
 # 服务器操作
 
-服务器是单所有者环境。`ecs-user` 用于 SSH/WinSCP，`l4d2` 只运行游戏；两个账户共享 `l4d2` 组。游戏目录 `/home/l4d2/server` 是唯一真实状态，不使用 overlay、release staging 或单独的 VPK 投递目录。
+服务器是单所有者环境。`ecs-user` 用于 SSH/WinSCP，`l4d2` 只运行游戏；两个账户共享 `l4d2` 组。游戏目录 `/home/l4d2/server` 是唯一运行状态，Git checkout `/home/l4d2/integration` 是仓库内容的部署来源；不使用 overlay、release staging 或单独的 VPK 投递目录。
 
 ## 直接修改
 
@@ -21,9 +21,11 @@
 | 插件 | `addons/sourcemod/plugins/` |
 | 第三方地图 | `addons/` |
 
-CFG、管理员、名字、公告和 Stripper 文件由所有者直接维护，不经过投递或覆盖层。需要立即让 SourceMod 重读管理员时，在服务器控制台执行 `sm_reloadadmins`；普通 CFG 是否立即生效由具体插件和执行时机决定。
+Git 跟踪的 CFG、管理员、公告和 Stripper 文件在仓库中维护，并由 02 部署；未跟踪的服务器私有文件和第三方内容仍可直接维护。需要立即让 SourceMod 重读管理员时，在服务器控制台执行 `sm_reloadadmins`；普通 CFG 是否立即生效由具体插件和执行时机决定。
 
 ## 应用 VPK/SMX
+
+Windows 的唯一更新/部署入口是 `ops/windows/02-apply-content-and-restart.cmd`，远端执行 `sudo l4d2-update-and-restart`。命令要求 Git checkout 位于配置分支且工作树干净，fetch 后仅允许 fast-forward，并以 `OWNER_USER` 身份运行 Git；只部署 Git 跟踪的 `addons/`、`cfg/`、`scripts/` 到 `GAME_DIR`，不覆盖未跟踪文件，也不执行 `rsync --delete`。首次运行以更新前的 checkout revision 为基线，后续使用已成功部署的 revision；只按 Git revision 差异删除被删除或重命名的运行时路径。检查或重启失败时 marker 不更新，01 仍只检查内容，03 仍只重启。
 
 文件仍然直接上传到游戏目录。整批 VPK/SMX 传完后先检查：
 
