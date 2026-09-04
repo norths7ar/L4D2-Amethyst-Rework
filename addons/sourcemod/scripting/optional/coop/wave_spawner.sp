@@ -220,6 +220,11 @@ void ResetWaveNow()
     g_bHasFirstDeath = false;
     g_bWaitingBonus = false;
 
+    if (!IsServerProcessing() || FindEntityByClassname(-1, "worldspawn") == -1)
+    {
+        return;
+    }
+
     int entity = CreateEntityByName("logic_script");
     if (entity != -1)
     {

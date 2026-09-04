@@ -374,6 +374,18 @@ Assert-Contains `
     "cfg/cfgogl/astredux/astredux.cfg" `
     '^\s*confogl_addcvar\s+profile_controller_config\s+"configs/astredux_profiles\.cfg"\s*$' `
     "AstRedux does not configure the generic Profile Controller"
+Assert-RawContains `
+    "addons/sourcemod/scripting/optional/coop/profile_controller.sp" `
+    '(?ms)HookConVarChange\(g_cvProfileConfig,\s*OnProfileConfigChanged\).*?public void OnConfigsExecuted\(\).*?TryInitializeProfiles\(\)' `
+    "Profile Controller does not defer initialization behind the externally configured CVar"
+Assert-NotContains `
+    "addons/sourcemod/scripting/optional/coop/profile_controller.sp" `
+    'SetFailState\(' `
+    "Profile Controller still fails the plugin when its deferred config is unavailable"
+Assert-RawContains `
+    "addons/sourcemod/scripting/optional/coop/wave_spawner.sp" `
+    '(?ms)void ResetWaveNow\(\).*?!IsServerProcessing\(\).*?FindEntityByClassname\(-1,\s*"worldspawn"\).*?CreateEntityByName\(' `
+    "Wave Spawner does not guard ResetWaveNow before creating the script entity"
 Assert-Contains `
     "cfg/cfgogl/astredux/plugins_3.cfg" `
     '^sm plugins load optional/coop/profile_controller\.smx$' `

@@ -39,6 +39,7 @@ public void OnPluginStart()
     g_cvCurrentProfile = CreateConVar("profile_current", "1", "Currently applied player profile.", FCVAR_NOTIFY, true, 1.0, true, 4.0);
     g_cvForcedProfile = CreateConVar("profile_forced", "0", "Force a profile; 0 follows human survivor count.", FCVAR_NOTIFY, true, 0.0, true, 4.0);
     g_cvProfileConfig = CreateConVar("profile_controller_config", "", "Path_SM-relative KeyValues profile configuration.", FCVAR_DONTRECORD);
+    HookConVarChange(g_cvProfileConfig, OnProfileConfigChanged);
 
     RegServerCmd("sm_profile_reapply", Command_ReapplyProfile);
     RegAdminCmd("sm_profile_status", Command_ProfileStatus, ADMFLAG_CONFIG, "Show the active profile.");
@@ -50,31 +51,45 @@ public void OnPluginStart()
 
 public void OnConfigsExecuted()
 {
-    char configPath[PLATFORM_MAX_PATH];
-    g_cvProfileConfig.GetString(configPath, sizeof(configPath));
-    if (configPath[0] == '\0')
+    TryInitializeProfiles();
+}
+
+public void OnProfileConfigChanged(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+    TryInitializeProfiles();
+}
+
+bool TryInitializeProfiles()
+{
+    if (!g_bProfilesLoaded)
     {
-        SetFailState("profile_controller_config is empty; set it to a Path_SM-relative profile config.");
-        return;
-    }
-    char resolvedPath[PLATFORM_MAX_PATH];
-    BuildPath(Path_SM, resolvedPath, sizeof(resolvedPath), configPath);
-    if (!FileExists(resolvedPath))
-    {
-        SetFailState("profile_controller_config points to missing file: %s (resolved %s).", configPath, resolvedPath);
-        return;
-    }
-    if (!LoadProfiles())
-    {
-        SetFailState("Could not load valid profiles from profile_controller_config=%s.", configPath);
-        return;
+        char configPath[PLATFORM_MAX_PATH];
+        g_cvProfileConfig.GetString(configPath, sizeof(configPath));
+        if (configPath[0] == '\0')
+        {
+            return false;
+        }
+
+        char resolvedPath[PLATFORM_MAX_PATH];
+        BuildPath(Path_SM, resolvedPath, sizeof(resolvedPath), configPath);
+        if (!FileExists(resolvedPath))
+        {
+            LogError("[Profile Controller] profile_controller_config points to missing file: %s (resolved %s).", configPath, resolvedPath);
+            return false;
+        }
+        if (!LoadProfiles())
+        {
+            LogError("[Profile Controller] Could not load valid profiles from profile_controller_config=%s.", configPath);
+            return false;
+        }
     }
 
-    ApplyEffectiveProfile("configs_executed", true);
     if (g_hPlayerCountTimer == null)
     {
+        ApplyEffectiveProfile("configs_executed", true);
         g_hPlayerCountTimer = CreateTimer(5.0, Timer_UpdateProfile, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
     }
+    return true;
 }
 
 public void OnMapEnd()
