@@ -6,6 +6,8 @@
 
 Windows 的更新入口是 `ops/windows/02-apply-content-and-restart.cmd`，远端执行 `sudo l4d2-update-and-restart`：它校验 Git checkout 的分支和工作树，只做 fast-forward 更新，将 Git 跟踪的 `addons/`、`cfg/`、`scripts/` 部署到游戏目录，再复用内容校验和重启。01 只检查内容，03 只重启；两者都不执行 Git。
 
+测试期默认开启 `srcds_run -debug`，非零退出后的 Source backtrace 写入 `$SERVER_ROOT/debug.log`。`l4d2-observe.service` 同时以低频滚动记录主机 CPU steal、内存、I/O pressure 和 `srcds_linux` 线程状态；检测到游戏子进程替换或持续 CPU steal 时，会把最近的基线与服务日志封存到 `/var/lib/l4d2-observe/incidents/`。默认保留 7 天；这些值可在 `/etc/l4d2-restart.conf` 调整。
+
 `sudo l4d2-restart-now [原因]` 在 systemd journal 中记录操作者、地图和真人数，然后通过 systemd 重启并等待健康检查。它适合已经有人等着玩的情况。
 
 VPK 或 SMX 上传完成后，显式执行：

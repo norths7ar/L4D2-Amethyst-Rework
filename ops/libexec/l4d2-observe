@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+CONFIG_PATH=${L4D2_RESTART_CONFIG:-/etc/l4d2-restart.conf}
+# shellcheck source=/dev/null
+source "$CONFIG_PATH"
+
+STATE_DIR=/var/lib/l4d2-observe
+BASELINE_LOG="$STATE_DIR/baseline.log"
+INCIDENT_DIR="$STATE_DIR/incidents"
+INTERVAL_SECONDS=${OBSERVE_INTERVAL_SECONDS:-5}
+RETENTION_DAYS=${OBSERVE_RETENTION_DAYS:-7}
+INCIDENT_LINES=${OBSERVE_INCIDENT_LINES:-7200}
+BASELINE_MAX_BYTES=${OBSERVE_BASELINE_MAX_BYTES:-12582912}
+
+install -d -o root -g root -m 0750 "$INCIDENT_DIR"
+touch "$BASELINE_LOG"
+chmod 0640 "$BASELINE_LOG"
+
+find_srcds_pid() {
+    pgrep -o -f '[s]rcds_linux' || true
+}
+
+snapshot_incident() {
+    local reason=$1 timestamp incident
+    timestamp=$(date -u +%Y%m%dT%H%M%SZ)
+    incident="$INCIDENT_DIR/${timestamp}-${reason}.log"
+    {
+        printf 'reason=%s\n' "$reason"
+        printf 'captured_at=%s\n\n' "$(date -Is)"
+        tail -n "$INCIDENT_LINES" "$BASELINE_LOG"
+        if [[ -f ${SRCDS_DEBUG_LOG:-$SERVER_ROOT/debug.log} ]]; then
+            printf '\n== srcds debug.log ==\n'
+            tail -n 400 "${SRCDS_DEBUG_LOG:-$SERVER_ROOT/debug.log}"
+        fi
+        printf '\n== l4d2 journal tail ==\n'
+        journalctl -u "$SERVICE_NAME" -n 400 --no-pager || true
+    } >"$incident"
+    chmod 0640 "$incident"
+    find "$INCIDENT_DIR" -type f -mtime +"$RETENTION_DAYS" -delete
+}
+
+read_cpu() {
+    awk '/^cpu / { for (i = 2; i <= 9; i++) printf "%s%s", $i, (i == 9 ? ORS : " "); exit }' /proc/stat
+}
+
+cpu_percentage() {
+    local before=$1 after=$2 field total_before=0 total_after=0 idle_before idle_after
+    local -a previous current
+    read -r -a previous <<<"$before"
+    read -r -a current <<<"$after"
+    for field in {0..7}; do
+        ((total_before += previous[field]))
+        ((total_after += current[field]))
+    done
+    idle_before=$((previous[3] + previous[4]))
+    idle_after=$((current[3] + current[4]))
+    awk -v total="$((total_after - total_before))" \
+        -v idle="$((idle_after - idle_before))" \
+        -v steal="$((current[7] - previous[7]))" \
+        'BEGIN { if (total <= 0) { print "busy=0.0 idle=0.0 steal=0.0" } else { printf "busy=%.1f idle=%.1f steal=%.1f\n", 100 * (total-idle)/total, 100 * idle/total, 100 * steal/total } }'
+}
+
+last_pid=''
+previous_cpu=$(read_cpu)
+high_steal_samples=0
+
+while true; do
+    sleep "$INTERVAL_SECONDS"
+    current_cpu=$(read_cpu)
+    cpu=$(cpu_percentage "$previous_cpu" "$current_cpu")
+    previous_cpu=$current_cpu
+    pid=$(find_srcds_pid)
+    timestamp=$(date -Is)
+
+    if [[ -n $last_pid && $pid != "$last_pid" ]]; then
+        snapshot_incident "srcds-pid-${last_pid}-to-${pid:-none}"
+    fi
+    last_pid=$pid
+
+    {
+        printf '== %s pid=%s %s ==\n' "$timestamp" "${pid:-none}" "$cpu"
+        printf 'loadavg: '; cat /proc/loadavg
+        printf 'memory: '; free -m | awk 'NR == 2 { printf "total=%sMi available=%sMi swap_used=%sMi\n", $2, $7, $3 }'
+        printf 'pressure: '
+        awk 'NR == 1 { printf "%s ", FILENAME ":" $0 }' /proc/pressure/cpu /proc/pressure/io /proc/pressure/memory
+        printf '\n'
+        if [[ -n $pid ]]; then
+            ps -L -p "$pid" -o pid,tid,psr,stat,%cpu,rss,etime,comm --sort=-%cpu
+        else
+            printf 'srcds_linux not running\n'
+        fi
+        iostat -xz 1 2 | tail -n 24 || true
+        printf '\n'
+    } >>"$BASELINE_LOG"
+
+    if (( $(stat -c %s "$BASELINE_LOG") > BASELINE_MAX_BYTES )); then
+        tail -n "$INCIDENT_LINES" "$BASELINE_LOG" >"$BASELINE_LOG.next"
+        mv -f -- "$BASELINE_LOG.next" "$BASELINE_LOG"
+        chmod 0640 "$BASELINE_LOG"
+    fi
+
+    steal=$(awk -F'[ =]' '{ for (i = 1; i <= NF; i++) if ($i == "steal") { print $(i + 1); exit } }' <<<"$cpu")
+    if awk -v value="$steal" 'BEGIN { exit !(value >= 10) }'; then
+        ((high_steal_samples += 1))
+        if ((high_steal_samples == 3)); then
+            snapshot_incident "sustained-cpu-steal"
+        fi
+    else
+        high_steal_samples=0
+    fi
+done

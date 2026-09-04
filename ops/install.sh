@@ -33,6 +33,7 @@ assert_owned_unit() {
 }
 
 assert_owned_unit /etc/systemd/system/l4d2.service
+assert_owned_unit /etc/systemd/system/l4d2-observe.service
 
 install -d -o root -g root -m 0755 "$LIBEXEC_DIR"
 install -o root -g root -m 0755 "$SCRIPT_DIR/l4d2-restart-now" \
@@ -45,6 +46,8 @@ install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/l4d2-console" \
     "$LIBEXEC_DIR/l4d2-console"
 install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/l4d2-run" \
     "$LIBEXEC_DIR/l4d2-run"
+install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/l4d2-observe" \
+    "$LIBEXEC_DIR/l4d2-observe"
 install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/vpk_campaigns.py" \
     "$LIBEXEC_DIR/vpk_campaigns.py"
 if [[ ! -e "$CONFIG_PATH" ]]; then
@@ -57,6 +60,11 @@ source "$CONFIG_PATH"
 chown root:"$SERVICE_GROUP" "$CONFIG_PATH"
 chmod 0640 "$CONFIG_PATH"
 
+if [[ ${SRCDS_DEBUG:-1} == 1 ]] && ! command -v gdb >/dev/null 2>&1; then
+    printf 'install.sh: SRCDS_DEBUG=1 requires gdb; install it or set SRCDS_DEBUG=0\n' >&2
+    exit 1
+fi
+
 # The SSH/SFTP owner and the game process intentionally share the whole install.
 usermod -a -G "$SERVICE_GROUP" "$OWNER_USER"
 chown "$OWNER_USER:$SERVICE_GROUP" "$SERVER_ROOT" "$GAME_DIR"
@@ -65,9 +73,12 @@ chmod 0750 /home/l4d2
 
 install -o root -g root -m 0644 "$SCRIPT_DIR/systemd/l4d2.service" \
     /etc/systemd/system/l4d2.service
+install -o root -g root -m 0644 "$SCRIPT_DIR/systemd/l4d2-observe.service" \
+    /etc/systemd/system/l4d2-observe.service
 
 systemctl daemon-reload
 systemctl enable l4d2.service
+systemctl enable l4d2-observe.service
 
 printf 'Installed direct-owner L4D2 operations with explicit content apply.\n'
 printf 'The update helper requires git, rsync, flock, and sudo on the host.\n'

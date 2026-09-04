@@ -1,0 +1,18 @@
+# Managed by L4D2-Amethyst-Rework ops/install.sh
+[Unit]
+Description=L4D2 performance and restart observer
+After=l4d2.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+Environment=L4D2_RESTART_CONFIG=/etc/l4d2-restart.conf
+ExecStart=/usr/local/libexec/l4d2/l4d2-observe
+Restart=always
+RestartSec=5
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

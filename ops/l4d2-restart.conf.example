@@ -17,3 +17,14 @@ PORT=27015
 START_MAP=c1m1_hotel
 TICKRATE=100
 HEALTH_STARTUP_TIMEOUT_SECONDS=60
+
+# Keep Valve's crash backtrace path enabled while this server is under test.
+# srcds_run writes its report here after a non-zero srcds_linux exit.
+SRCDS_DEBUG=1
+SRCDS_DEBUG_LOG=$SERVER_ROOT/debug.log
+
+# Low-overhead host/process baseline collected by l4d2-observe.service.
+OBSERVE_INTERVAL_SECONDS=5
+OBSERVE_RETENTION_DAYS=7
+OBSERVE_INCIDENT_LINES=7200
+OBSERVE_BASELINE_MAX_BYTES=12582912
