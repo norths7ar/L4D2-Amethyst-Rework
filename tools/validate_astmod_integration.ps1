@@ -472,8 +472,8 @@ Assert-NotContains `
     "AstRedux still loads the AstMod Wave Spawner"
 Assert-NotContains `
     "cfg/cfgogl/astredux/plugins_3.cfg" `
-    '^\s*sm\s+plugins\s+load\s+optional/astmod/l4d2_jockey_skeet\.smx\s*$' `
-    "AstRedux still loads the AstMod Jockey Skeet plugin"
+    '^\s*sm\s+plugins\s+load\s+optional/(?:[^/\s]+/)*l4d2_jockey_skeet\.smx\s*$' `
+    "AstRedux still loads a Jockey Skeet plugin"
 foreach ($legacyPattern in @('\bWaves\b', 'update_diff_old', 'ast_wave_spawn', 'ast_sitimer(_new)?', 'ast_silimit_new')) {
     Assert-NotContains `
         "scripts/vscripts/astredux.nut" `
