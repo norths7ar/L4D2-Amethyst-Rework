@@ -11,6 +11,24 @@ if ([string]::IsNullOrWhiteSpace($Root)) {
 
 $failures = [System.Collections.Generic.List[string]]::new()
 
+foreach ($removedPath in @(
+    "addons/sourcemod/scripting/astredux_autowipe.sp",
+    "addons/sourcemod/scripting/astredux_challenge.sp",
+    "addons/sourcemod/scripting/astredux_profile_controller.sp",
+    "addons/sourcemod/scripting/astredux_rules.sp",
+    "addons/sourcemod/scripting/astredux_wave_spawner.sp",
+    "addons/sourcemod/scripting/challenge.sp",
+    "addons/sourcemod/plugins/optional/astredux/astredux_autowipe.smx",
+    "addons/sourcemod/plugins/optional/astredux/astredux_profile_controller.smx",
+    "addons/sourcemod/plugins/optional/astredux/astredux_rules.smx",
+    "addons/sourcemod/plugins/optional/astredux/challenge.smx",
+    "addons/sourcemod/plugins/optional/astredux/wave_spawner.smx"
+)) {
+    if (Test-Path -LiteralPath (Join-Path $Root $removedPath)) {
+        Add-Failure "Removed component path still exists: $removedPath"
+    }
+}
+
 function Add-Failure {
     param([string]$Message)
 
@@ -23,6 +41,15 @@ function Assert-Path {
     $path = Join-Path $Root $RelativePath
     if (-not (Test-Path -LiteralPath $path)) {
         Add-Failure "Missing required path: $RelativePath"
+    }
+}
+
+function Assert-NotPath {
+    param([string]$RelativePath)
+
+    $path = Join-Path $Root $RelativePath
+    if (Test-Path -LiteralPath $path) {
+        Add-Failure "Obsolete path still exists: $RelativePath"
     }
 }
 
@@ -146,24 +173,40 @@ $requiredPaths = @(
     "addons/sourcemod/translations/imatchext.phrases.txt",
     "addons/sourcemod/translations/chi/imatchext.phrases.txt",
     "addons/sourcemod/translations/zho/imatchext.phrases.txt",
-    "addons/sourcemod/scripting/campaign_switcher.sp",
-    "addons/sourcemod/scripting/pause_coop.sp",
-    "addons/sourcemod/plugins/optional/astmod/campaign_switcher.smx",
-    "addons/sourcemod/plugins/optional/astmod/pause_coop.smx",
-    "addons/sourcemod/scripting/astredux_profile_controller.sp",
-    "addons/sourcemod/scripting/astredux_wave_spawner.sp",
-    "addons/sourcemod/scripting/astredux_rules.sp",
-    "addons/sourcemod/scripting/astredux_autowipe.sp",
-    "addons/sourcemod/scripting/script_reloader.sp",
+    "addons/sourcemod/scripting/optional/coop/campaign_switcher.sp",
+    "addons/sourcemod/scripting/optional/coop/pause_coop.sp",
+    "addons/sourcemod/plugins/optional/coop/campaign_switcher.smx",
+    "addons/sourcemod/plugins/optional/coop/pause_coop.smx",
+    "addons/sourcemod/scripting/optional/coop/profile_controller.sp",
+    "addons/sourcemod/scripting/optional/coop/wave_spawner.sp",
+    "addons/sourcemod/scripting/optional/coop/tank_health.sp",
+    "addons/sourcemod/scripting/optional/coop/tank_melee_damage.sp",
+    "addons/sourcemod/scripting/optional/coop/witch_control.sp",
+    "addons/sourcemod/scripting/optional/coop/smg_reload_control.sp",
+    "addons/sourcemod/scripting/optional/coop/autowipe.sp",
+    "addons/sourcemod/scripting/optional/coop/challenge.sp",
+    "addons/sourcemod/scripting/optional/coop/kill_rewards.sp",
+    "addons/sourcemod/scripting/optional/coop/si_damage_control.sp",
+    "addons/sourcemod/scripting/optional/coop/use_action_speed.sp",
+    "addons/sourcemod/scripting/optional/coop/script_reloader.sp",
+    "addons/sourcemod/scripting/optional/astmod/challenge.sp",
     "addons/sourcemod/scripting/include/script_reloader.inc",
-    "addons/sourcemod/plugins/optional/astredux/astredux_profile_controller.smx",
-    "addons/sourcemod/plugins/optional/astredux/wave_spawner.smx",
-    "addons/sourcemod/plugins/optional/astredux/astredux_rules.smx",
-    "addons/sourcemod/plugins/optional/astredux/astredux_autowipe.smx",
+    "addons/sourcemod/plugins/optional/coop/profile_controller.smx",
+    "addons/sourcemod/plugins/optional/coop/wave_spawner.smx",
+    "addons/sourcemod/plugins/optional/coop/tank_health.smx",
+    "addons/sourcemod/plugins/optional/coop/tank_melee_damage.smx",
+    "addons/sourcemod/plugins/optional/coop/witch_control.smx",
+    "addons/sourcemod/plugins/optional/coop/smg_reload_control.smx",
+    "addons/sourcemod/plugins/optional/coop/autowipe.smx",
+    "addons/sourcemod/plugins/optional/coop/challenge.smx",
+    "addons/sourcemod/plugins/optional/coop/kill_rewards.smx",
+    "addons/sourcemod/plugins/optional/coop/si_damage_control.smx",
+    "addons/sourcemod/plugins/optional/coop/use_action_speed.smx",
+    "addons/sourcemod/plugins/optional/astmod/challenge.smx",
     "cfg/generalfixes.cfg",
     "cfg/competitive_shared.cfg",
     "cfg/sharedplugins.cfg",
-    "cfg/stripper/astmod",
+    "cfg/stripper/astredux",
     "scripts/vscripts/astmod.nut",
     "scripts/vscripts/astredux.nut",
     "tools/build_astmod_vpk.ps1"
@@ -188,6 +231,8 @@ foreach ($mode in $modes) {
 foreach ($relativePath in $requiredPaths) {
     Assert-Path $relativePath
 }
+
+Assert-NotPath "cfg/stripper/astmod"
 
 $pluginListPaths = @(
     "cfg/generalfixes.cfg",
@@ -255,7 +300,7 @@ foreach ($mode in $modes) {
     if ($modePluginText -notmatch '(?m)^\s*sm\s+plugins\s+load\s+match_vote\.smx\s*$') {
         Add-Failure "$mode does not load match_vote.smx"
     }
-    if ($modePluginText -notmatch '(?m)^\s*sm\s+plugins\s+load\s+optional/astmod/jointeam\.smx\s*$') {
+    if ($modePluginText -notmatch '(?m)^\s*sm\s+plugins\s+load\s+optional/coop/jointeam\.smx\s*$') {
         Add-Failure "$mode does not load jointeam.smx"
     }
     if ($modePluginText -match '(?m)^\s*sm\s+plugins\s+load\s+optional/playermanagement\.smx\s*$') {
@@ -285,16 +330,113 @@ Assert-NotContains `
 
 Assert-Contains `
     "cfg/cfgogl/astredux/plugins_1.cfg" `
-    '^\s*sm\s+plugins\s+load\s+optional/astredux/wave_spawner\.smx\s*$' `
-    "AstRedux does not load its own Wave Spawner"
-Assert-Contains `
+    '^\s*sm\s+plugins\s+load\s+optional/coop/wave_spawner\.smx\s*$' `
+    "AstRedux does not load the shared Coop Wave Spawner"
+foreach ($component in @('tank_health', 'tank_melee_damage', 'witch_control', 'smg_reload_control')) {
+    Assert-Contains `
+        "cfg/cfgogl/astredux/plugins_1.cfg" `
+        "^\s*sm\s+plugins\s+load\s+optional/coop/$component\.smx\s*$" `
+        "AstRedux does not load Coop component $component"
+}
+foreach ($component in @('kill_rewards', 'si_damage_control', 'use_action_speed')) {
+    Assert-Contains "cfg/cfgogl/astredux/plugins_1.cfg" "^\s*sm\s+plugins\s+load\s+optional/coop/$component\.smx\s*$" "AstRedux does not load Coop component $component"
+}
+$astReduxPluginText = Get-Content -LiteralPath (Join-Path $Root "cfg/cfgogl/astredux/plugins_1.cfg") -Raw -Encoding utf8
+$challengeLoadIndex = $astReduxPluginText.IndexOf('sm plugins load optional/coop/challenge.smx', [StringComparison]::Ordinal)
+foreach ($component in @('kill_rewards', 'si_damage_control', 'use_action_speed')) {
+    $componentLoadIndex = $astReduxPluginText.IndexOf("sm plugins load optional/coop/$component.smx", [StringComparison]::Ordinal)
+    if ($componentLoadIndex -lt 0 -or $challengeLoadIndex -lt 0 -or $componentLoadIndex -gt $challengeLoadIndex) {
+        Add-Failure "AstRedux does not load Coop component $component before Challenge"
+    }
+}
+Assert-NotContains `
     "cfg/cfgogl/astredux/plugins_1.cfg" `
-    '^\s*sm\s+plugins\s+load\s+optional/astredux/astredux_rules\.smx\s*$' `
-    "AstRedux does not load its rules component"
+    'astredux_rules|astredux_tank_spawn_health|astredux_tank_melee_damage|astredux_tank_engine_scale|astredux_no_witch|astredux_smg_reload_duration|astredux_smg_silenced_reload_duration' `
+    "AstRedux still references the removed rules component or legacy CVar names"
+
+foreach ($componentPath in @(
+    "addons/sourcemod/scripting/optional/coop/tank_health.sp",
+    "addons/sourcemod/scripting/optional/coop/tank_melee_damage.sp",
+    "addons/sourcemod/scripting/optional/coop/witch_control.sp",
+    "addons/sourcemod/scripting/optional/coop/smg_reload_control.sp"
+)) {
+    Assert-NotContains $componentPath `
+        'astredux_rules|astredux_tank_spawn_health|astredux_tank_melee_damage|astredux_tank_engine_scale|astredux_no_witch|astredux_smg_reload_duration|astredux_smg_silenced_reload_duration' `
+        "Coop component still contains removed rules identifiers"
+}
+foreach ($profileKey in @('tank_spawn_health', 'tank_melee_damage', 'witch_block', 'smg_reload_duration', 'smg_silenced_reload_duration')) {
+    Assert-Contains `
+        "addons/sourcemod/configs/astredux_profiles.cfg" `
+        ('"' + $profileKey + '"') `
+        "AstRedux profile is missing component CVar $profileKey"
+}
+Assert-Contains `
+    "cfg/cfgogl/astredux/astredux.cfg" `
+    '^\s*confogl_addcvar\s+profile_controller_config\s+"configs/astredux_profiles\.cfg"\s*$' `
+    "AstRedux does not configure the generic Profile Controller"
+Assert-Contains `
+    "cfg/cfgogl/astredux/plugins_3.cfg" `
+    '^sm plugins load optional/coop/profile_controller\.smx$' `
+    "AstRedux does not load the generic Profile Controller"
+Assert-Contains `
+    "addons/sourcemod/scripting/optional/coop/challenge.sp" `
+    'RegAdminCmd\("sm_reset"' `
+    "Coop Challenge does not expose sm_reset"
+Assert-NotContains `
+    "addons/sourcemod/scripting/optional/coop/challenge.sp" `
+    'RegAdminCmd\("sm_astreset"' `
+    "Coop Challenge still exposes the old sm_astreset command"
+foreach ($baseline in @(
+    '"vs_tank_damage" "24"',
+    '"ast_pills_enabled" "0"',
+    '"ast_pills_map_kill" "0"',
+    '"kill_rewards_health_enable" "0"',
+    '"kill_rewards_ammo_enable" "0"',
+    '"si_damage_enable" "0"',
+    '"si_damage_ratio_enable" "0"',
+    '"si_damage_base" "12"',
+    '"ast_maxinfected" "0"',
+    '"ast_allowhumantank" "0"',
+    '"ai_hardsi_enable" "1"'
+)) {
+    Assert-Contains "addons/sourcemod/configs/astredux_profiles.cfg" $baseline "AstRedux defaults is missing baseline $baseline"
+}
+Assert-NotContains `
+    "addons/sourcemod/scripting/optional/coop/challenge.sp" `
+    'SetConVarBool\(hRatioDamage|SIDamage\(12\.0\)|SetConVarInt\(FindConVar\("vs_tank_damage"\), 24\)|SetConVarBool\(hRehealth|SetConVarBool\(hReammo' `
+    "Coop Challenge ResetSettings still hardcodes gameplay baselines"
+Assert-NotContains `
+    "addons/sourcemod/scripting/optional/coop/challenge.sp" `
+    'HookEvent\("(?:player_death|infected_death|player_hurt|tongue_|charger_)|SDKHook|L4D2_OnStartUseAction_Post|\b(?:giveAmmo|GiveAmmo)\s*\(' `
+    "Coop Challenge still contains extracted gameplay event or hook logic"
+Assert-Contains `
+    "addons/sourcemod/scripting/optional/coop/kill_rewards.sp" `
+    'HookEvent\("player_death"' `
+    "Kill Rewards does not own special-infected death rewards"
+Assert-Contains `
+    "addons/sourcemod/scripting/optional/coop/kill_rewards.sp" `
+    'HookEvent\("infected_death"' `
+    "Kill Rewards does not own common-infected death rewards"
+Assert-Contains `
+    "addons/sourcemod/scripting/optional/coop/si_damage_control.sp" `
+    'SDKHook\([^\r\n]*SDKHook_OnTakeDamage' `
+    "SI Damage Control does not own its damage hook"
+Assert-Contains `
+    "addons/sourcemod/scripting/optional/coop/si_damage_control.sp" `
+    'HookEvent\("tongue_pull_stopped"' `
+    "SI Damage Control does not own tongue-cut handling"
+Assert-Contains `
+    "addons/sourcemod/scripting/optional/coop/use_action_speed.sp" `
+    'L4D2_OnStartUseAction_Post\(' `
+    "Use Action Speed does not own the use-action hook"
 Assert-NotContains `
     "cfg/cfgogl/astredux/plugins_1.cfg" `
     '^\s*sm\s+plugins\s+load\s+optional/astmod/wave_spawner\.smx\s*$' `
     "AstRedux still loads the AstMod Wave Spawner"
+Assert-NotContains `
+    "cfg/cfgogl/astredux/plugins_3.cfg" `
+    '^\s*sm\s+plugins\s+load\s+optional/astmod/l4d2_jockey_skeet\.smx\s*$' `
+    "AstRedux still loads the AstMod Jockey Skeet plugin"
 foreach ($legacyPattern in @('\bWaves\b', 'update_diff_old', 'ast_wave_spawn', 'ast_sitimer(_new)?', 'ast_silimit_new')) {
     Assert-NotContains `
         "scripts/vscripts/astredux.nut" `
@@ -303,9 +445,8 @@ foreach ($legacyPattern in @('\bWaves\b', 'update_diff_old', 'ast_wave_spawn', '
 }
 
 foreach ($nativeCaller in @(
-    "addons/sourcemod/scripting/astredux_wave_spawner.sp",
-    "addons/sourcemod/scripting/wave_spawner.sp",
-    "addons/sourcemod/scripting/challenge.sp"
+    "addons/sourcemod/scripting/optional/coop/wave_spawner.sp",
+    "addons/sourcemod/scripting/optional/astmod/wave_spawner.sp"
 )) {
     Assert-NotContains `
         $nativeCaller `
@@ -318,11 +459,11 @@ foreach ($nativeCaller in @(
 }
 
 Assert-Contains `
-    "addons/sourcemod/scripting/script_reloader.sp" `
+    "addons/sourcemod/scripting/optional/coop/script_reloader.sp" `
     'CreateNative\("VScript_Reload"' `
     "script_reloader does not publish its reload native"
 Assert-Contains `
-    "addons/sourcemod/scripting/script_reloader.sp" `
+    "addons/sourcemod/scripting/optional/coop/script_reloader.sp" `
     'GlobalForward\("VScript_OnReloaded"' `
     "script_reloader does not publish its completion forward"
 Assert-Contains `
@@ -335,23 +476,23 @@ Assert-NotContains `
     "AstRedux still uses proportional SI limit scaling"
 
 Assert-Contains `
-    "addons/sourcemod/scripting/campaign_switcher.sp" `
+    "addons/sourcemod/scripting/optional/coop/campaign_switcher.sp" `
     '#include <imatchext>' `
     "Campaign Switcher does not use imatchext as its mission registry"
 Assert-Contains `
-    "addons/sourcemod/scripting/campaign_switcher.sp" `
+    "addons/sourcemod/scripting/optional/coop/campaign_switcher.sp" `
     'RegConsoleCmd\("sm_mapvote"' `
     "Campaign Switcher does not register sm_mapvote"
 Assert-Contains `
-    "addons/sourcemod/scripting/campaign_switcher.sp" `
+    "addons/sourcemod/scripting/optional/coop/campaign_switcher.sp" `
     'RegConsoleCmd\("sm_nextmap"' `
     "Campaign Switcher does not register sm_nextmap"
 Assert-Contains `
-    "addons/sourcemod/scripting/campaign_switcher.sp" `
+    "addons/sourcemod/scripting/optional/coop/campaign_switcher.sp" `
     'RegConsoleCmd\("sm_chaptervote"' `
     "Campaign Switcher does not register sm_chaptervote"
 Assert-NotContains `
-    "addons/sourcemod/scripting/campaign_switcher.sp" `
+    "addons/sourcemod/scripting/optional/coop/campaign_switcher.sp" `
     'sm_mapvotes' `
     "Campaign Switcher still exposes the retired sm_mapvotes command"
 Assert-Contains `
@@ -367,7 +508,7 @@ Assert-NotContains `
     '"sm_slots"' `
     "The no-argument !slots item is still present in !vote"
 Assert-NotContains `
-    "addons/sourcemod/scripting/challenge.sp" `
+    "addons/sourcemod/scripting/optional/coop/challenge.sp" `
     'weapon_allow_m2_hunter|推 Hunter 设定|特感加智' `
     "The supported !ast menu still contains deferred AstFlex controls"
 foreach ($mode in @("astmod", "astredux", "astflex")) {
@@ -377,18 +518,18 @@ foreach ($mode in @("astmod", "astredux", "astflex")) {
         "$mode still configures a CVar not provided by the active Hunter plugin"
 }
 Assert-Contains `
-    "addons/sourcemod/scripting/pause_coop.sp" `
+    "addons/sourcemod/scripting/optional/coop/pause_coop.sp" `
     'CreateGlobalForward\("OnPause"' `
     "Coop pause does not publish the pause forward"
 Assert-Contains `
-    "addons/sourcemod/scripting/pause_coop.sp" `
+    "addons/sourcemod/scripting/optional/coop/pause_coop.sp" `
     'CreateGlobalForward\("OnUnpause"' `
     "Coop pause does not publish the unpause forward"
 
 foreach ($mode in @("astmod", "astredux")) {
     Assert-Contains `
         "cfg/cfgogl/$mode/plugins_1.cfg" `
-        'sm plugins load optional/astmod/pause_coop\.smx' `
+        'sm plugins load optional/coop/pause_coop\.smx' `
         "$mode does not load the coop pause implementation"
     Assert-NotContains `
         "cfg/cfgogl/$mode/plugins_1.cfg" `
@@ -403,8 +544,8 @@ Assert-Contains `
 foreach ($mode in $modes) {
     $pluginList = Join-Path $Root "cfg/cfgogl/$mode/plugins_1.cfg"
     $pluginText = Get-Content -LiteralPath $pluginList -Raw -Encoding utf8
-    $reloaderIndex = $pluginText.IndexOf('sm plugins load optional/astmod/script_reloader.smx', [StringComparison]::Ordinal)
-    $wavePath = if ($mode -eq 'astredux') { 'optional/astredux/wave_spawner.smx' } else { 'optional/astmod/wave_spawner.smx' }
+    $reloaderIndex = $pluginText.IndexOf('sm plugins load optional/coop/script_reloader.smx', [StringComparison]::Ordinal)
+    $wavePath = if ($mode -eq 'astredux') { 'optional/coop/wave_spawner.smx' } else { 'optional/astmod/wave_spawner.smx' }
     $waveIndex = $pluginText.IndexOf("sm plugins load $wavePath", [StringComparison]::Ordinal)
     if ($reloaderIndex -lt 0 -or $waveIndex -lt 0 -or $reloaderIndex -gt $waveIndex) {
         Add-Failure "$mode does not load script_reloader before its wave spawner"
