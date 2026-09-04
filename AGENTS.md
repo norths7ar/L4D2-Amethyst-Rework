@@ -2,20 +2,18 @@
 
 ## Project Identity
 
-- Maintain a complete L4D2 server configuration on top of L4D2 Competitive Rework, with the AstMod PVE family exposed as independent Confogl matchmodes.
-- Mode roles: `astmod` = maintained personal Baseline rather than a byte-for-byte historical archive; `astredux` = runnable parallel development mode that reuses unchanged AstMod assets while replacing rules with Redux-owned components; `astflex` = paused low-pressure preview retained until Redux or another viable Coop-native base exists. Read `README.md` for current priorities rather than duplicating the roadmap here.
+- Maintain a complete L4D2 server configuration on top of L4D2 Competitive Rework. AstRedux is the formal current Coop/PVE gameplay mainline; AstMod remains a legacy compatibility mode, and AstFlex is paused except for mechanical maintenance that prevents broken paths. Read `README.md` for current priorities rather than duplicating a roadmap here.
 - Do not broadly rewrite Competitive Rework core without a concrete mode need and review.
 
 ## Sources of truth
 
-- `README.md`: project intent, mode positioning, AstMod → AstRedux differences, Redux status, and roadmap.
-- `ASTMOD_INTEGRATION.md`: how the AstMod Baseline is integrated into Competitive Rework, including copied assets, lifecycle boundaries, known issues, and AstMod validation history.
+- `README.md`: project intent and current mode positioning.
 - `PLUGIN_SOURCE_INVENTORY.md`: bundled SMX provenance, source leads, and rebuild boundaries.
 - `addons/sourcemod/configs/matchmodes.txt`: registered matchmode IDs.
 - `cfg/cfgogl/<mode>/`, SourceMod configs, and active plugin-load cfgs: actual runtime behavior and gameplay values.
 - `tools/validate_astmod_integration.ps1`: maintained static checks.
 
-Keep these in their own lane. AGENTS records durable maintenance invariants, not current gameplay values or a second copy of project status. README explains intent and meaningful design differences but should link to authoritative configs instead of duplicating frequently changing numeric tables. Use ASTMOD_INTEGRATION for Baseline integration facts and PLUGIN_SOURCE_INVENTORY for binary provenance.
+Keep these in their own lane. AGENTS records durable maintenance invariants, not current gameplay values or a second copy of project status. README explains intent and meaningful design differences but should link to authoritative configs instead of duplicating frequently changing numeric tables. Use PLUGIN_SOURCE_INVENTORY for binary provenance.
 
 ## Runtime and validation
 
@@ -34,13 +32,15 @@ Keep these in their own lane. AGENTS records durable maintenance invariants, not
 
 ## Hard constraints
 
-- Naming boundary: the stable Baseline uses `astmod`; the parallel development mode owns the `astredux` matchmode, mutation, cfg, VScript, and replacement-plugin names while reusing AstMod assets that it has not replaced. The old `amethyst` namespace may appear only in historical/upstream provenance. Keep Redux changes isolated until deliberately backported. AstFlex development is paused.
+- Naming boundary: `astredux` is the current Coop/PVE matchmode, mutation, cfg, VScript, and identity namespace. `astmod` is the legacy compatibility mode; `astflex` is paused and receives only mechanical path maintenance. Generic shared components must not be named for either mode. The old `amethyst` namespace may appear only in historical/upstream provenance.
 - Shared-plugin boundary: `cfg/generalfixes.cfg` must remain mode-neutral. Human-PvP policy belongs in `cfg/competitive_shared.cfg`; Ast modes load `jointeam.smx` and must not also load `playermanagement.smx`.
 - Competitive Rework owns framework lifecycle. Never place `sm plugins load_unlock`, `unload_all`, `load_lock`, or `refresh` in custom mode cfgs. Custom modes must follow the current Rework lifecycle instead of managing plugin locking or full teardown themselves.
-- AstMod-only plugins and unchanged implementations reused by Ast modes stay under `addons/sourcemod/plugins/optional/astmod/`; Redux-owned replacements stay under `addons/sourcemod/plugins/optional/astredux/`. Do not reintroduce `confogl_autoloader.smx`.
+- Plugin directories follow the runtime ecology: `optional/` root for cross-mode components, `optional/competitive/` for Human Survivor-vs-Infected PVP, `optional/coop/` for Coop/PVE and shared Coop components, `optional/astmod/` for AstMod legacy-specific implementations, `optional/astmod/disabled/` for unloaded AstMod binaries, and `plugins/disabled/` for other unloaded non-AstMod-specific binaries. Do not create `legacy/` or `versus/` namespaces, and do not reintroduce `confogl_autoloader.smx`.
+- Challenge implementations are kept separately as `optional/coop/challenge.smx` and `optional/astmod/challenge.smx`; shared code duplication is acceptable to keep either implementation from depending on the other mode.
+- The `astredux_rules` behavior is split into the Coop components `tank_health`, `tank_melee_damage`, `witch_control`, and `smg_reload_control`.
 - Do not overwrite same-name Competitive Rework core files with older AstMod copies. The plugin-load cfg split (`plugins_1/2/3.cfg`) preserves staged load order. Plugin-list cfgs may contain only plugin lifecycle commands and `exec` calls to other plugin lists; gameplay CVars and unrelated commands belong in the mode or shared runtime cfg that owns them. Changing cross-stage load order, collapsing the split, or moving dependency-sensitive plugins requires dependency analysis and runtime validation.
 - Use `confogl_addcvar` for match-scoped values that should remain fixed during play. Use `sm_cvar` for values that plugins intentionally change at runtime so Confogl does not report expected changes as tracked-CVar violations.
 - Treat existing author and upstream comments as maintenance evidence, especially comments that explain design intent, game-engine quirks, compatibility constraints, provenance, or deliberately disabled behavior. Refactors must move or update those comments with the code instead of deleting them merely for brevity or style. Before removing substantial comments or commented reference code, compare with `AstSrc` or the relevant upstream; remove it only when it is demonstrably stale, incorrect, or valueless debug residue, and preserve the rationale in a replacement comment when the behavior remains.
 - `astmod.vpk` is rebuilt from `assets/astmod_vpk/` by `tools/build_astmod_vpk.ps1`. Recheck its `gamemodes.txt` after game updates and when combining addons that ship the same path. Missing source or a reproducible build for some bundled SMX files does not block unrelated configuration and integration maintenance. State provenance honestly: do not claim bundled `.smx` files were rebuilt, source-matched, or audited when they were not.
 - Third-party campaign compatibility is first-class. Do not suppress map instructor hints, scripted bosses, mechanisms, or finale progression without a mode-specific reason and a runtime test. Preserve AstMod custom SI spawning as mode identity unless the user explicitly changes that decision.
-- `astredux` is a parallel rules experiment focused on a Coop-native base and third-party campaign compatibility. Preserve AstMod as the stable Versus-backed Baseline while Redux evolves independently.
+- `cfg/stripper/astredux/` is the authoritative Stripper directory shared by AstRedux and the legacy AstMod (and paused AstFlex) modes; it must not be described as AstMod-owned. AstRedux does not load Jockey Skeet.

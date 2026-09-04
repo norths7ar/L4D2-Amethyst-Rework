@@ -4,7 +4,7 @@
 
 ## 先从调用链读起
 
-以玩家在游戏内选择 `!match` 的 `astmod` 为例：
+以玩家在游戏内选择 `!match` 的 `astredux` 为例：
 
 ```text
 addons/sourcemod/configs/matchmodes.txt
@@ -18,7 +18,7 @@ addons/sourcemod/configs/matchmodes.txt
       → mapinfo.txt：地图特例与物资限制
 ```
 
-`astredux` 复用同一条骨架，并以自己的 `cfg/cfgogl/astredux/`、`astredux` mutation、Redux 专属插件和 `addons/sourcemod/configs/astredux_profiles.cfg` 组成独立规则层。
+`astmod` 复用同一条骨架，但它是 legacy 兼容模式；`astredux` 是当前 Coop/PVE 主线，以 `cfg/cfgogl/astredux/`、`astredux` mutation、模式身份入口和 `addons/sourcemod/configs/astredux_profiles.cfg` 组成规则层。AstRedux 的 generic profile controller 通过 `profile_controller_config` 指向 `configs/astredux_profiles.cfg`。AstMod 与 AstRedux（以及暂停的 AstFlex）共享的 Stripper 资产权威目录是 `cfg/stripper/astredux/`。
 
 ## 各层只回答一个问题
 
@@ -27,12 +27,12 @@ addons/sourcemod/configs/matchmodes.txt
 | `cfg/server.cfg` | 这台服务器的全局基线是什么？ | 日志、网络、槽位等不随模式切换的设置。 |
 | `cfg/generalfixes.cfg` | 所有模式都需要哪些引擎修复？ | 模式中立的引擎修复入口。 |
 | `addons/sourcemod/configs/matchmodes.txt` | 玩家可以选择哪些模式？ | 注册 ID 与显示名；每个条目对应一套完整的模式配置。 |
-| `cfg/cfgogl/<mode>/shared_cvars.cfg` | 这个模式以什么 mutation、Stripper 和共同规则运行？ | 模式身份和模式级 CVar。 |
+| `cfg/cfgogl/<mode>/shared_cvars.cfg` | 这个模式以什么 mutation、Stripper 和共同规则运行？ | 模式身份和模式级 CVar；AstRedux/AstMod/AstFlex 的 Stripper 路径均指向共享权威目录。 |
 | `cfg/cfgogl/<mode>/confogl_plugins.cfg` | 该模式要加载哪几段插件清单？ | 只负责确定顺序地 `exec plugins_1/2/3.cfg`。 |
 | `cfg/cfgogl/<mode>/plugins_1.cfg` 至 `plugins_3.cfg` | 具体加载哪些插件？ | Source 引擎命令缓冲限制下的有序切分。 |
 | `cfg/cfgogl/<mode>/confogl.cfg` / `confogl_off.cfg` | 进入与退出模式各做什么？ | 分别写 on/off 行为；收尾仍由 Rework 生命周期统一处理。 |
 | `cfg/cfgogl/<mode>/mapinfo.txt` | 哪些规则必须按地图覆写？ | 地图例外与物资限制。 |
-| `addons/sourcemod/configs/astredux_profiles.cfg` | Redux 在 1–4 人时的最终规则是什么？ | Redux 的唯一人数基线；Controller 应用 CVar，规则、刷特和 AutoWipe 组件各自执行。 |
+| `addons/sourcemod/configs/astredux_profiles.cfg` | Redux 在 1–4 人时的最终规则是什么？ | Redux 的唯一人数基线；generic Controller 应用 CVar，`tank_health`、`tank_melee_damage`、`witch_control`、`smg_reload_control`、刷特和 AutoWipe 组件各自执行。 |
 
 ## 插件加载的职责
 
@@ -59,9 +59,9 @@ sm plugins refresh
 ## 修改规则时的阅读顺序
 
 - 想改 AstMod 的玩法数值：`cfg/cfgogl/astmod/shared_cvars.cfg`、`confogl.cfg` 与相关插件配置。
-- 想改 Redux 的人数基线：`astredux_profiles.cfg`；想改执行方式：分别看 `astredux_profile_controller`、`astredux_rules`、`astredux_wave_spawner` 和 `astredux_autowipe`。`!si` 临时值由 Wave Spawner 单独维护。
+- 想改 Redux 的人数基线：`astredux_profiles.cfg`；想改执行方式：分别看 `profile_controller`、`tank_health`、`tank_melee_damage`、`witch_control`、`smg_reload_control`、`wave_spawner` 和 `autowipe`。`!si` 临时值由 Wave Spawner 单独维护。
 - 想改武器：先找当前加载的武器属性插件与该模式的加载清单，再确认这项属性没有被模式 cfg 或 mutation 覆盖。
-- 想改某张地图：该模式的 `cfg/stripper/<mode>/maps/` 与 `mapinfo.txt`。
+- 想改某张地图：先读共享权威目录 `cfg/stripper/astredux/maps/`，再读对应模式的 `mapinfo.txt`；不要把该目录描述成 AstMod 专属。
 - 想排查“切模式后残留”：`confogl_off.cfg` 与 Rework 的 `pred_unload_plugins` 路径。
 
 ## 维护原则
@@ -69,4 +69,4 @@ sm plugins refresh
 - 一项规则有明确的权威位置，其他文档链接过去。
 - 改动前先定位它属于全服基线、模式规则、地图例外或运行时临时调整。
 - 玩法验证由实际进图和模式往返完成；静态校验覆盖资产和加载声明。
-- 历史命名、资产来源和已知限制记录在 `ASTMOD_INTEGRATION.md`。
+- 二进制来源与可重建性记录在 `PLUGIN_SOURCE_INVENTORY.md`；当前模式行为以实际 cfg、插件加载清单和 VScript 为准。
