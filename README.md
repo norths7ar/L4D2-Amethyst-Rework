@@ -16,6 +16,10 @@ AstMod 是海洋维护的原版Config，最新版本为2.8.1；AstRedux 是轨�
 
 Competitive Rework 负责模式生命周期、通用修复、基础管理、投票与对抗规则等共享能力。
 
+服务器没有 matchmode 时，首个客户端进入会由 `cfg/server.cfg` 自动触发 `public_coop`；空服时保持该模式。加载 `campaign_switcher` 的模式在空服倒计时后，会切换到配置的 `campaign_empty_matchmode`（当前为 `public_coop`）并随机选择一张官方战役首图。管理员使用 `sm_forcechangematch <mode> [map]` 手动切换。
+
+`public_coop` 只提供基础管理、依赖、崩溃/过场保护与换图管理，保持普通 Coop 战役参数；它不加载玩法插件、Stripper、VScript、profile、暂停、jointeam 或 match_vote。
+
 插件按实际运行生态归类：`optional/` 根目录是跨 Competitive/Coop 通用组件，`optional/competitive/` 是PVP药抗专用插件，`optional/coop/` 是PVE药役专用插件，`optional/astmod/` 是AstMod专用的遗留实现；未加载二进制分别放在 `optional/astmod/disabled/` 与 `plugins/disabled/`。AstRedux 的模式身份留在其 matchmode、cfg、VScript、显示名等模式入口，通用组件保持中性命名。
 
 ### 服务器功能与 Ast 配置分开

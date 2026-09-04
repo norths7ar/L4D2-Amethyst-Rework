@@ -5,7 +5,7 @@
 #include <builtinvotes>
 #include <imatchext>
 
-#define PLUGIN_VERSION "2.0.0"
+#define PLUGIN_VERSION "2.1.0"
 #define MISSION_CYCLE_PATH "configs/missioncycle.txt"
 #define MAX_MAP_NAME 128
 #define MAP_CHANGE_DELAY 3.0
@@ -44,6 +44,7 @@ ArrayList g_mapOfficial;
 ConVar g_voteParticipation;
 ConVar g_votePassPercent;
 ConVar g_emptySwitchDelay;
+ConVar g_emptyMatchMode;
 Handle g_emptyServerTimer;
 bool g_hadHumanPlayers;
 
@@ -89,6 +90,12 @@ public void OnPluginStart()
 		FCVAR_NOTIFY,
 		true,
 		1.0
+	);
+	g_emptyMatchMode = CreateConVar(
+		"campaign_empty_matchmode",
+		"",
+		"Optional safe matchmode command token to load before changing the empty server to an official campaign.",
+		FCVAR_NOTIFY
 	);
 
 	CreateConVar(
@@ -213,8 +220,55 @@ public Action Timer_ChangeToEmptyServerMap(Handle timer)
 		return Plugin_Stop;
 	}
 
-	ForceChangeLevel(firstChapter, "Campaign Switcher empty server");
+	char matchMode[MAX_MAP_NAME];
+	g_emptyMatchMode.GetString(matchMode, sizeof(matchMode));
+	if (IsSafeCommandToken(matchMode) && IsSafeCommandToken(firstChapter) && CommandExists("sm_forcechangematch"))
+	{
+		ServerCommand("sm_forcechangematch %s %s", matchMode, firstChapter);
+	}
+	else
+	{
+		if (matchMode[0] == '\0')
+		{
+			LogMessage("Campaign Switcher empty server matchmode is unset; falling back to direct official Chapter change");
+		}
+		else if (!IsSafeCommandToken(matchMode))
+		{
+			LogError("Campaign Switcher empty server matchmode is not a safe command token (%s); falling back to direct official Chapter change", matchMode);
+		}
+		else if (!IsSafeCommandToken(firstChapter))
+		{
+			LogError("Campaign Switcher selected official Chapter is not a safe command token (%s); falling back to direct Chapter change", firstChapter);
+		}
+		else
+		{
+			LogError("Campaign Switcher cannot use sm_forcechangematch; falling back to direct official Chapter change");
+		}
+
+		ForceChangeLevel(firstChapter, "Campaign Switcher empty server");
+	}
 	return Plugin_Stop;
+}
+
+bool IsSafeCommandToken(const char[] value)
+{
+	int length = strlen(value);
+	if (length == 0)
+		return false;
+
+	for (int i = 0; i < length; i++)
+	{
+		int character = value[i];
+		if ((character < 'a' || character > 'z') &&
+			(character < 'A' || character > 'Z') &&
+			(character < '0' || character > '9') &&
+			character != '_' && character != '-')
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 public Action Timer_ReloadRegistry(Handle timer)

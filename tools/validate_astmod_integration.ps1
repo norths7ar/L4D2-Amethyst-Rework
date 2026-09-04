@@ -213,6 +213,17 @@ $requiredPaths = @(
     "tools/build_astmod_vpk.ps1"
 )
 
+$requiredPaths += @(
+    "cfg/cfgogl/public_coop/generalfixes.cfg",
+    "cfg/cfgogl/public_coop/confogl_plugins.cfg",
+    "cfg/cfgogl/public_coop/sharedplugins.cfg",
+    "cfg/cfgogl/public_coop/shared_cvars.cfg",
+    "cfg/cfgogl/public_coop/confogl.cfg",
+    "cfg/cfgogl/public_coop/public_coop.cfg",
+    "cfg/cfgogl/public_coop/confogl_off.cfg",
+    "cfg/cfgogl/public_coop/mapinfo.txt"
+)
+
 foreach ($mode in $modes) {
     foreach ($file in @(
         "$mode.cfg",
@@ -238,7 +249,9 @@ Assert-NotPath "cfg/stripper/astmod"
 $pluginListPaths = @(
     "cfg/generalfixes.cfg",
     "cfg/competitive_shared.cfg",
-    "cfg/sharedplugins.cfg"
+    "cfg/sharedplugins.cfg",
+    "cfg/cfgogl/public_coop/generalfixes.cfg",
+    "cfg/cfgogl/public_coop/sharedplugins.cfg"
 )
 $cfgoglRoot = Join-Path $Root "cfg/cfgogl"
 $pluginListPaths += Get-ChildItem -LiteralPath $cfgoglRoot -Recurse -File |
@@ -315,6 +328,83 @@ foreach ($mode in $modes) {
     }
     if ($modePluginText -match '(?m)^\s*sm\s+plugins\s+load\s+optional/playermanagement\.smx\s*$') {
         Add-Failure "$mode loads playermanagement.smx alongside jointeam.smx"
+    }
+}
+
+$publicModeRoot = Join-Path $Root "cfg/cfgogl/public_coop"
+foreach ($chunk in @("plugins_1.cfg", "plugins_2.cfg", "plugins_3.cfg", "shared_plugins.cfg")) {
+    Assert-NotPath "cfg/cfgogl/public_coop/$chunk"
+}
+Assert-Contains "addons/sourcemod/configs/matchmodes.txt" '"public_coop"' "public_coop is not registered in matchmodes.txt"
+Assert-Contains "addons/sourcemod/configs/matchmodes.txt" '"name"\s+"Public Coop - 纯净战役"' "public_coop display name is missing"
+Assert-Contains "cfg/server.cfg" '^sm_cvar\s+confogl_match_autoload\s+"1"' "Server startup does not enable Confogl autoload"
+Assert-Contains "cfg/server.cfg" '^sm_cvar\s+confogl_match_autoconfig\s+"public_coop"' "Server startup does not select public_coop for autoload"
+Assert-Contains "addons/sourcemod/scripting/confoglcompmod/ReqMatch.sp" 'CreateConVarEx\("match_unload_when_empty",\s*"1"' "ReqMatch does not default to unloading match modes while empty"
+Assert-Contains "addons/sourcemod/scripting/confoglcompmod/ReqMatch.sp" 'RM_hUnloadWhenEmpty\.BoolValue' "ReqMatch does not recheck match_unload_when_empty"
+Assert-RawContains "addons/sourcemod/scripting/optional/coop/campaign_switcher.sp" 'CreateConVar\(\s*"campaign_empty_matchmode"' "Campaign Switcher does not expose the empty-server matchmode"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/campaign_switcher.sp" 'CommandExists\("sm_forcechangematch"\)' "Campaign Switcher does not check sm_forcechangematch availability"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/campaign_switcher.sp" 'ServerCommand\("sm_forcechangematch %s %s"' "Campaign Switcher does not load the configured matchmode before changing map"
+Assert-Contains "cfg/sourcemod/campaign_switcher.cfg" '^campaign_empty_matchmode\s+"public_coop"' "Campaign Switcher config does not select public_coop"
+Assert-Contains "cfg/cfgogl/public_coop/shared_cvars.cfg" '^confogl_addcvar\s+confogl_match_unload_when_empty\s+0' "public_coop does not track and reset its empty-server lifecycle override"
+Assert-Contains "cfg/cfgogl/public_coop/shared_cvars.cfg" '^confogl_addcvar\s+mp_gamemode\s+coop' "public_coop does not use Coop"
+Assert-Contains "cfg/cfgogl/public_coop/shared_cvars.cfg" '^confogl_addcvar\s+sv_gravity\s+800' "public_coop does not restore vanilla gravity"
+Assert-Contains "cfg/cfgogl/public_coop/public_coop.cfg" '^confogl_setcvars\s*$' "public_coop registers CVar overrides but never applies them"
+Assert-RawContains "cfg/cfgogl/public_coop/mapinfo.txt" '^\s*"MapInfo"\s*\{' "public_coop mapinfo does not use the empty MapInfo object"
+
+foreach ($disabledConfoglCvar in @(
+    "confogl_boss_tank", "confogl_remove_escape_tank", "confogl_disable_tank_hordes", "confogl_block_punch_rock",
+    "confogl_blockinfectedbots", "confogl_lock_boss_spawns", "confogl_reduce_finalespawnrange", "confogl_waterslowdown",
+    "confogl_SM_enable", "confogl_enable_itemtracking", "confogl_replace_cssweapons", "confogl_remove_grenade",
+    "confogl_remove_chainsaw", "confogl_remove_m60", "confogl_remove_statickits", "confogl_remove_defib",
+    "confogl_remove_upg_explosive", "confogl_remove_upg_incendiary", "confogl_replace_tier2",
+    "confogl_replace_tier2_finale", "confogl_replace_tier2_all", "confogl_limit_tier2",
+    "confogl_limit_tier2_saferoom", "confogl_replace_startkits", "confogl_replace_finalekits",
+    "confogl_remove_lasersight", "confogl_remove_saferoomitems"
+)) {
+    Assert-Contains `
+        "cfg/cfgogl/public_coop/shared_cvars.cfg" `
+        ("^confogl_addcvar\s+" + [regex]::Escape($disabledConfoglCvar) + "\s+0$") `
+        "public_coop does not disable Confogl gameplay CVar $disabledConfoglCvar"
+}
+
+$publicGeneralFixes = "cfg/cfgogl/public_coop/generalfixes.cfg"
+foreach ($requiredPlugin in @(
+    "basebans.smx", "basecommands.smx", "basecomm.smx", "admin-flatfile.smx", "adminhelp.smx", "adminmenu.smx", "playercommands.smx",
+    "left4dhooks.smx", "optional/predictable_unloader.smx", "fix_exec_config_unicode.smx", "server_restart.smx", "fixes/command_buffer.smx",
+    "fixes/l4d_fix_deathfall_cam.smx", "fixes/l4d2_hltv_crash_fix.smx", "fixes/l4d2_null_cusercmd_fix.smx", "fixes/l4d2_fix_changelevel.smx"
+)) {
+    Assert-Contains $publicGeneralFixes ("^\s*sm\s+plugins\s+load\s+" + [regex]::Escape($requiredPlugin) + "\s*$") "public_coop generalfixes is missing $requiredPlugin"
+}
+
+$publicPluginText = Get-Content -LiteralPath (Join-Path $Root "cfg/cfgogl/public_coop/confogl_plugins.cfg") -Raw -Encoding utf8
+Assert-Contains "cfg/cfgogl/public_coop/confogl_plugins.cfg" '^\s*sm\s+plugins\s+load\s+optional/l4d_cutscene_nodamage\.smx\s*$' "public_coop does not load cutscene no-damage protection"
+Assert-Contains "cfg/cfgogl/public_coop/confogl_plugins.cfg" '^\s*sm\s+plugins\s+load\s+optional/coop/campaign_switcher\.smx\s*$' "public_coop does not load Campaign Switcher"
+Assert-Contains "cfg/cfgogl/public_coop/confogl_plugins.cfg" '^\s*sm\s+plugins\s+load\s+confoglcompmod\.smx\s*$' "public_coop does not load confoglcompmod"
+foreach ($forbiddenPublicPlugin in @("match_vote", "jointeam", "profile", "pause", "astmod", "astredux", "astflex", "vscript", "stripper")) {
+    if ($publicPluginText -match $forbiddenPublicPlugin) {
+        Add-Failure "public_coop loads forbidden plugin or Ast path: $forbiddenPublicPlugin"
+    }
+}
+foreach ($forbiddenPublicPath in @("vscript", "stripper", "astmod", "astredux", "astflex")) {
+    foreach ($match in Get-ChildItem -LiteralPath $publicModeRoot -File | Select-String -Pattern $forbiddenPublicPath) {
+        Add-Failure "public_coop contains forbidden path $forbiddenPublicPath ($([System.IO.Path]::GetRelativePath($Root, $match.Path)):$($match.LineNumber))"
+    }
+}
+$publicPluginAllowlist = @(
+    "basebans.smx", "basecommands.smx", "basecomm.smx", "admin-flatfile.smx", "adminhelp.smx", "adminmenu.smx", "playercommands.smx",
+    "left4dhooks.smx", "optional/predictable_unloader.smx", "fix_exec_config_unicode.smx", "server_restart.smx", "fixes/command_buffer.smx",
+    "fixes/l4d_fix_deathfall_cam.smx", "fixes/l4d2_hltv_crash_fix.smx", "fixes/l4d2_null_cusercmd_fix.smx", "fixes/l4d2_fix_changelevel.smx",
+    "optional/l4d_cutscene_nodamage.smx", "optional/coop/campaign_switcher.smx", "confoglcompmod.smx"
+)
+$publicLoads = @(
+    Get-Content -LiteralPath (Join-Path $Root $publicGeneralFixes) -Encoding utf8
+    Get-Content -LiteralPath (Join-Path $Root "cfg/cfgogl/public_coop/confogl_plugins.cfg") -Encoding utf8
+) | ForEach-Object {
+    if ($_ -match '^\s*sm\s+plugins\s+load\s+([^\s]+)\s*$') { $Matches[1] }
+}
+foreach ($publicLoad in $publicLoads) {
+    if ($publicLoad -notin $publicPluginAllowlist) {
+        Add-Failure "public_coop plugin is outside its allowlist: $publicLoad"
     }
 }
 

@@ -32,7 +32,8 @@ static ConVar
 	RM_hAutoCfg			   = null,
 	RM_hConfigFile_On	   = null,
 	RM_hConfigFile_Plugins = null,
-	RM_hConfigFile_Off	   = null;
+	RM_hConfigFile_Off	   = null,
+	RM_hUnloadWhenEmpty	   = null;
 
 void RM_APL()
 {
@@ -52,6 +53,7 @@ void RM_OnModuleStart()
 	// RM_hConfigFile_Plugins = CreateConVarEx("match_execcfg_plugins", "confogl_plugins.cfg", "Execute this config file upon match mode starts. This will only get executed once and meant for plugins that needs to be loaded."); //original
 	RM_hConfigFile_Plugins = CreateConVarEx("match_execcfg_plugins", "generalfixes.cfg;confogl_plugins.cfg;sharedplugins.cfg", "Execute this config file upon match mode starts. This will only get executed once and meant for plugins that needs to be loaded.");	   // rework
 	RM_hConfigFile_Off	   = CreateConVarEx("match_execcfg_off", "confogl_off.cfg", "Execute this config file upon match mode ends.");
+	RM_hUnloadWhenEmpty	   = CreateConVarEx("match_unload_when_empty", "1", "Unload the active match mode after the server has been empty for the reset interval. Set to 0 for modes that must remain active while empty.", _, true, 0.0, true, 1.0);
 
 	// RegConsoleCmd("sm_match", RM_Cmd_Match);
 	RegAdminCmd("sm_forcematch", RM_Cmd_ForceMatch, ADMFLAG_CONFIG, "Forces the game to use match mode");
@@ -536,7 +538,7 @@ static Action RM_MatchRequestTimeout(Handle hTimer)
 
 void RM_OnClientDisconnect(int client)
 {
-	if (!RM_bIsMatchModeLoaded || IsFakeClient(client))
+	if (!RM_bIsMatchModeLoaded || !RM_hUnloadWhenEmpty.BoolValue || IsFakeClient(client))
 	{
 		return;
 	}
@@ -546,6 +548,11 @@ void RM_OnClientDisconnect(int client)
 
 static Action RM_MatchResetTimer(Handle hTimer)
 {
+	if (!RM_hUnloadWhenEmpty.BoolValue)
+	{
+		return Plugin_Stop;
+	}
+
 	RM_Match_Unload();
 
 	return Plugin_Stop;

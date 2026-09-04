@@ -126,6 +126,10 @@
 	}
 	"Co-op Configs"
 	{
+		"public_coop"
+		{
+			"name" "Public Coop - 纯净战役"
+		}
 		"astmod"
 		{
 			"name" "AstMod - 药役"
