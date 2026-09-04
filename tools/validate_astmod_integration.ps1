@@ -125,7 +125,7 @@ function Assert-PluginListCommands {
     foreach ($line in Get-Content -LiteralPath $path -Encoding utf8) {
         $lineNumber++
         $trimmed = $line.Trim()
-        if ([string]::IsNullOrWhiteSpace($trimmed) -or $trimmed -match '^[\\/]*//' -or $trimmed.StartsWith(';')) {
+        if ([string]::IsNullOrWhiteSpace($trimmed) -or $trimmed.StartsWith('//') -or $trimmed.StartsWith(';')) {
             continue
         }
 
@@ -290,6 +290,15 @@ foreach ($mode in $modes) {
         "cfg/cfgogl/$mode/confogl_off.cfg" `
         '^\s*pred_unload_plugins\s*$' `
         "$mode does not use predictable plugin unloading"
+
+    Assert-Contains `
+        "cfg/cfgogl/$mode/$mode.cfg" `
+        '^\s*confogl_addcvar\s+sm_vscript_filename\s+\S+\s*$' `
+        "$mode does not track its VScript filename as a match-scoped CVar"
+    Assert-NotContains `
+        "cfg/cfgogl/$mode/$mode.cfg" `
+        '^\s*sm_cvar\s+sm_vscript_filename\b' `
+        "$mode still sets its fixed VScript filename as a runtime-mutable CVar"
 
     $modePluginLists = 1..3 | ForEach-Object { Join-Path $Root "cfg/cfgogl/$mode/plugins_$_.cfg" }
     $modePluginParts = $modePluginLists | ForEach-Object { Get-Content -LiteralPath $_ -Raw -Encoding utf8 }

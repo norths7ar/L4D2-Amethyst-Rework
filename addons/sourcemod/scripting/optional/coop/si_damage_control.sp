@@ -152,7 +152,10 @@ public Action Event_ChargerCarryStart(Event event, const char[] name, bool dontB
 	return Plugin_Continue;
 }
 
-// End immunity when the pummel starts. The original behavior intentionally uses this event.
+// End immunity about one second after the carry ends.
+// There is some time between carryend and pummelbegin, but pummelbegin does not
+// always get called if the Charger died first, so it is unreliable.
+// 轨迹注：拆分时保留原有 charger_pummel_start 事件，不在架构迁移中改变触发时机。
 public Action Event_ChargerPummelStart(Event event, const char[] name, bool dontBroadcast)
 {
 	int charger = GetClientOfUserId(event.GetInt("userid"));
