@@ -20,6 +20,8 @@ int tempRatioDamage = -1;
 int tempRehealth = -1;
 int tempReammo = -1;
 int tempSIDamage = -1;
+int tempMobLimit = -1;
+int pendingMobLimit = -1;
 int g_iOverrideMask;
 Handle g_hEmptyResetTimer;
 Handle g_hReminderTimer;
@@ -37,7 +39,7 @@ public Plugin myinfo =
 	name = "Coop Challenge",
 	author = "海洋空氣, norths7ar",
 	description = "Difficulty Controller for Coop.",
-	version = "2.6-integration",
+	version = "2.7-integration",
 	url = "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
 };
 
@@ -97,6 +99,9 @@ public Action drawPanel(int client, int first_item)
 	AddNamedToggleMenuItem(menu, "ratio_damage", "[单人] 按特感血量比例扣血", GetConVarBool(hRatioDamage));
 	AddNamedToggleMenuItem(menu, "rehealth", "击杀特感回血", GetConVarBool(hRehealth));
 	AddNamedToggleMenuItem(menu, "reammo", "击杀回复备弹", GetConVarBool(hReammo));
+	ConVar mobLimit = FindConVar("mob_spawn_limit_enabled");
+	if (mobLimit != null) AddNamedToggleMenuItem(menu, "mob_limit", "有限尸潮", mobLimit.BoolValue);
+	else AddMenuItem(menu, "mob_limit", "有限尸潮（插件未就绪）", ITEMDRAW_DISABLED);
 	AddMenuItem(menu, "pills", "额外发药设定");
 	AddMenuItem(menu, "player_infected", "玩家特感设定");
 	AddMenuItem(menu, "reset", "恢复默认设置");
@@ -147,6 +152,11 @@ public int MenuHandler(Handle menu, MenuAction action, int client, int param)
 				return 1;
 			}
 			TZ_CallVote(client, 13, !GetConVarBool(hReammo));
+			drawPanel(client, 0);
+		} else if (StrEqual(item, "mob_limit")) {
+			ConVar mobLimit = FindConVar("mob_spawn_limit_enabled");
+			if (mobLimit == null) PrintToChat(client, "\x04[Ast] \x01有限尸潮插件尚未就绪，请稍后再试.");
+			else TZ_CallVote(client, 16, !mobLimit.BoolValue);
 			drawPanel(client, 0);
 		} else if (StrEqual(item, "pills")) {
 			Menu_MorePills(client, false);
@@ -290,6 +300,11 @@ public void TZ_CallVote(int client, int target, int value)
 				tempSIDamage = value;
 				SetBuiltinVoteResultCallback(g_hVote, SIDamageVoteResultHandler);
 			}
+			case 16: {
+				value ? Format(sBuffer, sizeof(sBuffer), "开启有限尸潮") : Format(sBuffer, sizeof(sBuffer), "关闭有限尸潮");
+				pendingMobLimit = value;
+				SetBuiltinVoteResultCallback(g_hVote, MobLimitVoteResultHandler);
+			}
 		}
 
 		SetBuiltinVoteArgument(g_hVote, sBuffer);
@@ -317,6 +332,12 @@ void ApplyGameplaySetting(int target, int value, bool announce)
 			return;
 		}
 		case 15: { tempSIDamage = value; hDmgThreshold.FloatValue = float(value); }
+		case 16: {
+			ConVar mobLimit = FindConVar("mob_spawn_limit_enabled");
+			if (mobLimit == null) return;
+			tempMobLimit = value;
+			mobLimit.IntValue = value;
+		}
 		default: return;
 	}
 
@@ -340,6 +361,7 @@ void ReapplyGameplayOverrides()
 	if ((g_iOverrideMask & (1 << 12)) && tempRehealth >= 0) ApplyGameplaySetting(12, tempRehealth, false);
 	if ((g_iOverrideMask & (1 << 13)) && tempReammo >= 0) ApplyGameplaySetting(13, tempReammo, false);
 	if ((g_iOverrideMask & (1 << 15)) && tempSIDamage >= 0) ApplyGameplaySetting(15, tempSIDamage, false);
+	if ((g_iOverrideMask & (1 << 16)) && tempMobLimit >= 0) ApplyGameplaySetting(16, tempMobLimit, false);
 }
 
 public Action Timer_ReapplyGameplayOverrides(Handle timer)
@@ -538,6 +560,18 @@ public void SIDamageVoteResultHandler(Handle vote, int num_votes, int num_client
 	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
 }
 
+public void MobLimitVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
+{
+	if (DidVotePass(num_votes, num_items, item_info)) {
+		DisplayBuiltinVotePass(vote, "正在更改有限尸潮设置...");
+		ApplyGameplaySetting(16, pendingMobLimit, false);
+		pendingMobLimit = -1;
+		return;
+	}
+	pendingMobLimit = -1;
+	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
+}
+
 public void VoteHandler(Handle vote, BuiltinVoteAction action, int param1, int param2)
 {
 	switch (action) {
@@ -547,6 +581,7 @@ public void VoteHandler(Handle vote, BuiltinVoteAction action, int param1, int p
 			return;
 		}
 		case BuiltinVoteAction_Cancel: {
+			pendingMobLimit = -1;
 			DisplayBuiltinVoteFail( vote, view_as<BuiltinVoteFailReason>(param1) );
 			return;
 		}
@@ -633,6 +668,8 @@ public void ResetSettings(bool announce)
 	tempRehealth = -1;
 	tempReammo = -1;
 	tempSIDamage = -1;
+	tempMobLimit = -1;
+	pendingMobLimit = -1;
 	ServerCommand("sm_wave_reset_override");
 	ServerCommand("sm_profile_reapply");
 	if (announce) {

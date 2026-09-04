@@ -404,6 +404,21 @@ Assert-Contains `
     "addons/sourcemod/scripting/optional/coop/challenge.sp" `
     'RegAdminCmd\("sm_reset"' `
     "Coop Challenge does not expose sm_reset"
+Assert-Path "addons/sourcemod/scripting/optional/coop/mob_interval_limit.sp"
+Assert-Path "addons/sourcemod/plugins/optional/coop/mob_interval_limit.smx"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/mob_interval_limit.sp" 'CreateConVar\("mob_spawn_limit_enabled",\s*"0"' "Mob limit default is not 0"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/mob_interval_limit.sp" 'if\s*\(!hMobLimitEnabled\.BoolValue\)\s*return\s+Plugin_Continue' "Mob limit hook does not gate disabled state"
+Assert-Contains "cfg/cfgogl/astredux/astredux.cfg" '^\s*confogl_addcvar\s+mob_spawn_limit_enabled\s+0\s*$' "AstRedux does not configure mob limit default"
+foreach ($legacyMode in @('astmod', 'astflex')) {
+    Assert-Contains "cfg/cfgogl/$legacyMode/$legacyMode.cfg" '^\s*confogl_addcvar\s+mob_spawn_limit_enabled\s+1\s*$' "$legacyMode does not preserve the legacy mob limit behavior"
+}
+Assert-Contains "addons/sourcemod/scripting/optional/coop/challenge.sp" 'mob_limit' "Coop Challenge does not expose mob_limit menu item"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/challenge.sp" '有限尸潮' "Coop Challenge does not name the mob limit toggle"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/challenge.sp" 'TZ_CallVote\(client,\s*16' "Coop Challenge does not use target 16 for mob limit"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/challenge.sp" 'g_iOverrideMask\s*&\s*\(1\s*<<\s*16\)' "Coop Challenge does not reapply mob limit override"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/challenge.sp" 'pendingMobLimit\s*=\s*-1' "Coop Challenge does not clear pending mob limit votes"
+Assert-Contains "addons/sourcemod/configs/astredux_profiles.cfg" '^\s*"mob_spawn_limit_enabled"\s+"0"\s*$' "AstRedux profile defaults do not reset mob limit"
+Assert-NotContains "addons/sourcemod/scripting/optional/coop/challenge.sp" 'ResetConVar\(mobLimit|mobLimit\.(?:IntValue|BoolValue)\s*=\s*0' "Coop Challenge hardcodes the mob limit baseline"
 Assert-NotContains `
     "addons/sourcemod/scripting/optional/coop/challenge.sp" `
     'RegAdminCmd\("sm_astreset"' `

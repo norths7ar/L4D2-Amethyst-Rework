@@ -12,7 +12,6 @@
 | `l4d2_drop.smx` | 有源码但未复现 | 已保存 AstMod 源码快照。 |
 | `l4d2_sniper_stats.smx` | 有源码但未复现 | 已保存 AstMod 源码快照。 |
 | `l4d2_votetospec.smx` | 有源码但未复现 | 已保存 AstMod 源码快照。 |
-| `mob_interval_limit.smx` | 有源码但未复现 | 已保存 AstMod 源码快照。 |
 | `pills_giver.smx` | 有源码但未复现 | 已保存 AstMod 源码快照。 |
 | `script_reloader.smx` | 有源码但未复现 | 已保存 AstMod 源码快照。 |
 | `versus2coop.smx` | 有源码但未复现 | 已保存 AstMod 源码快照。 |
