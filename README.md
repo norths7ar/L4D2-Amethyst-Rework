@@ -1,22 +1,22 @@
 # L4D2 AstMod Rework
 
-这是一个以 [L4D2 Competitive Rework](https://github.com/SirPlease/L4D2-Competitive-Rework) 为框架的服务端配置。仓库保留 Rework 的对抗配置，并提供当前 Coop/PVE 主线 AstRedux 与 legacy 兼容模式 AstMod；AstFlex 暂停，仅接受避免路径断裂的机械维护。
+这是一个以 [L4D2 Competitive Rework](https://github.com/SirPlease/L4D2-Competitive-Rework) 为框架的服务端配置。仓库保留 Rework 的对抗配置，并新增了 AstMod 药役，以及在 AstMod 基础上开发的 AstRedux 药役。
 
 ## 设计取舍
 
-### AstRedux 是当前 Coop/PVE 主线
+### AstRedux 与 AstMod 的关系
 
-AstRedux 是正式的当前玩法主线，使用 Coop/PVE 配置与组件。AstMod 保留为 legacy 兼容模式，供既有配置与资产继续工作，不再作为共享层的稳定主导。
+AstMod 是海洋维护的原版Config，最新版本为2.8.1；AstRedux 是轨迹目前正在更新维护的改版插件，目前侧重于简化功能、优化结构，处于早期快速迭代中。计划中的 AstFlex 为 AstRedux 的低压力版预设，供新手朋友使用。
 
 ### Redux 用声明式人数 profile 表达基线
 
-旧 DAS 通过人数切换整份难度 cfg：数值、插件加载、脚本重载和临时运行行为会一起变动，维护一个规则时往往要追踪多层间接关系。Redux 将 1–4 人的最终基线直接写入 `astredux_profiles.cfg`；Profile Controller 只负责选择和下发，Tank、波次和 AutoWipe 等组件各自负责自己的运行规则。具体数值及当前生效项以 `addons/sourcemod/configs/astredux_profiles.cfg` 为准。
+旧 Mod 使用的 DAS 通过人数切换整份难度 cfg：数值、插件加载、脚本重载和临时运行行为会一起变动，维护一个规则时往往要追踪多层间接关系。Redux 将 1–4 人的最终基线直接写入 `astredux_profiles.cfg`；Profile Controller 只负责选择和下发，Tank、波次和 AutoWipe 等组件各自负责自己的运行规则。具体数值及当前生效项以 `addons/sourcemod/configs/astredux_profiles.cfg` 为准。
 
 ### 尽量复用 Rework，共享能力不复制
 
-Competitive Rework 负责模式生命周期、通用修复、基础管理、投票与对抗规则等共享能力。Ast 系列优先复用这些组件，避免维护两套同类机制；所有模式都适用的调整应放在共享配置，而不是藏进 Ast 专属目录。
+Competitive Rework 负责模式生命周期、通用修复、基础管理、投票与对抗规则等共享能力。
 
-插件按实际运行生态归类：`optional/` 根目录是跨 Competitive/Coop 通用组件，`optional/competitive/` 是 Human Survivor-vs-Infected PVP 专属，`optional/coop/` 是 Coop/PVE 与共享 Coop 组件，`optional/astmod/` 是 AstMod legacy 特有实现；未加载二进制分别放在 `optional/astmod/disabled/` 与 `plugins/disabled/`。不要新增 `legacy/` 或 `versus/` 目录。AstRedux 的模式身份留在其 matchmode、cfg、VScript、显示名等模式入口，通用组件保持中性命名。
+插件按实际运行生态归类：`optional/` 根目录是跨 Competitive/Coop 通用组件，`optional/competitive/` 是PVP药抗专用插件，`optional/coop/` 是PVE药役专用插件，`optional/astmod/` 是AstMod专用的遗留实现；未加载二进制分别放在 `optional/astmod/disabled/` 与 `plugins/disabled/`。AstRedux 的模式身份留在其 matchmode、cfg、VScript、显示名等模式入口，通用组件保持中性命名。
 
 ### 服务器功能与 Ast 配置分开
 
@@ -24,13 +24,7 @@ Competitive Rework 负责模式生命周期、通用修复、基础管理、投�
 
 AstMod/AstRedux 只定义进入 Ast 模式后如何游玩。某项功能是否归入 Ast，取决于它是否改变 Ast 的规则本身，而不是它最早在哪个模式里实现。
 
-## 模式
-
-| 模式 | 定位 |
-| --- | --- |
-| **AstRedux** | 当前 Coop/PVE 玩法主线，以声明式 profile 和独立 Coop 组件运行。 |
-| **AstMod** | legacy 兼容模式，保留既有 AstMod 玩法与资产入口。 |
-| **AstFlex** | 暂停；仅接受避免路径断裂的机械维护。 |
+### 关于命名
 
 运行时主线使用 `astredux` matchmode、mutation、cfg、VScript 和显示名；`amethyst` 仅用于说明上游历史。
 

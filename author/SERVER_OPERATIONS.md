@@ -39,8 +39,6 @@ sudo l4d2-content-apply
 
 命令会完整校验 VPK，扫描其中的战役任务，并要求第三方战役提供 AstMod/AstRedux 的 Versus 章节定义；随后只原子更新 `addons/sourcemod/configs/missioncycle.txt` 的“第三方战役”段，再重启一次。官图段长期固定；`!mapvote`、`!nextmap` 使用每个战役的第一关，`!chaptervote` 由 Mission Cache 读取当前战役的全部章节。任一 VPK 损坏、任务定义不完整或 ID/地图冲突时，命令失败，不改清单也不重启。
 
-服务器不再根据静默窗口自动判断“上传完成”，也不再运行 `l4d2-content-watch.timer`。
-
 ## 重启
 
 有人急着玩、无需等待空服时：
