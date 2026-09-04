@@ -176,7 +176,7 @@ public Action Menu_TankDmg(int client, int args)
 	{
 		char label[16];
 		Format(label, sizeof(label), "%s%d", (currentDmg == g_tankDamages[i]) ? "✔" : "", g_tankDamages[i]);
-		
+
 		char info[4];
 		IntToString(i, info, sizeof(info));  // 用索引作为 info
 
@@ -212,7 +212,7 @@ public void TZ_CallVote(int client, int target, int value)
 		ApplyGameplaySetting(target, value, true);
 		return;
 	}
-	
+
 	if ( IsNewBuiltinVoteAllowed() ) {
 		int iNumPlayers;
 		int iPlayers[MAXPLAYERS];
@@ -745,12 +745,12 @@ public Action OnChangeTeam(Handle event, const char[] name, bool dontBroadcast)
 	int client = GetClientOfUserId(GetEventInt(event, "userid"));
 	int newteam = GetEventInt(event, "team");
 	int oldteam = GetEventInt(event, "oldteam");
-	if (client > 0 && IsClientInGame(client) && IsFakeClient(client) 
+	if (client > 0 && IsClientInGame(client) && IsFakeClient(client)
 	&& (newteam == TEAM_SURVIVORS || oldteam == TEAM_SURVIVORS)) {
 		ArrayList cvar = new ArrayList();
 		cvar.Push(tempTankBhop);
 		cvar.Push(tempTankRock);
-		
+
 		CreateTimer(1.0, Timer_SetTankConVar, cvar);
 	}
 	return Plugin_Continue;
