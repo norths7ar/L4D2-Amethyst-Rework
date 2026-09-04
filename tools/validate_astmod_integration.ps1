@@ -174,6 +174,7 @@ $requiredPaths = @(
     "addons/sourcemod/translations/chi/imatchext.phrases.txt",
     "addons/sourcemod/translations/zho/imatchext.phrases.txt",
     "addons/sourcemod/scripting/optional/coop/campaign_switcher.sp",
+    "cfg/sourcemod/campaign_switcher.cfg",
     "addons/sourcemod/scripting/optional/coop/pause_coop.sp",
     "addons/sourcemod/plugins/optional/coop/campaign_switcher.smx",
     "addons/sourcemod/plugins/optional/coop/pause_coop.smx",
@@ -512,6 +513,34 @@ Assert-Contains `
     "addons/sourcemod/scripting/optional/coop/campaign_switcher.sp" `
     'RegConsoleCmd\("sm_chaptervote"' `
     "Campaign Switcher does not register sm_chaptervote"
+Assert-RawContains `
+    "addons/sourcemod/scripting/optional/coop/campaign_switcher.sp" `
+    'CreateConVar\(\s*"campaign_empty_switch_delay"[\s\S]*?true,\s*1\.0' `
+    "Campaign Switcher does not enforce its minimum empty-server delay"
+Assert-RawContains `
+    "addons/sourcemod/scripting/optional/coop/campaign_switcher.sp" `
+    '(?ms)public void OnClientDisconnect_Post\(int client\).*?CountConnectedHumans\(\).*?g_emptyServerTimer != null.*?CreateTimer\(' `
+    "Campaign Switcher does not schedule the empty-server transition from the last human disconnect"
+Assert-RawContains `
+    "addons/sourcemod/scripting/optional/coop/campaign_switcher.sp" `
+    '(?ms)public Action Timer_ChangeToEmptyServerMap\(Handle timer\).*?CountConnectedHumans\(\).*?SelectRandomOfficialMap\(\).*?ForceChangeLevel\(' `
+    "Campaign Switcher does not recheck emptiness before selecting an official campaign"
+Assert-RawContains `
+    "addons/sourcemod/scripting/optional/coop/campaign_switcher.sp" `
+    '(?ms)public void OnClientConnected\(int client\).*?if\s*\(IsFakeClient\(client\)\).*?return;.*?CancelEmptyServerTimer\(\)' `
+    "Campaign Switcher does not cancel the empty-server transition for a connecting human"
+Assert-RawContains `
+    "addons/sourcemod/scripting/optional/coop/campaign_switcher.sp" `
+    '(?ms)int CountConnectedHumans\(\).*?IsClientConnected\(client\).*?!IsFakeClient\(client\)' `
+    "Campaign Switcher does not count connected non-fake clients"
+Assert-Contains `
+    "cfg/sourcemod/campaign_switcher.cfg" `
+    '^campaign_empty_switch_delay\s+"15\.0"\s*$' `
+    "Campaign Switcher config does not set the documented default delay"
+Assert-Contains `
+    "cfg/server.cfg" `
+    '^sv_hibernate_when_empty\s+"0"' `
+    "Global server config does not keep empty-server timers advancing"
 Assert-NotContains `
     "addons/sourcemod/scripting/optional/coop/campaign_switcher.sp" `
     'sm_mapvotes' `

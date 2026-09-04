@@ -43,6 +43,9 @@ ArrayList g_mapOfficial;
 
 ConVar g_voteParticipation;
 ConVar g_votePassPercent;
+ConVar g_emptySwitchDelay;
+Handle g_emptyServerTimer;
+bool g_hadHumanPlayers;
 
 char g_changeVoteMap[MAX_MAP_NAME];
 char g_changeVoteName[MAX_MAP_NAME];
@@ -79,6 +82,14 @@ public void OnPluginStart()
 		true,
 		1.0
 	);
+	g_emptySwitchDelay = CreateConVar(
+		"campaign_empty_switch_delay",
+		"15.0",
+		"Seconds to wait after the last human leaves before selecting an official campaign.",
+		FCVAR_NOTIFY,
+		true,
+		1.0
+	);
 
 	CreateConVar(
 		"campaign_switcher_version",
@@ -91,10 +102,12 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_nextmap", Command_NextMap, "Choose the Map played after the finale");
 	RegConsoleCmd("sm_chaptervote", Command_ChapterVote, "Vote to change Chapter within the current Map");
 	RegAdminCmd("sm_campaign_reload", Command_ReloadMaps, ADMFLAG_CHANGEMAP, "Reload missioncycle.txt against the Mission Cache");
+	AutoExecConfig(true, "campaign_switcher");
 
 	HookEvent("finale_win", Event_FinaleWin);
 
 	ResetNextMapVotes();
+	g_hadHumanPlayers = CountConnectedHumans() > 0;
 }
 
 public void OnConfigsExecuted()
@@ -106,6 +119,7 @@ public void OnMapStart()
 {
 	ResetNextMapVotes();
 	g_finaleChangeScheduled = false;
+	g_hadHumanPlayers = CountConnectedHumans() > 0;
 	CreateTimer(0.5, Timer_ReloadRegistry, _, TIMER_FLAG_NO_MAPCHANGE);
 	CreateTimer(AUTO_MENU_DELAY, Timer_ShowFinaleMenus, _, TIMER_FLAG_NO_MAPCHANGE);
 }
@@ -120,13 +134,87 @@ public void OnClientPutInServer(int client)
 	if (IsFakeClient(client))
 		return;
 
+	g_hadHumanPlayers = true;
+	CancelEmptyServerTimer();
+
 	CreateTimer(AUTO_MENU_DELAY, Timer_ShowFinaleMenuToClient, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
+}
+
+public void OnClientConnected(int client)
+{
+	if (IsFakeClient(client))
+		return;
+
+	g_hadHumanPlayers = true;
+	CancelEmptyServerTimer();
 }
 
 public void OnClientDisconnect(int client)
 {
 	g_nextMapVote[client][0] = '\0';
 	g_nextMapMenuShown[client] = false;
+}
+
+public void OnClientDisconnect_Post(int client)
+{
+	if (CountConnectedHumans() > 0 || !g_hadHumanPlayers || g_emptyServerTimer != null)
+		return;
+
+	g_hadHumanPlayers = false;
+	g_emptyServerTimer = CreateTimer(
+		g_emptySwitchDelay.FloatValue,
+		Timer_ChangeToEmptyServerMap,
+		_,
+		TIMER_FLAG_NO_MAPCHANGE
+	);
+}
+
+public void OnMapEnd()
+{
+	// NO_MAPCHANGE timers are closed by SourceMod during map teardown.
+	g_emptyServerTimer = null;
+}
+
+void CancelEmptyServerTimer()
+{
+	if (g_emptyServerTimer == null)
+		return;
+
+	delete g_emptyServerTimer;
+	g_emptyServerTimer = null;
+}
+
+public Action Timer_ChangeToEmptyServerMap(Handle timer)
+{
+	if (timer != g_emptyServerTimer)
+		return Plugin_Stop;
+
+	g_emptyServerTimer = null;
+	if (CountConnectedHumans() > 0)
+	{
+		g_hadHumanPlayers = true;
+		return Plugin_Stop;
+	}
+
+	int winner = SelectRandomOfficialMap();
+	if (winner < 0 || winner >= g_mapFirstChapters.Length)
+	{
+		LogError("Cannot select an official campaign for the empty server: Mission Cache registry is unavailable or empty");
+		return Plugin_Stop;
+	}
+
+	char firstChapter[MAX_MAP_NAME];
+	char displayName[MAX_MAP_NAME];
+	g_mapFirstChapters.GetString(winner, firstChapter, sizeof(firstChapter));
+	g_mapDisplayNames.GetString(winner, displayName, sizeof(displayName));
+	if (!IsMapValid(firstChapter))
+	{
+		LogError("Cannot change empty server to invalid official Chapter %s (%s)", firstChapter, displayName);
+		return Plugin_Stop;
+	}
+
+	ForceChangeLevel(firstChapter, "Campaign Switcher empty server");
+	return Plugin_Stop;
 }
 
 public Action Timer_ReloadRegistry(Handle timer)
@@ -855,6 +943,17 @@ int CountEligibleHumans()
 	for (int client = 1; client <= MaxClients; client++)
 	{
 		if (IsEligibleHuman(client))
+			count++;
+	}
+	return count;
+}
+
+int CountConnectedHumans()
+{
+	int count;
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (IsClientConnected(client) && !IsFakeClient(client))
 			count++;
 	}
 	return count;
