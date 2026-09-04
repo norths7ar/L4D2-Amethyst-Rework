@@ -63,14 +63,14 @@ function update_diff()
 function ApplyDirectorOptions()
 {
 	local limits = [
-		Convars.GetStr("astredux_si_hunter_limit").tointeger(),
-		Convars.GetStr("astredux_si_smoker_limit").tointeger(),
-		Convars.GetStr("astredux_si_boomer_limit").tointeger(),
-		Convars.GetStr("astredux_si_spitter_limit").tointeger(),
-		Convars.GetStr("astredux_si_jockey_limit").tointeger(),
-		Convars.GetStr("astredux_si_charger_limit").tointeger()
+		Convars.GetStr("wave_hunter_limit").tointeger(),
+		Convars.GetStr("wave_smoker_limit").tointeger(),
+		Convars.GetStr("wave_boomer_limit").tointeger(),
+		Convars.GetStr("wave_spitter_limit").tointeger(),
+		Convars.GetStr("wave_jockey_limit").tointeger(),
+		Convars.GetStr("wave_charger_limit").tointeger()
 	];
-	local waveSize = Convars.GetStr("astredux_wave_size").tointeger();
+	local waveSize = Convars.GetStr("wave_size").tointeger();
 	local baseTotal = 0;
 	foreach (limit in limits) {
 		baseTotal += limit;
@@ -88,7 +88,7 @@ function ApplyDirectorOptions()
 	DirectorOptions.SpitterLimit = limits[3];
 	DirectorOptions.JockeyLimit = limits[4];
 	DirectorOptions.ChargerLimit = limits[5];
-	DirectorOptions.PreferredSpecialDirection = Convars.GetStr("astredux_si_preferred_direction").tointeger();
+	DirectorOptions.PreferredSpecialDirection = Convars.GetStr("wave_preferred_direction").tointeger();
 
 	// Wave Spawner owns the exact SI wave size. Keep the Director ceilings one slot
 	// above it so a Tank cannot make the script-level cap the limiting mechanism.
@@ -144,8 +144,8 @@ function UpdateHUDSI()
 function UpdateHUDStats()
 {
 	HUDInfo.hud_mode = "stats";
-	local timer_new = Convars.GetStr("astredux_wave_interval").tofloat();
-	local limit_new = Convars.GetStr("astredux_wave_size").tointeger();
+	local timer_new = Convars.GetStr("wave_interval").tofloat();
+	local limit_new = Convars.GetStr("wave_size").tointeger();
 
 	HUDInfo.si_text = format("当前特感刷新速度：%.1f秒%d特", timer_new, limit_new);
 	HUDInfo.si_text += "\n使用 !si 修改";

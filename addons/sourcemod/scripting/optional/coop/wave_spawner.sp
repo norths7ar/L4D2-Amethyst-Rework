@@ -14,9 +14,9 @@
 
 public Plugin myinfo =
 {
-    name = "AstRedux Wave Spawner",
+    name = "Coop Wave Spawner",
     author = "海洋空氣, norths7ar",
-    description = "Runs the single wave-based Special Infected spawn model for AstRedux.",
+    description = "Runs the single wave-based Special Infected spawn model for Coop.",
     version = "1.0.0",
     url = "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
 };
@@ -44,24 +44,24 @@ bool g_bApplyingEffectiveWave;
 
 public void OnPluginStart()
 {
-    CreateConVar("astredux_wave_version", "1.0.0", "AstRedux Wave Spawner version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
-    g_cvDefaultInterval = CreateConVar("astredux_wave_default_interval", "8.0", "Profile default interval between SI waves.", FCVAR_DONTRECORD, true, 0.0, true, 10000.0);
-    g_cvDefaultSize = CreateConVar("astredux_wave_default_size", "3", "Profile default number of SI in each wave.", FCVAR_DONTRECORD, true, 1.0, true, 32.0);
-    g_cvInterval = CreateConVar("astredux_wave_interval", "8.0", "Effective interval between SI waves.", FCVAR_NOTIFY, true, 0.0, true, 10000.0);
-    g_cvSize = CreateConVar("astredux_wave_size", "3", "Effective number of SI in each wave.", FCVAR_NOTIFY, true, 1.0, true, 32.0);
-    g_cvOverrideActive = CreateConVar("astredux_wave_override_active", "0", "Whether effective wave parameters are a player override.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    CreateConVar("wave_spawner_version", "1.0.0", "Coop Wave Spawner version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
+    g_cvDefaultInterval = CreateConVar("wave_default_interval", "8.0", "Profile default interval between SI waves.", FCVAR_DONTRECORD, true, 0.0, true, 10000.0);
+    g_cvDefaultSize = CreateConVar("wave_default_size", "3", "Profile default number of SI in each wave.", FCVAR_DONTRECORD, true, 1.0, true, 32.0);
+    g_cvInterval = CreateConVar("wave_interval", "8.0", "Effective interval between SI waves.", FCVAR_NOTIFY, true, 0.0, true, 10000.0);
+    g_cvSize = CreateConVar("wave_size", "3", "Effective number of SI in each wave.", FCVAR_NOTIFY, true, 1.0, true, 32.0);
+    g_cvOverrideActive = CreateConVar("wave_override_active", "0", "Whether effective wave parameters are a player override.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 
-    CreateConVar("astredux_si_hunter_limit", "1", "Hunter limit for the AstRedux VScript.", FCVAR_DONTRECORD, true, 0.0);
-    CreateConVar("astredux_si_smoker_limit", "1", "Smoker limit for the AstRedux VScript.", FCVAR_DONTRECORD, true, 0.0);
-    CreateConVar("astredux_si_boomer_limit", "0", "Boomer limit for the AstRedux VScript.", FCVAR_DONTRECORD, true, 0.0);
-    CreateConVar("astredux_si_spitter_limit", "0", "Spitter limit for the AstRedux VScript.", FCVAR_DONTRECORD, true, 0.0);
-    CreateConVar("astredux_si_jockey_limit", "1", "Jockey limit for the AstRedux VScript.", FCVAR_DONTRECORD, true, 0.0);
-    CreateConVar("astredux_si_charger_limit", "1", "Charger limit for the AstRedux VScript.", FCVAR_DONTRECORD, true, 0.0);
-    CreateConVar("astredux_si_preferred_direction", "4", "Preferred special direction for the AstRedux VScript.", FCVAR_DONTRECORD, true, 0.0);
+    CreateConVar("wave_hunter_limit", "1", "Hunter limit for the Coop VScript.", FCVAR_DONTRECORD, true, 0.0);
+    CreateConVar("wave_smoker_limit", "1", "Smoker limit for the Coop VScript.", FCVAR_DONTRECORD, true, 0.0);
+    CreateConVar("wave_boomer_limit", "0", "Boomer limit for the Coop VScript.", FCVAR_DONTRECORD, true, 0.0);
+    CreateConVar("wave_spitter_limit", "0", "Spitter limit for the Coop VScript.", FCVAR_DONTRECORD, true, 0.0);
+    CreateConVar("wave_jockey_limit", "1", "Jockey limit for the Coop VScript.", FCVAR_DONTRECORD, true, 0.0);
+    CreateConVar("wave_charger_limit", "1", "Charger limit for the Coop VScript.", FCVAR_DONTRECORD, true, 0.0);
+    CreateConVar("wave_preferred_direction", "4", "Preferred special direction for the Coop VScript.", FCVAR_DONTRECORD, true, 0.0);
 
-    RegConsoleCmd("sm_si", Command_WaveOverride, "Adjust AstRedux SI wave interval and size.");
-    RegConsoleCmd("sm_spawnwave", Command_ForceWave, "Reset the current AstRedux SI wave.");
-    RegServerCmd("sm_astredux_wave_reset_override", Command_ResetWaveOverride, "Clear the active AstRedux wave override.");
+    RegConsoleCmd("sm_si", Command_WaveOverride, "Adjust Coop SI wave interval and size.");
+    RegConsoleCmd("sm_spawnwave", Command_ForceWave, "Reset the current Coop SI wave.");
+    RegServerCmd("sm_wave_reset_override", Command_ResetWaveOverride, "Clear the active Coop wave override.");
 
     HookEvent("round_end", Event_RoundBoundary, EventHookMode_PostNoCopy);
     HookEvent("round_start", Event_RoundBoundary, EventHookMode_PostNoCopy);
@@ -88,7 +88,7 @@ public void OnMapEnd()
     g_hVote = INVALID_HANDLE;
 }
 
-public void AstRedux_OnProfileApplied(int profile)
+public void ProfileController_OnProfileApplied(int profile)
 {
     if (!g_cvOverrideActive.BoolValue)
     {
@@ -242,14 +242,14 @@ public Action Command_WaveOverride(int client, int args)
 {
     if (client <= 0 || !IsClientInGame(client) || GetClientTeam(client) != TEAM_SURVIVORS)
     {
-        ReplyToCommand(client, "\x04[AstRedux] \x01只有生还者可以调整特感刷新参数。");
+        ReplyToCommand(client, "\x04[Wave] \x01只有生还者可以调整特感刷新参数。");
         return Plugin_Handled;
     }
 
     if (args != 2)
     {
-        ReplyToCommand(client, "\x04[AstRedux] \x01当前刷新速率：\x03%.1f秒%d特", g_cvInterval.FloatValue, g_cvSize.IntValue);
-        ReplyToCommand(client, "\x04[AstRedux] \x01使用方法：\x03!si <刷新时间> <特感数量>\x01，例如：\x03!si 7.5 3");
+        ReplyToCommand(client, "\x04[Wave] \x01当前刷新速率：\x03%.1f秒%d特", g_cvInterval.FloatValue, g_cvSize.IntValue);
+        ReplyToCommand(client, "\x04[Wave] \x01使用方法：\x03!si <刷新时间> <特感数量>\x01，例如：\x03!si 7.5 3");
         return Plugin_Handled;
     }
 
@@ -261,20 +261,20 @@ public Action Command_WaveOverride(int client, int args)
         || StringToIntEx(sizeArgument, g_iPendingSize) != strlen(sizeArgument)
         || g_fPendingInterval < 0.0 || g_fPendingInterval > 10000.0 || g_iPendingSize < 1 || g_iPendingSize > 32)
     {
-        ReplyToCommand(client, "\x04[AstRedux] \x01刷新时间必须为 0–10000 秒，数量必须为 1–32。");
+        ReplyToCommand(client, "\x04[Wave] \x01刷新时间必须为 0–10000 秒，数量必须为 1–32。");
         return Plugin_Handled;
     }
 
     if (CountHumanSurvivors() <= 1)
     {
         ApplyWaveOverride(g_fPendingInterval, g_iPendingSize);
-        PrintToChatAll("\x04[AstRedux] \x01已将特感刷新速度调整为 \x03%.1f秒%d特\x01。", g_fPendingInterval, g_iPendingSize);
+        PrintToChatAll("\x04[Wave] \x01已将特感刷新速度调整为 \x03%.1f秒%d特\x01。", g_fPendingInterval, g_iPendingSize);
         return Plugin_Handled;
     }
 
     if (!IsNewBuiltinVoteAllowed())
     {
-        ReplyToCommand(client, "\x04[AstRedux] \x01当前无法发起新投票。");
+        ReplyToCommand(client, "\x04[Wave] \x01当前无法发起新投票。");
         return Plugin_Handled;
     }
 
@@ -363,7 +363,7 @@ void ApplyDirectorSettings()
 {
     if (!VScript_Reload())
     {
-        LogError("[AstRedux] Could not apply Director settings through script_reloader.");
+        LogError("[Wave] Could not apply Director settings through script_reloader.");
     }
 }
 

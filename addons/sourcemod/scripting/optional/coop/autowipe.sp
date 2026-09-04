@@ -8,7 +8,7 @@
 // Original AutoWipe 1.2 rationale:
 // This plugin was created because of a Hard12 bug where one or more survivors were not taking damage while pinned
 // by special infected. If the whole team is immobilised, they get a grace period before they are AutoWiped.
-// The Redux adapter keeps that behavior behind a declarative profile switch.
+// This component keeps that behavior behind a declarative profile switch.
 #define GRACE_TIME 5.0
 #define TEAM_SURVIVOR 2
 #define TEAM_INFECTED 3
@@ -16,10 +16,10 @@
 
 public Plugin myinfo =
 {
-    name = "AstRedux AutoWipe Adapter",
+    name = "AutoWipe",
     author = "Breezy, 海洋空氣, norths7ar",
-    description = "Keeps AutoWipe loaded while allowing AstRedux profiles to enable it declaratively.",
-    version = "1.3-redux"
+    description = "Automatically revives survivors when the whole team is immobilised.",
+    version = "1.3"
 };
 
 ConVar g_cvEnabled;
@@ -38,7 +38,7 @@ float g_fSurvivorTempHealth[MAXPLAYERS + 1];
 
 public void OnPluginStart()
 {
-    g_cvEnabled = CreateConVar("astredux_autowipe_enable", "0", "Enable the AstRedux AutoWipe adapter.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_cvEnabled = CreateConVar("autowipe_enable", "0", "Enable AutoWipe.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     HookEvent("tongue_grab", Event_SurvivorDominated);
     HookEvent("jockey_ride", Event_SurvivorDominated);
     HookEvent("lunge_pounce", Event_SurvivorDominated);
@@ -49,7 +49,7 @@ public void OnPluginStart()
     HookEvent("mission_lost", Event_DisableAutoWipe, EventHookMode_PostNoCopy);
     HookEvent("round_end", Event_DisableAutoWipe, EventHookMode_PostNoCopy);
 
-    g_cvWipeDamage = CreateConVar("aw_wipedamage", "40", "Survivor health cost when AstRedux AutoWipe revives the team.", FCVAR_NOTIFY, true, 0.0, true, 100.0);
+    g_cvWipeDamage = CreateConVar("autowipe_wipe_damage", "40", "Survivor health cost when AutoWipe revives the team.", FCVAR_NOTIFY, true, 0.0, true, 100.0);
     g_cvMaxIncaps = FindConVar("survivor_max_incapacitated_count");
     g_cvReviveHealth = FindConVar("survivor_revive_health");
 }

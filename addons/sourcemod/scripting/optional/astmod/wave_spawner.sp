@@ -383,7 +383,7 @@ int GetCurrentDifficultyMarker()
     // 轨迹注：Baseline 使用 DAS 难度，Redux scaffold 使用独立 profile；两者共用覆盖生命周期。
     ConVar difficulty = FindConVar("das_fakedifficulty");
     if (difficulty == null) {
-        difficulty = FindConVar("astredux_profile_current");
+        difficulty = FindConVar("profile_current");
     }
     return difficulty == null ? -1 : difficulty.IntValue;
 }

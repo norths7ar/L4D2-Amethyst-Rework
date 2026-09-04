@@ -3,7 +3,6 @@
 
 #include <sourcemod>
 
-#define PROFILE_CONFIG "configs/astredux_profiles.cfg"
 #define MAX_PROFILES 4
 #define TEAM_SURVIVOR 2
 
@@ -16,15 +15,18 @@ enum struct CachedProfile
 
 public Plugin myinfo =
 {
-    name = "AstRedux Profile Controller",
+    name = "Profile Controller",
     author = "norths7ar",
-    description = "Validates, selects, and applies declarative AstRedux player-count profiles.",
-    version = "0.3.0"
+    description = "Validates, selects, and applies declarative player-count profiles.",
+    version = "0.4.0"
 };
 
 CachedProfile g_profiles[MAX_PROFILES + 1];
+ArrayList g_defaultCvarNames;
+ArrayList g_defaultCvarValues;
 ConVar g_cvCurrentProfile;
 ConVar g_cvForcedProfile;
+ConVar g_cvProfileConfig;
 GlobalForward g_fwdProfileApplied;
 Handle g_hPlayerCountTimer;
 Handle g_hPlayerTeamTimer;
@@ -33,23 +35,38 @@ bool g_bProfilesLoaded;
 
 public void OnPluginStart()
 {
-    CreateConVar("astredux_profile_version", "0.3.0", "AstRedux profile controller version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
-    g_cvCurrentProfile = CreateConVar("astredux_profile_current", "1", "Currently applied AstRedux player profile.", FCVAR_NOTIFY, true, 1.0, true, 4.0);
-    g_cvForcedProfile = CreateConVar("astredux_profile_forced", "0", "Force an AstRedux profile; 0 follows human survivor count.", FCVAR_NOTIFY, true, 0.0, true, 4.0);
+    CreateConVar("profile_controller_version", "0.4.0", "Profile Controller version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
+    g_cvCurrentProfile = CreateConVar("profile_current", "1", "Currently applied player profile.", FCVAR_NOTIFY, true, 1.0, true, 4.0);
+    g_cvForcedProfile = CreateConVar("profile_forced", "0", "Force a profile; 0 follows human survivor count.", FCVAR_NOTIFY, true, 0.0, true, 4.0);
+    g_cvProfileConfig = CreateConVar("profile_controller_config", "", "Path_SM-relative KeyValues profile configuration.", FCVAR_DONTRECORD);
 
-    RegServerCmd("sm_astredux_profile_reapply", Command_ReapplyProfile);
-    RegAdminCmd("sm_astredux_profile_status", Command_ProfileStatus, ADMFLAG_CONFIG, "Show the active AstRedux profile.");
-    RegAdminCmd("sm_astredux_profile_force", Command_ForceProfile, ADMFLAG_CONFIG, "Force profile 1-4, or 0 for automatic selection.");
+    RegServerCmd("sm_profile_reapply", Command_ReapplyProfile);
+    RegAdminCmd("sm_profile_status", Command_ProfileStatus, ADMFLAG_CONFIG, "Show the active profile.");
+    RegAdminCmd("sm_profile_force", Command_ForceProfile, ADMFLAG_CONFIG, "Force profile 1-4, or 0 for automatic selection.");
 
     HookEvent("player_team", Event_PlayerTeam, EventHookMode_Post);
-    g_fwdProfileApplied = new GlobalForward("AstRedux_OnProfileApplied", ET_Ignore, Param_Cell);
+    g_fwdProfileApplied = new GlobalForward("ProfileController_OnProfileApplied", ET_Ignore, Param_Cell);
 }
 
 public void OnConfigsExecuted()
 {
+    char configPath[PLATFORM_MAX_PATH];
+    g_cvProfileConfig.GetString(configPath, sizeof(configPath));
+    if (configPath[0] == '\0')
+    {
+        SetFailState("profile_controller_config is empty; set it to a Path_SM-relative profile config.");
+        return;
+    }
+    char resolvedPath[PLATFORM_MAX_PATH];
+    BuildPath(Path_SM, resolvedPath, sizeof(resolvedPath), configPath);
+    if (!FileExists(resolvedPath))
+    {
+        SetFailState("profile_controller_config points to missing file: %s (resolved %s).", configPath, resolvedPath);
+        return;
+    }
     if (!LoadProfiles())
     {
-        SetFailState("Could not load valid AstRedux profiles from %s.", PROFILE_CONFIG);
+        SetFailState("Could not load valid profiles from profile_controller_config=%s.", configPath);
         return;
     }
 
@@ -118,7 +135,7 @@ public Action Command_ProfileStatus(int client, int args)
 
     ReplyToCommand(
         client,
-        "[AstRedux] profile=%d (%s) forced=%d humans=%d",
+        "[Profile Controller] profile=%d (%s) forced=%d humans=%d",
         g_iCurrentProfile,
         label,
         g_cvForcedProfile.IntValue,
@@ -131,7 +148,7 @@ public Action Command_ForceProfile(int client, int args)
 {
     if (args != 1)
     {
-        ReplyToCommand(client, "[AstRedux] Usage: sm_astredux_profile_force <0-4>");
+        ReplyToCommand(client, "[Profile Controller] Usage: sm_profile_force <0-4>");
         return Plugin_Handled;
     }
 
@@ -140,7 +157,7 @@ public Action Command_ForceProfile(int client, int args)
     int profile;
     if (StringToIntEx(argument, profile) != strlen(argument) || profile < 0 || profile > MAX_PROFILES)
     {
-        ReplyToCommand(client, "[AstRedux] Profile must be 0-4; 0 restores automatic selection.");
+        ReplyToCommand(client, "[Profile Controller] Profile must be 0-4; 0 restores automatic selection.");
         return Plugin_Handled;
     }
 
@@ -184,8 +201,22 @@ bool ApplyProfile(int profile, const char[] reason)
     ArrayList cvarValues = g_profiles[profile].cvarValues;
     if (cvarNames == null || cvarValues == null || cvarNames.Length == 0)
     {
-        LogError("[AstRedux] Profile players_%d is not loaded.", profile);
+        LogError("[Profile Controller] Profile players_%d is not loaded.", profile);
         return false;
+    }
+
+    if (g_defaultCvarNames != null && g_defaultCvarValues != null)
+    {
+        for (int index = 0; index < g_defaultCvarNames.Length; index++)
+        {
+            char cvarName[64];
+            g_defaultCvarNames.GetString(index, cvarName, sizeof(cvarName));
+            if (FindConVar(cvarName) == null)
+            {
+                LogError("[Profile Controller] Required defaults cvar disappeared before apply: %s.", cvarName);
+                return false;
+            }
+        }
     }
 
     for (int index = 0; index < cvarNames.Length; index++)
@@ -194,8 +225,20 @@ bool ApplyProfile(int profile, const char[] reason)
         cvarNames.GetString(index, cvarName, sizeof(cvarName));
         if (FindConVar(cvarName) == null)
         {
-            LogError("[AstRedux] Required profile cvar disappeared before apply: %s.", cvarName);
+            LogError("[Profile Controller] Required profile cvar disappeared before apply: %s.", cvarName);
             return false;
+        }
+    }
+
+    if (g_defaultCvarNames != null && g_defaultCvarValues != null)
+    {
+        for (int index = 0; index < g_defaultCvarNames.Length; index++)
+        {
+            char cvarName[64];
+            char cvarValue[64];
+            g_defaultCvarNames.GetString(index, cvarName, sizeof(cvarName));
+            g_defaultCvarValues.GetString(index, cvarValue, sizeof(cvarValue));
+            FindConVar(cvarName).SetString(cvarValue);
         }
     }
 
@@ -215,8 +258,8 @@ bool ApplyProfile(int profile, const char[] reason)
     Call_PushCell(profile);
     Call_Finish();
 
-    LogMessage("[AstRedux] Applied players_%d (%s), reason=%s, cvars=%d.", profile, g_profiles[profile].label, reason, cvarNames.Length);
-    PrintToChatAll("\x04[AstRedux]\x01 Profile changed to \x03%s\x01.", g_profiles[profile].label);
+    LogMessage("[Profile Controller] Applied players_%d (%s), reason=%s, cvars=%d.", profile, g_profiles[profile].label, reason, cvarNames.Length);
+    PrintToChatAll("\x04[Profile Controller]\x01 Profile changed to \x03%s\x01.", g_profiles[profile].label);
     return true;
 }
 
@@ -225,12 +268,14 @@ bool LoadProfiles()
     ClearProfiles();
 
     char path[PLATFORM_MAX_PATH];
-    BuildPath(Path_SM, path, sizeof(path), PROFILE_CONFIG);
-    KeyValues profiles = new KeyValues("AstReduxProfiles");
+    char configPath[PLATFORM_MAX_PATH];
+    g_cvProfileConfig.GetString(configPath, sizeof(configPath));
+    BuildPath(Path_SM, path, sizeof(path), configPath);
+    KeyValues profiles = new KeyValues("Profiles");
     if (!profiles.ImportFromFile(path))
     {
         delete profiles;
-        LogError("[AstRedux] Could not load %s.", path);
+        LogError("[Profile Controller] Could not load %s.", path);
         return false;
     }
 
@@ -242,7 +287,7 @@ bool LoadProfiles()
         if (!profiles.JumpToKey(section))
         {
             delete profiles;
-            LogError("[AstRedux] Missing profile section %s.", section);
+            LogError("[Profile Controller] Missing profile section %s.", section);
             ClearProfiles();
             return false;
         }
@@ -251,7 +296,7 @@ bool LoadProfiles()
         if (g_profiles[profile].label[0] == '\0')
         {
             delete profiles;
-            LogError("[AstRedux] Missing label in %s.", section);
+            LogError("[Profile Controller] Missing label in %s.", section);
             ClearProfiles();
             return false;
         }
@@ -259,6 +304,19 @@ bool LoadProfiles()
         g_profiles[profile].cvarNames = new ArrayList(ByteCountToCells(64));
         g_profiles[profile].cvarValues = new ArrayList(ByteCountToCells(64));
         if (!ReadProfileGroups(profiles, section, g_profiles[profile].cvarNames, g_profiles[profile].cvarValues))
+        {
+            delete profiles;
+            ClearProfiles();
+            return false;
+        }
+    }
+
+    profiles.Rewind();
+    if (profiles.JumpToKey("defaults"))
+    {
+        g_defaultCvarNames = new ArrayList(ByteCountToCells(64));
+        g_defaultCvarValues = new ArrayList(ByteCountToCells(64));
+        if (!ReadProfileGroups(profiles, "defaults", g_defaultCvarNames, g_defaultCvarValues))
         {
             delete profiles;
             ClearProfiles();
@@ -275,7 +333,7 @@ bool ReadProfileGroups(KeyValues profiles, const char[] section, ArrayList cvarN
 {
     if (!profiles.GotoFirstSubKey())
     {
-        LogError("[AstRedux] Profile %s has no cvar groups.", section);
+        LogError("[Profile Controller] Profile %s has no cvar groups.", section);
         return false;
     }
 
@@ -285,7 +343,7 @@ bool ReadProfileGroups(KeyValues profiles, const char[] section, ArrayList cvarN
         {
             char group[64];
             profiles.GetSectionName(group, sizeof(group));
-            LogError("[AstRedux] Empty cvar group in %s: %s.", section, group);
+            LogError("[Profile Controller] Empty cvar group in %s: %s.", section, group);
             return false;
         }
 
@@ -297,12 +355,12 @@ bool ReadProfileGroups(KeyValues profiles, const char[] section, ArrayList cvarN
             profiles.GetString(NULL_STRING, cvarValue, sizeof(cvarValue), "");
             if (!IsSafeCvarToken(cvarName) || !IsSafeNumericToken(cvarValue) || cvarNames.FindString(cvarName) != -1)
             {
-                LogError("[AstRedux] Invalid or duplicate cvar in %s: %s=%s.", section, cvarName, cvarValue);
+                LogError("[Profile Controller] Invalid or duplicate cvar in %s: %s=%s.", section, cvarName, cvarValue);
                 return false;
             }
             if (FindConVar(cvarName) == null)
             {
-                LogError("[AstRedux] Required profile cvar does not exist: %s.", cvarName);
+                LogError("[Profile Controller] Required profile cvar does not exist: %s.", cvarName);
                 return false;
             }
             cvarNames.PushString(cvarName);
@@ -325,6 +383,8 @@ void ClearProfiles()
         delete g_profiles[profile].cvarValues;
         g_profiles[profile].label[0] = '\0';
     }
+    delete g_defaultCvarNames;
+    delete g_defaultCvarValues;
     g_bProfilesLoaded = false;
 }
 
