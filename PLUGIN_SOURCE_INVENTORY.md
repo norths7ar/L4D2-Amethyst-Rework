@@ -27,7 +27,6 @@
 | `l4d_boss_percent.smx` | 源码重复，来源未确认 | 本仓库源码与 AstMod 快照均为候选。 |
 | `pause.smx` | 源码重复，来源未确认 | 本仓库源码与 AstMod 快照均为候选。 |
 | `survivor_mvp.smx` | 源码重复，来源未确认 | 本仓库源码与 AstMod 快照均为候选。 |
-| `cannounce.smx` | 仅插件无源码 | 进服欢迎提示。 |
 | `enhancedsprays.smx` | 仅插件无源码 | 无冷却喷漆、旁观喷漆。 |
 | `healer_witch.smx` | 仅插件无源码 | 秒妹回血。 |
 | `l4d_swimming.smx` | 仅插件无源码 | 出门前可以游泳。 |
