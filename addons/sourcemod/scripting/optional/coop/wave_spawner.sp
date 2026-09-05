@@ -33,7 +33,7 @@ int g_iWaveSize;
 int g_iSpawnedSICount;
 int g_iAliveSICount;
 bool g_bHasFirstDeath;
-bool g_bWaitingBonus;
+bool g_bWaveSettingsPending;
 float g_fFirstDeathTime;
 float g_fBonusSpawnTime;
 
@@ -96,7 +96,9 @@ public void OnPluginStart()
 
 public void OnConfigsExecuted()
 {
+    RefreshEffectiveWave();
     ApplyDirectorSettings();
+    g_bWaveSettingsPending = false;
 }
 
 public void OnMapEnd()
@@ -110,7 +112,7 @@ public void ProfileController_OnProfileApplied(int profile)
 {
     g_bProfileApplying = false;
     ApplySlotOrCurrent(profile);
-    ApplyDirectorSettings();
+    g_bWaveSettingsPending = true;
 }
 
 public void ProfileController_OnProfilePreApply(int profile)
@@ -129,9 +131,8 @@ public void OnEffectiveWaveChanged(ConVar convar, const char[] oldValue, const c
     if (slot < 1 || slot > 4) return;
     CaptureField(slot, convar);
     g_cvOverrideActive.BoolValue = g_iSlotOverrideMask[slot] != 0;
-    RefreshEffectiveWave();
-    RescheduleActiveWave();
-    ApplyDirectorSettings();
+    // Keep this wave's size and timing; apply the latest CVars at the next wave.
+    g_bWaveSettingsPending = true;
 }
 
 public void Event_RoundBoundary(Event event, const char[] name, bool dontBroadcast)
@@ -224,7 +225,6 @@ public Action Timer_ResetWave(Handle timer)
 
     if (g_fBonusSpawnTime > 0.0)
     {
-        g_bWaitingBonus = true;
         ScheduleWaveReset(g_fBonusSpawnTime);
         g_fBonusSpawnTime = 0.0;
         return Plugin_Handled;
@@ -238,11 +238,17 @@ void ResetWaveNow()
 {
     g_iSpawnedSICount = g_iAliveSICount;
     g_bHasFirstDeath = false;
-    g_bWaitingBonus = false;
 
     if (!IsServerProcessing() || FindEntityByClassname(-1, "worldspawn") == -1)
     {
         return;
+    }
+
+    if (g_bWaveSettingsPending)
+    {
+        RefreshEffectiveWave();
+        ApplyDirectorSettings();
+        g_bWaveSettingsPending = false;
     }
 
     int entity = CreateEntityByName("logic_script");
@@ -367,12 +373,11 @@ public Action Command_ResetWaveOverride(int args)
     int slot = GetCurrentProfile();
     if (slot >= 1 && slot <= 4) g_iSlotOverrideMask[slot] = 0;
     g_cvOverrideActive.BoolValue = false;
-    RefreshEffectiveWave();
     if (LibraryExists("profile_controller") && GetFeatureStatus(FeatureType_Native, "ProfileController_Reapply") == FeatureStatus_Available)
     {
         ProfileController_Reapply();
     }
-    ApplyDirectorSettings();
+    g_bWaveSettingsPending = true;
     return Plugin_Handled;
 }
 
@@ -386,7 +391,6 @@ void ApplyWaveOverride(float interval, int size, int slot)
     if (slot != GetCurrentProfile()) return;
     g_cvOverrideActive.BoolValue = g_iSlotOverrideMask[slot] != 0;
     SetEffectiveWave(interval, size);
-    ApplyDirectorSettings();
 }
 
 void SetEffectiveWave(float interval, int size)
@@ -395,8 +399,7 @@ void SetEffectiveWave(float interval, int size)
     g_cvInterval.FloatValue = interval;
     g_cvSize.IntValue = size;
     g_bApplyingEffectiveWave = false;
-    RefreshEffectiveWave();
-    RescheduleActiveWave();
+    g_bWaveSettingsPending = true;
 }
 
 int GetCurrentProfile()
@@ -433,7 +436,6 @@ void ApplySlotOrCurrent(int slot)
         g_bInternalWrite = false;
     }
     g_cvOverrideActive.BoolValue = g_iSlotOverrideMask[slot] != 0;
-    RefreshEffectiveWave();
 }
 
 public int Native_ResetAllOverrides(Handle plugin, int numParams)
@@ -467,7 +469,6 @@ void ResetWaveState()
 {
     g_iSpawnedSICount = 0;
     g_bHasFirstDeath = false;
-    g_bWaitingBonus = false;
     g_fFirstDeathTime = 0.0;
     g_fBonusSpawnTime = 0.0;
 }
@@ -476,17 +477,6 @@ void ScheduleWaveReset(float delay)
 {
     delete g_hWaveTimer;
     g_hWaveTimer = CreateTimer(delay, Timer_ResetWave, _, TIMER_FLAG_NO_MAPCHANGE);
-}
-
-void RescheduleActiveWave()
-{
-    if (!g_bHasFirstDeath || g_bWaitingBonus)
-    {
-        return;
-    }
-
-    float remaining = g_fWaveInterval - (GetEngineTime() - g_fFirstDeathTime);
-    ScheduleWaveReset(remaining > 0.0 ? remaining : 0.0);
 }
 
 int CountHumanSurvivors()
