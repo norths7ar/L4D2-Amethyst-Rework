@@ -102,7 +102,11 @@
 	}
 	"ReadyLoading"
 	{
-	    "chi" "正在等待所有玩家加载……"
+	    "chi" "正在等待玩家加载及预留席位恢复……"
+	}
+	"ReadyWaiting"
+	{
+	    "chi" "每位生还者输入 !r 准备，!nr 取消。"
 	}
 	"ReadyCountdown"
 	{

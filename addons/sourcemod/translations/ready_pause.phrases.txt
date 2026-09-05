@@ -102,7 +102,11 @@
 	}
 	"ReadyLoading"
 	{
-	    "en" "Waiting for all players to load..."
+	    "en" "Waiting for players to load and reserved seats to settle..."
+	}
+	"ReadyWaiting"
+	{
+	    "en" "Every survivor: !r to ready, !nr to cancel."
 	}
 	"ReadyCountdown"
 	{
