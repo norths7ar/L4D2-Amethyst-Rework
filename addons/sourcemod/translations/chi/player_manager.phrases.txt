@@ -1,8 +1,25 @@
 "Phrases"
 {
+	"SeatsReserved"
+	{
+		"chi" "生还者席位已满或正为返回的玩家保留，请稍候或旁观。"
+	}
+	"SeatRestored"
+	{
+		"chi" "已恢复你的生还者席位；如需旁观，请输入 !spec。"
+	}
+	"SeatExpired"
+	{
+		"#format" "{1:s}"
+		"chi" "等待 {1} 返回已超时，其生还者席位不再保留。"
+	}
+	"SeatProtectionEnded"
+	{
+		"chi" "回合已开始，尚未返回玩家的席位不再保留。"
+	}
 	"JoinAfterStart"
 	{
-	    "chi" "队伍离开安全屋后无法加入生还者。"
+	    "chi" "回合已开始，目前没有可接管的生还者机器人。"
 	}
 	"PlayerSpectated"
 	{

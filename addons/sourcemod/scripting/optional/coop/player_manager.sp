@@ -28,6 +28,8 @@ int g_reservationRole[MAX_RESERVATIONS];
 int g_reservationExpires[MAX_RESERVATIONS];
 int g_reservationGeneration[MAX_RESERVATIONS];
 bool g_reservationClaimed[MAX_RESERVATIONS];
+char g_reservationName[MAX_RESERVATIONS][MAX_NAME_LENGTH];
+bool g_wantsSpectator[MAXPLAYERS + 1];
 StringMap g_reservations;
 
 public Plugin myinfo =
@@ -46,6 +48,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
 	CreateNative("Coop_IsRoundLive", Native_IsRoundLive);
 	CreateNative("Coop_ShouldKeepSurvivorBots", Native_ShouldKeepSurvivorBots);
 	CreateNative("Coop_IsRosterStable", Native_IsRosterStable);
+	CreateNative("Coop_GetWaitingSurvivor", Native_GetWaitingSurvivor);
 	RegPluginLibrary("player_manager");
 	return APLRes_Success;
 }
@@ -71,9 +74,95 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_die", CommandKill, "Kill yourself.");
 	RegConsoleCmd("sm_suicide", CommandKill, "Kill yourself.");
 	RegConsoleCmd("sm_zs", CommandKill, "Kill yourself.");
+	AddCommandListener(OnJoinTeamCommand, "jointeam");
 
 	HookEvent("round_start", EventRoundStart, EventHookMode_PostNoCopy);
 	HookEvent("map_transition", EventMapTransition, EventHookMode_Post);
+	HookEvent("player_team", EventPlayerTeam, EventHookMode_Post);
+	for (int client = 1; client <= MaxClients; client++)
+		if (IsHumanClient(client)) CreateTimer(0.2, TimerCheckHumanTeam, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
+}
+
+public void EventPlayerTeam(Event event, const char[] name, bool dontBroadcast)
+{
+	if (!event.GetBool("disconnect"))
+	{
+		int client = GetClientOfUserId(event.GetInt("userid"));
+		if (IsHumanClient(client) && !g_transitionCaptured && event.GetInt("team") != TEAM_SURVIVORS)
+		{
+			int reservation = FindReservation(client);
+			if (ValidReservation(reservation) && g_reservationRole[reservation] == RESERVATION_SURVIVOR) g_reservationClaimed[reservation] = false;
+		}
+		CreateTimer(0.2, TimerCheckHumanTeam, event.GetInt("userid"), TIMER_FLAG_NO_MAPCHANGE);
+	}
+}
+
+public Action OnJoinTeamCommand(int client, const char[] command, int argc)
+{
+	if (!IsHumanClient(client) || argc < 1) return Plugin_Continue;
+	char team[16];
+	GetCmdArg(1, team, sizeof(team));
+	if (StringToInt(team) == TEAM_SPECTATORS || StrEqual(team, "spectator", false))
+	{
+		g_wantsSpectator[client] = true;
+		g_requestToken[client]++;
+		int reservation = FindReservation(client);
+		if (ValidReservation(reservation)) ClearReservation(reservation);
+	}
+	else if (StringToInt(team) == TEAM_SURVIVORS || StrEqual(team, "survivor", false))
+	{
+		g_wantsSpectator[client] = false;
+		int reservation = FindReservation(client);
+		if (ValidReservation(reservation) && g_reservationRole[reservation] == RESERVATION_SPECTATOR)
+		{
+			g_requestToken[client]++;
+			ClearReservation(reservation);
+		}
+	}
+	return Plugin_Continue;
+}
+
+public Action TimerCheckHumanTeam(Handle timer, int userid)
+{
+	int client = GetClientOfUserId(userid);
+	if (!IsHumanClient(client) || g_transitionCaptured) return Plugin_Stop;
+	int reservation = FindReservation(client);
+	if (g_wantsSpectator[client] || (ValidReservation(reservation) && g_reservationRole[reservation] == RESERVATION_SPECTATOR))
+	{
+		g_wantsSpectator[client] = true;
+		if (GetClientTeam(client) != TEAM_SPECTATORS) ChangeClientTeam(client, TEAM_SPECTATORS);
+		ClaimReservation(client);
+	}
+	else if (GetClientTeam(client) == TEAM_INFECTED)
+	{
+		// Anne join.sp also checks the actual team event: command-only checks miss
+		// the automatic Versus assignment while a human is connecting.
+		ChangeClientTeam(client, TEAM_SPECTATORS);
+		CommandJoin(client, 0);
+	}
+	else if (GetClientTeam(client) == TEAM_SURVIVORS)
+	{
+		if (ValidReservation(reservation))
+		{
+			MakeRoomForReturningSurvivor(client);
+			ClaimReservation(client);
+		}
+		else if (GetAdmissionCount(-1) > g_maxSurvivors.IntValue)
+		{
+			ChangeClientTeam(client, TEAM_SPECTATORS);
+			PrintToChat(client, "%t", "SeatsReserved");
+		}
+	}
+	else if (ValidReservation(reservation) && g_reservationRole[reservation] == RESERVATION_SURVIVOR)
+		ScheduleMoveToSurvivors(client);
+	return Plugin_Stop;
+}
+
+public Action L4D_OnEnterGhostStatePre(int client)
+{
+	if (!IsHumanClient(client)) return Plugin_Continue;
+	CreateTimer(0.1, TimerCheckHumanTeam, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
+	return Plugin_Handled;
 }
 
 public void OnMapStart()
@@ -82,8 +171,15 @@ public void OnMapStart()
 	g_roundLive = false;
 	CancelBotCleanup();
 	g_transitionCaptured = false;
+	// Loading the destination map must not consume the player's return window.
+	for (int i = 0; i < MAX_RESERVATIONS; i++)
+		if (g_reservationRole[i] != 0 && g_reservationGeneration[i] == g_generation)
+			g_reservationExpires[i] = GetTime() + RoundToNearest(RESERVATION_TTL);
 	for (int client = 1; client <= MaxClients; client++)
+	{
 		g_pendingReservation[client] = -1;
+		if (IsHumanClient(client)) CreateTimer(0.2, TimerCheckHumanTeam, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
+	}
 	SetServerInt("director_no_survivor_bots", 0);
 	SetServerInt("survivor_limit", g_maxSurvivors.IntValue);
 }
@@ -99,6 +195,8 @@ public void OnClientPutInServer(int client)
 	if (!IsFakeClient(client)) CancelBotCleanup();
 	g_pendingReservation[client] = -1;
 	g_requestToken[client]++;
+	g_wantsSpectator[client] = false;
+	if (!IsFakeClient(client)) CreateTimer(0.2, TimerCheckHumanTeam, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
 }
 
 public void OnClientPostAdminCheck(int client)
@@ -107,6 +205,7 @@ public void OnClientPostAdminCheck(int client)
 	if (!IsHumanClient(client)) return;
 	g_pendingReservation[client] = FindReservation(client);
 	if (ValidReservation(g_pendingReservation[client])) ScheduleReservationRestore(client, 0, g_reservationRole[g_pendingReservation[client]]);
+	CreateTimer(0.2, TimerCheckHumanTeam, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
 }
 
 public void OnClientDisconnect(int client)
@@ -124,11 +223,20 @@ public void OnClientDisconnect(int client)
 
 public Action CommandJoin(int client, int args)
 {
-	int reservation = g_pendingReservation[client];
-	bool returningSurvivor = ValidReservation(reservation) && g_reservationRole[reservation] == RESERVATION_SURVIVOR && !g_reservationClaimed[reservation];
-	if (ValidReservation(reservation) && g_reservationRole[reservation] == RESERVATION_SPECTATOR) return Plugin_Handled;
-	if (!IsHumanClient(client) || (!returningSurvivor && GetAdmissionCount(-1) >= g_maxSurvivors.IntValue))
+	if (!IsHumanClient(client)) return Plugin_Handled;
+	int reservation = FindReservation(client);
+	// An explicit join overrides a saved spectator role, just as !spec gives up
+	// a survivor reservation. Engine team changes alone do neither.
+	g_wantsSpectator[client] = false;
+	g_requestToken[client]++;
+	if (ValidReservation(reservation) && g_reservationRole[reservation] == RESERVATION_SPECTATOR) ClearReservation(reservation);
+	if (GetClientTeam(client) == TEAM_SURVIVORS) { ClaimReservation(client); return Plugin_Handled; }
+	bool returningSurvivor = ValidReservation(reservation) && g_reservationRole[reservation] == RESERVATION_SURVIVOR;
+	if (!returningSurvivor && GetAdmissionCount(-1) >= g_maxSurvivors.IntValue)
+	{
+		PrintToChat(client, "%t", "SeatsReserved");
 		return Plugin_Handled;
+	}
 	CancelBotCleanup();
 	if (g_roundLive)
 	{
@@ -149,6 +257,9 @@ public Action CommandSpectate(int client, int args)
 {
 	if (!IsHumanClient(client)) return Plugin_Handled;
 	g_requestToken[client]++;
+	g_wantsSpectator[client] = true;
+	int reservation = FindReservation(client);
+	if (ValidReservation(reservation)) ClearReservation(reservation);
 	if (GetClientTeam(client) == TEAM_SPECTATORS)
 	{
 		FakeClientCommand(client, "jointeam %d", TEAM_INFECTED);
@@ -184,6 +295,8 @@ public Action EventRoundStart(Event event, const char[] name, bool dontBroadcast
 {
 	g_roundLive = false;
 	CancelBotCleanup();
+	SetServerInt("director_no_survivor_bots", 0);
+	SetServerInt("survivor_limit", g_maxSurvivors.IntValue);
 	return Plugin_Continue;
 }
 
@@ -197,7 +310,17 @@ public Action EventMapTransition(Event event, const char[] name, bool dontBroadc
 
 public void L4D_OnFirstSurvivorLeftSafeArea_Post(int client)
 {
+	// With ready_pause loaded, its Live forward owns the round boundary.
+	if (!LibraryExists("readyup") && !g_roundLive) OnRoundIsLive();
+}
+
+public void OnRoundIsLive()
+{
 	g_roundLive = true;
+	bool waiting = CountValidReservations(RESERVATION_SURVIVOR) > 0;
+	for (int i = 0; i < MAX_RESERVATIONS; i++) ClearReservation(i);
+	for (int client = 1; client <= MaxClients; client++) g_requestToken[client]++;
+	if (waiting) PrintToChatAll("%t", "SeatProtectionEnded");
 	ReconcileBots();
 }
 
@@ -226,8 +349,10 @@ public Action TimerMoveToSurvivors(Handle timer, DataPack pack)
 	int token = pack.ReadCell();
 	int desiredRole = pack.ReadCell();
 	if (generation != g_generation || !IsHumanClient(client) || GetClientSerial(client) != serial || token != g_requestToken[client]) return Plugin_Stop;
+	if (g_wantsSpectator[client] && desiredRole == RESERVATION_SURVIVOR) return Plugin_Stop;
 	if (desiredRole == RESERVATION_SPECTATOR)
 	{
+		g_wantsSpectator[client] = true;
 		if (GetClientTeam(client) == TEAM_SPECTATORS)
 		{
 			ClaimReservation(client);
@@ -238,12 +363,16 @@ public Action TimerMoveToSurvivors(Handle timer, DataPack pack)
 		ScheduleReservationRestore(client, attempt + 1, desiredRole);
 		return Plugin_Stop;
 	}
+	int reservation = FindReservation(client);
+	if (ValidReservation(reservation)) MakeRoomForReturningSurvivor(client);
+	else if (GetClientTeam(client) != TEAM_SURVIVORS && GetAdmissionCount(-1) >= g_maxSurvivors.IntValue) return Plugin_Stop;
 	if (GetClientTeam(client) == TEAM_SURVIVORS)
 	{
 		ClaimReservation(client);
 		return Plugin_Stop;
 	}
 	if (attempt >= 10) return Plugin_Stop;
+	if (!g_roundLive && GetTotalSurvivors() < g_maxSurvivors.IntValue) SpawnSurvivorBot();
 	int bot = FindSurvivorBot();
 	if (bot > 0)
 	{
@@ -274,7 +403,14 @@ void ClaimReservation(int client)
 	int reservation = FindReservation(client);
 	g_pendingReservation[client] = -1;
 	if (!ValidReservation(reservation)) return;
-	ClearReservation(reservation);
+	if (g_reservationRole[reservation] == RESERVATION_SURVIVOR)
+	{
+		if (!g_reservationClaimed[reservation]) PrintToChat(client, "%t", "SeatRestored");
+		// Retain the identity until live/expiry so a later slow loader cannot
+		// displace somebody whose original seat was already restored.
+		g_reservationClaimed[reservation] = true;
+	}
+	else ClearReservation(reservation);
 	CancelBotCleanup();
 	ReconcileBots();
 }
@@ -375,6 +511,7 @@ void RememberRole(int client, int targetGeneration = -1)
 	}
 	else index--; // StringMap stores index + 1; FindFreeReservation returns a zero-based index.
 	strcopy(g_reservationSteam[index], sizeof(g_reservationSteam[]), steamId);
+	GetClientName(client, g_reservationName[index], sizeof(g_reservationName[]));
 	g_reservationRole[index] = GetClientTeam(client) == TEAM_SURVIVORS ? RESERVATION_SURVIVOR : RESERVATION_SPECTATOR;
 	g_reservationExpires[index] = GetTime() + RoundToNearest(RESERVATION_TTL);
 	g_reservationGeneration[index] = targetGeneration < 0 ? g_generation : targetGeneration;
@@ -418,7 +555,7 @@ int CountValidReservations(int role)
 {
 	int count;
 	for (int i = 0; i < MAX_RESERVATIONS; i++)
-		if (ValidReservation(i) && g_reservationRole[i] == role && !g_reservationClaimed[i]) count++;
+		if (ValidReservation(i) && g_reservationRole[i] == role && !g_reservationClaimed[i] && !ReservationIsOccupied(i)) count++;
 	return count;
 }
 
@@ -436,7 +573,12 @@ void ClearReservation(int index)
 public Action TimerReservationCleanup(Handle timer)
 {
 	for (int i = 0; i < MAX_RESERVATIONS; i++)
-		if (g_reservationRole[i] != 0 && !ValidReservation(i, true)) ClearReservation(i);
+		if (g_reservationRole[i] != 0 && !ValidReservation(i, true))
+		{
+			if (g_reservationGeneration[i] == g_generation && g_reservationRole[i] == RESERVATION_SURVIVOR && !g_reservationClaimed[i])
+				PrintToChatAll("%t", "SeatExpired", g_reservationName[i]);
+			ClearReservation(i);
+		}
 	ReconcileBots();
 	return Plugin_Continue;
 }
@@ -464,14 +606,34 @@ int GetAdmissionCount(int excludeReservation)
 {
 	int count = GetHumanSurvivors();
 	for (int i = 0; i < MAX_RESERVATIONS; i++)
-		if (i != excludeReservation && ValidReservation(i) && g_reservationRole[i] == RESERVATION_SURVIVOR && !g_reservationClaimed[i]) count++;
+		if (i != excludeReservation && ValidReservation(i) && g_reservationRole[i] == RESERVATION_SURVIVOR && !g_reservationClaimed[i] && !ReservationIsOccupied(i)) count++;
 	return count;
+}
+
+bool ReservationIsOccupied(int reservation)
+{
+	int team = g_reservationRole[reservation] == RESERVATION_SURVIVOR ? TEAM_SURVIVORS : TEAM_SPECTATORS;
+	for (int client = 1; client <= MaxClients; client++)
+		if (IsHumanClient(client) && GetClientTeam(client) == team && FindReservation(client) == reservation) return true;
+	return false;
+}
+
+void MakeRoomForReturningSurvivor(int returning)
+{
+	// Rework fix_team_shuffle restores ownership by first moving newcomers out
+	// of reserved seats. Use Steam identities here, not its PvP winner indices.
+	for (int client = MaxClients; client >= 1 && GetAdmissionCount(-1) > g_maxSurvivors.IntValue; client--)
+	{
+		if (client == returning || !IsHumanSurvivor(client) || ValidReservation(FindReservation(client))) continue;
+		ChangeClientTeam(client, TEAM_SPECTATORS);
+		PrintToChat(client, "%t", "SeatsReserved");
+	}
 }
 
 int FindSurvivorBot()
 {
 	for (int client = 1; client <= MaxClients; client++)
-		if (IsClientInGame(client) && IsFakeClient(client) && GetClientTeam(client) == TEAM_SURVIVORS) return client;
+		if (IsClientInGame(client) && IsFakeClient(client) && !IsClientInKickQueue(client) && GetClientTeam(client) == TEAM_SURVIVORS && L4D_GetIdlePlayerOfBot(client) <= 0) return client;
 	return 0;
 }
 
@@ -495,7 +657,7 @@ void SetServerInt(const char[] name, int value)
 
 bool IsHumanClient(int client)
 {
-	return client > 0 && client <= MaxClients && IsClientInGame(client) && !IsFakeClient(client);
+	return client > 0 && client <= MaxClients && IsClientInGame(client) && !IsFakeClient(client) && !IsClientInKickQueue(client);
 }
 
 bool IsHumanSurvivor(int client)
@@ -513,7 +675,7 @@ int GetHumanSurvivors()
 int GetTotalSurvivors()
 {
 	int count;
-	for (int client = 1; client <= MaxClients; client++) if (IsClientInGame(client) && GetClientTeam(client) == TEAM_SURVIVORS) count++;
+	for (int client = 1; client <= MaxClients; client++) if (IsClientInGame(client) && !IsClientInKickQueue(client) && GetClientTeam(client) == TEAM_SURVIVORS) count++;
 	return count;
 }
 
@@ -525,20 +687,19 @@ int Native_ShouldKeepSurvivorBots(Handle plugin, int params) { return g_allowBot
 
 int Native_IsRosterStable(Handle plugin, int params)
 {
+	return CountValidReservations(RESERVATION_SURVIVOR) == 0;
+}
+
+int Native_GetWaitingSurvivor(Handle plugin, int params)
+{
+	int ordinal = GetNativeCell(1);
 	for (int i = 0; i < MAX_RESERVATIONS; i++)
 	{
-		if (!ValidReservation(i)) continue;
-		bool restored;
-		int team = g_reservationRole[i] == RESERVATION_SURVIVOR ? TEAM_SURVIVORS : TEAM_SPECTATORS;
-		for (int client = 1; client <= MaxClients; client++)
-		{
-			if (IsHumanClient(client) && GetClientTeam(client) == team && FindReservation(client) == i)
-			{
-				restored = true;
-				break;
-			}
-		}
-		if (!restored) return false;
+		if (!ValidReservation(i) || g_reservationRole[i] != RESERVATION_SURVIVOR || g_reservationClaimed[i] || ReservationIsOccupied(i)) continue;
+		if (ordinal-- > 0) continue;
+		SetNativeString(2, g_reservationName[i], GetNativeCell(3), true);
+		SetNativeCellRef(4, g_reservationExpires[i] - GetTime());
+		return true;
 	}
-	return true;
+	return false;
 }

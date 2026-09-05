@@ -1,8 +1,25 @@
 "Phrases"
 {
+	"SeatsReserved"
+	{
+		"en" "Survivor slots are full or reserved for returning players. Please wait or spectate."
+	}
+	"SeatRestored"
+	{
+		"en" "Your survivor slot has been restored. Use !spec to spectate."
+	}
+	"SeatExpired"
+	{
+		"#format" "{1:s}"
+		"en" "{1}'s reserved survivor slot has expired."
+	}
+	"SeatProtectionEnded"
+	{
+		"en" "The round has started; unclaimed survivor slots are no longer reserved."
+	}
 	"JoinAfterStart"
 	{
-	    "en" "Survivor joining is unavailable after the team leaves the saferoom."
+	    "en" "The round has started and no survivor bot is available to take over."
 	}
 	"PlayerSpectated"
 	{
