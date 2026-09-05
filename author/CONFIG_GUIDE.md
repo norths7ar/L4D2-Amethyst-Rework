@@ -22,7 +22,7 @@ addons/sourcemod/configs/matchmodes.txt
 
 服务器无 matchmode 启动时，`cfg/server.cfg` 让 Confogl 在首个客户端进入时自动加载 `public_coop`；空服期间不会自动卸载它。任何加载 `campaign_switcher` 的模式在空服等待后，都会选择一张官方首图，并通过 `campaign_empty_matchmode`（当前为 `public_coop`）切换到该模式再换图。管理员仍可用 `sm_forcechangematch <mode> [map]` 手动切换。
 
-`public_coop` 是普通 Coop 纯净战役：只加载基础管理、依赖、崩溃/过场保护和换图管理，不改变门速、重力等玩法参数，也不加载玩法插件、Stripper、VScript、profile、暂停、jointeam 或 match_vote。
+`public_coop` 是普通 Coop 纯净战役：只加载基础管理、依赖、崩溃/过场保护和换图管理，不改变门速、重力等玩法参数，也不加载玩法插件、Stripper、VScript、profile、玩家队伍管理、准备/暂停流程或 match_vote。
 
 ## 各层只回答一个问题
 
@@ -64,6 +64,7 @@ sm plugins refresh
 
 - 想改 AstMod 的玩法数值：`cfg/cfgogl/astmod/shared_cvars.cfg`、`confogl.cfg` 与相关插件配置。
 - 想改 Redux 的人数基线：`astredux_profiles.cfg`；想改执行方式：分别看 `profile_controller`、`tank_health`、`tank_melee_damage`、`witch_control`、`smg_reload_control`、`wave_spawner` 和 `autowipe`。`!si` 临时值由 Wave Spawner 单独维护。
+- 想改 Redux/Flex 的玩家流程：队伍、bot 席位与跨图位置保护看 `player_manager`；开局加载门禁与 Coop 暂停看 `ready_pause`；跨图背包与开局药物看 `survivor_loadout`；`!fuck` 等管理异常处理看 `admin_tools`。AstMod 的同类行为仍由 `optional/astmod/jointeam.smx` 和 `pause_coop.smx` 保持。
 - 想改武器：先找当前加载的武器属性插件与该模式的加载清单，再确认这项属性没有被模式 cfg 或 mutation 覆盖。
 - 想改某张地图：先读共享权威目录 `cfg/stripper/astredux/maps/`，再读对应模式的 `mapinfo.txt`。
 - 想排查“切模式后残留”：`confogl_off.cfg` 与 Rework 的 `pred_unload_plugins` 路径。

@@ -28,6 +28,7 @@ ConVar g_cvCurrentProfile;
 ConVar g_cvForcedProfile;
 ConVar g_cvProfileConfig;
 GlobalForward g_fwdProfileApplied;
+GlobalForward g_fwdProfilePreApply;
 Handle g_hPlayerCountTimer;
 Handle g_hPlayerTeamTimer;
 int g_iCurrentProfile;
@@ -47,6 +48,10 @@ public void OnPluginStart()
 
     HookEvent("player_team", Event_PlayerTeam, EventHookMode_Post);
     g_fwdProfileApplied = new GlobalForward("ProfileController_OnProfileApplied", ET_Ignore, Param_Cell);
+    g_fwdProfilePreApply = new GlobalForward("ProfileController_OnProfilePreApply", ET_Ignore, Param_Cell);
+    RegPluginLibrary("profile_controller");
+    CreateNative("ProfileController_GetCurrentProfile", Native_GetCurrentProfile);
+    CreateNative("ProfileController_Reapply", Native_Reapply);
 }
 
 public void OnConfigsExecuted()
@@ -103,6 +108,7 @@ public void OnPluginEnd()
 {
     ClearProfiles();
     delete g_fwdProfileApplied;
+    delete g_fwdProfilePreApply;
 }
 
 public Action Timer_UpdateProfile(Handle timer)
@@ -245,6 +251,10 @@ bool ApplyProfile(int profile, const char[] reason)
         }
     }
 
+    Call_StartForward(g_fwdProfilePreApply);
+    Call_PushCell(profile);
+    Call_Finish();
+
     if (g_defaultCvarNames != null && g_defaultCvarValues != null)
     {
         for (int index = 0; index < g_defaultCvarNames.Length; index++)
@@ -276,6 +286,20 @@ bool ApplyProfile(int profile, const char[] reason)
     LogMessage("[Profile Controller] Applied players_%d (%s), reason=%s, cvars=%d.", profile, g_profiles[profile].label, reason, cvarNames.Length);
     PrintToChatAll("\x04[Profile Controller]\x01 Profile changed to \x03%s\x01.", g_profiles[profile].label);
     return true;
+}
+
+public int Native_GetCurrentProfile(Handle plugin, int numParams)
+{
+    return g_iCurrentProfile;
+}
+
+public int Native_Reapply(Handle plugin, int numParams)
+{
+    if (!g_bProfilesLoaded || g_iCurrentProfile < 1 || g_iCurrentProfile > MAX_PROFILES)
+    {
+        return false;
+    }
+    return ApplyProfile(g_iCurrentProfile, "native_reapply");
 }
 
 bool LoadProfiles()

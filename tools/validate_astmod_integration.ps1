@@ -170,14 +170,33 @@ $requiredPaths = @(
     "addons/sourcemod/scripting/fix_exec_config_unicode.sp",
     "addons/sourcemod/scripting/server_restart.sp",
     "addons/sourcemod/scripting/include/imatchext.inc",
+    "addons/sourcemod/scripting/include/coop_player_manager.inc",
+    "addons/sourcemod/scripting/include/profile_controller.inc",
+    "addons/sourcemod/scripting/include/wave_spawner.inc",
     "addons/sourcemod/translations/imatchext.phrases.txt",
     "addons/sourcemod/translations/chi/imatchext.phrases.txt",
     "addons/sourcemod/translations/zho/imatchext.phrases.txt",
+    "addons/sourcemod/translations/challenge.phrases.txt",
+    "addons/sourcemod/translations/chi/challenge.phrases.txt",
+    "addons/sourcemod/translations/coop_flow.phrases.txt",
+    "addons/sourcemod/translations/chi/coop_flow.phrases.txt",
     "addons/sourcemod/scripting/optional/coop/campaign_switcher.sp",
     "cfg/sourcemod/campaign_switcher.cfg",
-    "addons/sourcemod/scripting/optional/coop/pause_coop.sp",
+    "addons/sourcemod/scripting/optional/astmod/jointeam.sp",
+    "addons/sourcemod/scripting/optional/astmod/pause_coop.sp",
+    "addons/sourcemod/scripting/optional/astmod/player_manager_compat.sp",
+    "addons/sourcemod/scripting/optional/coop/player_manager.sp",
+    "addons/sourcemod/scripting/optional/coop/ready_pause.sp",
+    "addons/sourcemod/scripting/optional/coop/survivor_loadout.sp",
+    "addons/sourcemod/scripting/optional/coop/admin_tools.sp",
     "addons/sourcemod/plugins/optional/coop/campaign_switcher.smx",
-    "addons/sourcemod/plugins/optional/coop/pause_coop.smx",
+    "addons/sourcemod/plugins/optional/astmod/jointeam.smx",
+    "addons/sourcemod/plugins/optional/astmod/pause_coop.smx",
+    "addons/sourcemod/plugins/optional/astmod/player_manager_compat.smx",
+    "addons/sourcemod/plugins/optional/coop/player_manager.smx",
+    "addons/sourcemod/plugins/optional/coop/ready_pause.smx",
+    "addons/sourcemod/plugins/optional/coop/survivor_loadout.smx",
+    "addons/sourcemod/plugins/optional/coop/admin_tools.smx",
     "addons/sourcemod/scripting/optional/coop/profile_controller.sp",
     "addons/sourcemod/scripting/optional/coop/wave_spawner.sp",
     "addons/sourcemod/scripting/optional/coop/tank_health.sp",
@@ -323,13 +342,34 @@ foreach ($mode in $modes) {
     if ($modePluginText -notmatch '(?m)^\s*sm\s+plugins\s+load\s+match_vote\.smx\s*$') {
         Add-Failure "$mode does not load match_vote.smx"
     }
-    if ($modePluginText -notmatch '(?m)^\s*sm\s+plugins\s+load\s+optional/coop/jointeam\.smx\s*$') {
-        Add-Failure "$mode does not load jointeam.smx"
+    if ($mode -eq "astmod") {
+        foreach ($legacyPlugin in @("jointeam", "pause_coop")) {
+            if ($modePluginText -notmatch "(?m)^\s*sm\s+plugins\s+load\s+optional/astmod/$legacyPlugin\.smx\s*`$") {
+                Add-Failure "AstMod does not load its legacy $legacyPlugin.smx"
+            }
+        }
+        foreach ($coopComponent in @("player_manager", "ready_pause", "survivor_loadout", "admin_tools")) {
+            if ($modePluginText -match "(?m)^\s*sm\s+plugins\s+load\s+optional/coop/$coopComponent\.smx\s*`$") {
+                Add-Failure "AstMod loads Redux/Flex component $coopComponent.smx"
+            }
+        }
     }
-    if ($modePluginText -match '(?m)^\s*sm\s+plugins\s+load\s+optional/playermanagement\.smx\s*$') {
-        Add-Failure "$mode loads playermanagement.smx alongside jointeam.smx"
+    else {
+        foreach ($coopComponent in @("ready_pause", "player_manager", "survivor_loadout", "admin_tools")) {
+            if ($modePluginText -notmatch "(?m)^\s*sm\s+plugins\s+load\s+optional/coop/$coopComponent\.smx\s*`$") {
+                Add-Failure "$mode does not load Coop component $coopComponent.smx"
+            }
+        }
+        foreach ($legacyLoad in @("optional/astmod/jointeam.smx", "optional/astmod/pause_coop.smx", "optional/coop/jointeam.smx", "optional/coop/pause_coop.smx", "optional/pause.smx", "optional/playermanagement.smx")) {
+            if ($modePluginText -match ("(?m)^\s*sm\s+plugins\s+load\s+" + [regex]::Escape($legacyLoad) + "\s*`$")) {
+                Add-Failure "$mode still loads incompatible player-flow plugin $legacyLoad"
+            }
+        }
     }
 }
+
+Assert-Contains "cfg/cfgogl/astflex/plugins_1.cfg" '^sm plugins load optional/astmod/player_manager_compat\.smx$' "AstFlex does not load the AstMod Challenge compatibility bridge"
+Assert-NotContains "cfg/cfgogl/astredux/plugins_1.cfg" 'player_manager_compat\.smx' "AstRedux loads the AstFlex-only compatibility bridge"
 
 $publicModeRoot = Join-Path $Root "cfg/cfgogl/public_coop"
 foreach ($chunk in @("plugins_1.cfg", "plugins_2.cfg", "plugins_3.cfg", "shared_plugins.cfg")) {
@@ -470,6 +510,15 @@ foreach ($profileKey in @('tank_spawn_health', 'tank_melee_damage', 'witch_block
         ('"' + $profileKey + '"') `
         "AstRedux profile is missing component CVar $profileKey"
 }
+foreach ($waveProfileKey in @('wave_interval', 'wave_size', 'wave_hunter_limit', 'wave_smoker_limit', 'wave_boomer_limit', 'wave_spitter_limit', 'wave_jockey_limit', 'wave_charger_limit', 'wave_preferred_direction')) {
+    Assert-Contains "addons/sourcemod/configs/astredux_profiles.cfg" ('"' + $waveProfileKey + '"') "AstRedux profile is missing direct Wave field $waveProfileKey"
+}
+Assert-NotContains "addons/sourcemod/configs/astredux_profiles.cfg" 'wave_default_(?:interval|size)' "AstRedux profile still uses obsolete Wave default keys"
+Assert-RawContains "addons/sourcemod/scripting/optional/coop/profile_controller.sp" '(?ms)for \(int index = 0; index < cvarNames\.Length.*?Call_StartForward\(g_fwdProfilePreApply\)' "Profile pre-apply forward is not after CVar validation"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/profile_controller.sp" 'CreateNative\("ProfileController_GetCurrentProfile"' "Profile Controller does not expose current profile native"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/profile_controller.sp" 'CreateNative\("ProfileController_Reapply"' "Profile Controller does not expose synchronous reapply native"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/wave_spawner.sp" 'g_iSlotOverrideMask' "Wave Spawner does not maintain per-slot field masks"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/challenge.sp" 'g_iPendingSlot' "Coop Challenge does not bind pending votes to profile slots"
 Assert-Contains `
     "cfg/cfgogl/astredux/astredux.cfg" `
     '^\s*confogl_addcvar\s+profile_controller_config\s+"configs/astredux_profiles\.cfg"\s*$' `
@@ -505,8 +554,14 @@ foreach ($legacyMode in @('astmod', 'astflex')) {
 Assert-Contains "addons/sourcemod/scripting/optional/coop/challenge.sp" 'mob_limit' "Coop Challenge does not expose mob_limit menu item"
 Assert-Contains "addons/sourcemod/scripting/optional/coop/challenge.sp" '有限尸潮' "Coop Challenge does not name the mob limit toggle"
 Assert-Contains "addons/sourcemod/scripting/optional/coop/challenge.sp" 'TZ_CallVote\(client,\s*16' "Coop Challenge does not use target 16 for mob limit"
-Assert-Contains "addons/sourcemod/scripting/optional/coop/challenge.sp" 'g_iOverrideMask\s*&\s*\(1\s*<<\s*16\)' "Coop Challenge does not reapply mob limit override"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/challenge.sp" 'g_iSlotOverrideMask\[slot\]' "Coop Challenge does not reapply per-profile overrides"
 Assert-Contains "addons/sourcemod/scripting/optional/coop/challenge.sp" 'pendingMobLimit\s*=\s*-1' "Coop Challenge does not clear pending mob limit votes"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/challenge.sp" 'RegConsoleCmd\("sm_info"' "Coop Challenge does not expose sm_info"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/challenge.sp" 'PrintOverrideDetails' "Coop Challenge info does not enumerate current overrides"
+Assert-Contains "addons/sourcemod/scripting/include/wave_spawner.inc" 'WAVE_FIELD_INTERVAL' "Wave field mask constants are missing"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/wave_spawner.sp" 'CreateNative\("WaveSpawner_GetCurrentOverrideMask"' "Wave Spawner does not expose current override mask"
+Assert-Contains "addons/sourcemod/translations/challenge.phrases.txt" 'InfoHeader' "Challenge info phrases are missing"
+Assert-Contains "addons/sourcemod/translations/chi/challenge.phrases.txt" 'InfoHeader' "Chinese Challenge info phrases are missing"
 Assert-Contains "addons/sourcemod/configs/astredux_profiles.cfg" '^\s*"mob_spawn_limit_enabled"\s+"0"\s*$' "AstRedux profile defaults do not reset mob limit"
 Assert-NotContains "addons/sourcemod/scripting/optional/coop/challenge.sp" 'ResetConVar\(mobLimit|mobLimit\.(?:IntValue|BoolValue)\s*=\s*0' "Coop Challenge hardcodes the mob limit baseline"
 Assert-NotContains `
@@ -522,8 +577,8 @@ foreach ($baseline in @(
     '"si_damage_enable" "0"',
     '"si_damage_ratio_enable" "0"',
     '"si_damage_base" "12"',
-    '"ast_maxinfected" "0"',
-    '"ast_allowhumantank" "0"',
+    '"coop_player_infected_limit" "0"',
+    '"coop_player_allow_human_tank" "0"',
     '"ai_hardsi_enable" "1"'
 )) {
     Assert-Contains "addons/sourcemod/configs/astredux_profiles.cfg" $baseline "AstRedux defaults is missing baseline $baseline"
@@ -595,8 +650,12 @@ Assert-Contains `
     "script_reloader does not publish its completion forward"
 Assert-Contains `
     "scripts/vscripts/astredux.nut" `
-    'RandomInt\(0, limits\.len\(\) - 1\)' `
-    "AstRedux does not distribute overflow slots equally across all SI classes"
+    'if \(limit > 0\) eligible\.append' `
+    "AstRedux does not restrict overflow slots to eligible SI classes"
+Assert-Contains `
+    "scripts/vscripts/astredux.nut" `
+    'Fisher-Yates|order\.len\(\) - 1' `
+    "AstRedux does not shuffle eligible overflow slots without replacement"
 Assert-NotContains `
     "scripts/vscripts/astredux.nut" `
     '\bscale\b' `
@@ -672,29 +731,36 @@ foreach ($mode in @("astmod", "astredux", "astflex")) {
         'weapon_allow_m2_hunter' `
         "$mode still configures a CVar not provided by the active Hunter plugin"
 }
-Assert-Contains `
-    "addons/sourcemod/scripting/optional/coop/pause_coop.sp" `
-    'CreateGlobalForward\("OnPause"' `
-    "Coop pause does not publish the pause forward"
-Assert-Contains `
-    "addons/sourcemod/scripting/optional/coop/pause_coop.sp" `
-    'CreateGlobalForward\("OnUnpause"' `
-    "Coop pause does not publish the unpause forward"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/ready_pause.sp" 'GlobalForward\("OnPause"' "Coop ready/pause does not publish the pause forward"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/ready_pause.sp" 'GlobalForward\("OnUnpause"' "Coop ready/pause does not publish the unpause forward"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/ready_pause.sp" 'RegPluginLibrary\("readyup"\)' "Coop ready/pause does not own the readyup library"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/ready_pause.sp" 'RegPluginLibrary\("pause"\)' "Coop ready/pause does not own the pause library"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/ready_pause.sp" 'CreateConVar\("coop_ready_enabled",\s*"1"' "Coop ready gate is not enabled by default"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/ready_pause.sp" 'CreateConVar\("coop_pause_enabled",\s*"1"' "Coop pause is not enabled by default"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/ready_pause.sp" 'if \(!g_readyEnabled\.BoolValue\) return Plugin_Continue' "Disabling the ready gate still blocks saferoom exit"
+Assert-RawContains "addons/sourcemod/scripting/optional/coop/ready_pause.sp" '(?ms)void BeginReadyPhase\(\).*?g_readyPhase\s*=\s*true.*?g_countdownFinished\s*=\s*!g_readyEnabled\.BoolValue' "Ready-disabled mode does not preserve the pre-live lifecycle"
 
-foreach ($mode in @("astmod", "astredux")) {
-    Assert-Contains `
-        "cfg/cfgogl/$mode/plugins_1.cfg" `
-        'sm plugins load optional/coop/pause_coop\.smx' `
-        "$mode does not load the coop pause implementation"
-    Assert-NotContains `
-        "cfg/cfgogl/$mode/plugins_1.cfg" `
-        'sm plugins load optional/pause\.smx' `
-        "$mode still loads the generic pause implementation"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/player_manager.sp" 'AuthId_SteamID64' "Player Manager reservations do not use SteamID64"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/player_manager.sp" 'GetTime\(\)' "Player Manager reservations do not use wall-clock expiry"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/player_manager.sp" 'g_reservationGeneration' "Player Manager reservations do not track map generation"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/player_manager.sp" 'g_requestToken' "Player Manager delayed team requests are not invalidatable"
+Assert-NotContains "addons/sourcemod/scripting/optional/coop/player_manager.sp" '\bGetGameTime\(' "Player Manager uses map-relative time for reservations"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/survivor_loadout.sp" 'CreateConVar\("coop_loadout_start_pills",\s*"1"' "Survivor Loadout does not expose starting pills"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/admin_tools.sp" 'RegAdminCmd\("sm_fuck"' "Coop Admin Tools does not own !fuck"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/admin_tools.sp" 'CleanupAiSpecialInfected\(' "Coop Admin Tools does not isolate its AI SI cleanup action"
+Assert-NotPath "addons/sourcemod/scripting/optional/coop/si_cleanup.sp"
+Assert-NotPath "addons/sourcemod/plugins/optional/coop/si_cleanup.smx"
+Assert-NotPath "addons/sourcemod/scripting/optional/coop/jointeam.sp"
+Assert-NotPath "addons/sourcemod/plugins/optional/coop/jointeam.smx"
+Assert-NotPath "addons/sourcemod/scripting/optional/coop/pause_coop.sp"
+Assert-NotPath "addons/sourcemod/plugins/optional/coop/pause_coop.smx"
+
+foreach ($mode in @("astredux", "astflex")) {
+    Assert-NotContains "cfg/cfgogl/$mode/$mode.cfg" '\bast_smacwelcome\b' "$mode still configures the AstMod-only fake SMAC welcome"
+    Assert-Contains "cfg/cfgogl/$mode/$mode.cfg" '^\s*confogl_addcvar\s+coop_ready_enabled\s+1\s*$' "$mode does not enable the Coop ready lifecycle"
+    Assert-Contains "cfg/cfgogl/$mode/$mode.cfg" '^\s*confogl_addcvar\s+coop_pause_enabled\s+1\s*$' "$mode does not enable Coop pause"
+    Assert-Contains "cfg/cfgogl/$mode/$mode.cfg" '^\s*confogl_addcvar\s+coop_loadout_start_pills\s+1\s*$' "$mode does not preserve starting pills"
 }
-Assert-Contains `
-    "cfg/cfgogl/astflex/plugins_1.cfg" `
-    'sm plugins load optional/pause\.smx' `
-    "AstFlex no longer loads the generic pause implementation"
 
 foreach ($mode in $modes) {
     $pluginList = Join-Path $Root "cfg/cfgogl/$mode/plugins_1.cfg"

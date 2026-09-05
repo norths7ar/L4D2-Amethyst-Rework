@@ -76,10 +76,27 @@ function ApplyDirectorOptions()
 		baseTotal += limit;
 	}
 
-	// 基础阵容只定义起点。超过基础总数的名额在六种特感间等概率独立分配，
-	// 不继承基础阵容的 Hunter 权重，也不使用等比例放大。
-	for (local extra = baseTotal; extra < waveSize; extra++) {
-		limits[RandomInt(0, limits.len() - 1)]++;
+	// 基础阵容只定义起点。额外名额只分配给原始上限大于 0 的职业，
+	// 每轮使用 Fisher-Yates 洗牌且不重复；超过一轮时再开始新一轮。
+	local eligible = [];
+	foreach (index, limit in limits) {
+		if (limit > 0) eligible.append(index);
+	}
+	local extraCount = waveSize - baseTotal;
+	while (extraCount > 0 && eligible.len() > 0) {
+		local order = [];
+		foreach (index in eligible) order.append(index);
+		for (local i = order.len() - 1; i > 0; i--) {
+			local j = RandomInt(0, i);
+			local swap = order[i];
+			order[i] = order[j];
+			order[j] = swap;
+		}
+		foreach (index in order) {
+			if (extraCount <= 0) break;
+			limits[index]++;
+			extraCount--;
+		}
 	}
 
 	DirectorOptions.HunterLimit = limits[0];

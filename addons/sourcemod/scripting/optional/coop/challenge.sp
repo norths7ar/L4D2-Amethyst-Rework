@@ -4,6 +4,8 @@
 #include <sourcemod>
 #include <builtinvotes>
 #include <left4dhooks>
+#include <profile_controller>
+#include <wave_spawner>
 
 #define MENU_DISPLAY_TIME		15
 
@@ -20,9 +22,11 @@ int tempRatioDamage = -1;
 int tempRehealth = -1;
 int tempReammo = -1;
 int tempSIDamage = -1;
-int tempMobLimit = -1;
 int pendingMobLimit = -1;
 int g_iOverrideMask;
+int g_iSlotOverrideMask[5];
+int g_iSlotOverride[5][17];
+int g_iPendingSlot;
 Handle g_hEmptyResetTimer;
 Handle g_hReminderTimer;
 
@@ -45,9 +49,11 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
+	LoadTranslations("challenge.phrases");
 	RegConsoleCmd("sm_tz", challengeRequest, "打开难度控制系统菜单");
 	RegConsoleCmd("sm_ast", challengeRequest, "打开 Ast 玩法调整菜单");
-	RegAdminCmd("sm_reset", ResetSettingsCommand, ADMFLAG_CONFIG, "立即恢复当前 Ast 模式默认设置");
+	RegConsoleCmd("sm_info", Command_Info, "显示当前 Coop 玩法状态");
+	RegAdminCmd("sm_reset", ResetSettingsCommand, ADMFLAG_CONFIG, "清除所有人数档位的临时调整，并恢复当前基线");
 	HookEvent("player_team", OnChangeTeam, EventHookMode_Post);
 
 	hRehealth = FindConVar("kill_rewards_health_enable");
@@ -56,6 +62,7 @@ public void OnPluginStart()
 	hRatioDamage = FindConVar("si_damage_ratio_enable");
 
 	g_hReminderTimer = CreateTimer(300.0, Timer_RemindOverrides, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+	ClearAllSlotOverrides();
 }
 
 public void L4D_OnFirstSurvivorLeftSafeArea_Post(int client)
@@ -70,6 +77,16 @@ public Action challengeRequest(int client, int args)
 {
 	if (client) {
 		drawPanel(client, 0);
+	}
+	return Plugin_Handled;
+}
+
+public Action Command_Info(int client, int args)
+{
+	if (client > 0 && IsClientInGame(client))
+	{
+		PrintGameplayStatus(client);
+		PrintOverrideDetails(client);
 	}
 	return Plugin_Handled;
 }
@@ -104,7 +121,7 @@ public Action drawPanel(int client, int first_item)
 	else AddMenuItem(menu, "mob_limit", "有限尸潮（插件未就绪）", ITEMDRAW_DISABLED);
 	AddMenuItem(menu, "pills", "额外发药设定");
 	AddMenuItem(menu, "player_infected", "玩家特感设定");
-	AddMenuItem(menu, "reset", "恢复默认设置");
+	AddMenuItem(menu, "reset", "清除临时调整");
 
 	DisplayMenuAtItem(menu, client, first_item, MENU_DISPLAY_TIME);
 	return Plugin_Handled;
@@ -219,11 +236,12 @@ public void TZ_CallVote(int client, int target, int value)
 {
 	if ( !IsClientSurvivor(client, true) ) return;
 	if (CountHumanSurvivors() == 1) {
-		ApplyGameplaySetting(target, value, true);
+		ApplyGameplaySetting(target, value, true, GetCurrentProfile());
 		return;
 	}
 
 	if ( IsNewBuiltinVoteAllowed() ) {
+		g_iPendingSlot = GetCurrentProfile();
 		int iNumPlayers;
 		int iPlayers[MAXPLAYERS];
 		for (int i = 1; i <= MaxClients; i++) {
@@ -292,7 +310,7 @@ public void TZ_CallVote(int client, int target, int value)
 				SetBuiltinVoteResultCallback(g_hVote, ReammoVoteResultHandler);
 			}
 			case 14: {
-				Format(sBuffer, sizeof(sBuffer), "恢复当前模式默认设置");
+				Format(sBuffer, sizeof(sBuffer), "清除所有人数档位的临时调整");
 				SetBuiltinVoteResultCallback(g_hVote, ResetVoteResultHandler);
 			}
 			case 15: {
@@ -314,14 +332,20 @@ public void TZ_CallVote(int client, int target, int value)
 	}
 }
 
-void ApplyGameplaySetting(int target, int value, bool announce)
+void ApplyGameplaySetting(int target, int value, bool announce, int slot)
 {
+	if (slot < 1 || slot > 4) slot = GetCurrentProfile();
+	if (slot < 1 || slot > 4 || target < 1 || target > 16) return;
+	g_iSlotOverride[slot][target] = value;
+	g_iSlotOverrideMask[slot] |= (1 << target);
+	if (slot != GetCurrentProfile()) return;
+	g_iOverrideMask = g_iSlotOverrideMask[slot];
 	switch (target) {
 		case 1: { tempTankDmg = value; SetConVarInt(FindConVar("vs_tank_damage"), value); }
 		case 2: { tempTankBhop = value; SetConVarInt(FindConVar("ai_tank_bhop"), value); }
 		case 3: { tempTankRock = value; SetConVarInt(FindConVar("ai_tank_rock"), value); }
-		case 4: { tempPlayerInfected = value; SetConVarInt(FindConVar("ast_maxinfected"), value); }
-		case 5: { tempPlayerTank = value; SetConVarInt(FindConVar("ast_allowhumantank"), value); }
+		case 4: { tempPlayerInfected = value; SetConVarInt(FindConVar("coop_player_infected_limit"), value); }
+		case 5: { tempPlayerTank = value; SetConVarInt(FindConVar("coop_player_allow_human_tank"), value); }
 		case 7: { tempMorePills = value; SetConVarInt(FindConVar("ast_pills_enabled"), value); }
 		case 8: { tempKillMapPills = value; SetConVarInt(FindConVar("ast_pills_map_kill"), value); }
 		case 11: { tempRatioDamage = value; SetConVarInt(hRatioDamage, value); }
@@ -335,51 +359,52 @@ void ApplyGameplaySetting(int target, int value, bool announce)
 		case 16: {
 			ConVar mobLimit = FindConVar("mob_spawn_limit_enabled");
 			if (mobLimit == null) return;
-			tempMobLimit = value;
 			mobLimit.IntValue = value;
 		}
 		default: return;
 	}
 
-	MarkOverride(target);
 	if (announce) {
 		PrintToChatAll("\x04[Ast] \x01单人调整已直接生效；使用 \x03!ast \x01查看当前状态.");
 	}
 }
 
+void ApplyVoteSetting(int target, int value)
+{
+	int slot = g_iPendingSlot;
+	if (slot < 1 || slot > 4) slot = GetCurrentProfile();
+	ApplyGameplaySetting(target, value, false, slot);
+	g_iPendingSlot = 0;
+}
+
 void ReapplyGameplayOverrides()
 {
-	if (g_iOverrideMask == 0) return;
-	if ((g_iOverrideMask & (1 << 1)) && tempTankDmg >= 0) ApplyGameplaySetting(1, tempTankDmg, false);
-	if ((g_iOverrideMask & (1 << 2)) && tempTankBhop >= 0) ApplyGameplaySetting(2, tempTankBhop, false);
-	if ((g_iOverrideMask & (1 << 3)) && tempTankRock >= 0) ApplyGameplaySetting(3, tempTankRock, false);
-	if ((g_iOverrideMask & (1 << 4)) && tempPlayerInfected >= 0) ApplyGameplaySetting(4, tempPlayerInfected, false);
-	if ((g_iOverrideMask & (1 << 5)) && tempPlayerTank >= 0) ApplyGameplaySetting(5, tempPlayerTank, false);
-	if ((g_iOverrideMask & (1 << 7)) && tempMorePills >= 0) ApplyGameplaySetting(7, tempMorePills, false);
-	if ((g_iOverrideMask & (1 << 8)) && tempKillMapPills >= 0) ApplyGameplaySetting(8, tempKillMapPills, false);
-	if ((g_iOverrideMask & (1 << 11)) && tempRatioDamage >= 0) ApplyGameplaySetting(11, tempRatioDamage, false);
-	if ((g_iOverrideMask & (1 << 12)) && tempRehealth >= 0) ApplyGameplaySetting(12, tempRehealth, false);
-	if ((g_iOverrideMask & (1 << 13)) && tempReammo >= 0) ApplyGameplaySetting(13, tempReammo, false);
-	if ((g_iOverrideMask & (1 << 15)) && tempSIDamage >= 0) ApplyGameplaySetting(15, tempSIDamage, false);
-	if ((g_iOverrideMask & (1 << 16)) && tempMobLimit >= 0) ApplyGameplaySetting(16, tempMobLimit, false);
-}
-
-public Action Timer_ReapplyGameplayOverrides(Handle timer)
-{
-	ReapplyGameplayOverrides();
-	return Plugin_Stop;
-}
-
-public void OnConfigsExecuted()
-{
-	CreateTimer(0.5, Timer_ReapplyGameplayOverrides, _, TIMER_FLAG_NO_MAPCHANGE);
-}
-
-void MarkOverride(int target)
-{
-	if (target > 0 && target < 31) {
-		g_iOverrideMask |= (1 << target);
+	int slot = GetCurrentProfile();
+	if (slot < 1 || slot > 4) return;
+	SyncTempMirrors(slot);
+	g_iOverrideMask = g_iSlotOverrideMask[slot];
+	for (int target = 1; target <= 16; target++)
+	{
+		if ((g_iOverrideMask & (1 << target)) != 0)
+		{
+			ApplyGameplaySetting(target, g_iSlotOverride[slot][target], false, slot);
+		}
 	}
+}
+
+void SyncTempMirrors(int slot)
+{
+	tempTankDmg = (g_iSlotOverrideMask[slot] & (1 << 1)) ? g_iSlotOverride[slot][1] : -1;
+	tempTankBhop = (g_iSlotOverrideMask[slot] & (1 << 2)) ? g_iSlotOverride[slot][2] : -1;
+	tempTankRock = (g_iSlotOverrideMask[slot] & (1 << 3)) ? g_iSlotOverride[slot][3] : -1;
+	tempPlayerInfected = (g_iSlotOverrideMask[slot] & (1 << 4)) ? g_iSlotOverride[slot][4] : -1;
+	tempPlayerTank = (g_iSlotOverrideMask[slot] & (1 << 5)) ? g_iSlotOverride[slot][5] : -1;
+	tempMorePills = (g_iSlotOverrideMask[slot] & (1 << 7)) ? g_iSlotOverride[slot][7] : -1;
+	tempKillMapPills = (g_iSlotOverrideMask[slot] & (1 << 8)) ? g_iSlotOverride[slot][8] : -1;
+	tempRatioDamage = (g_iSlotOverrideMask[slot] & (1 << 11)) ? g_iSlotOverride[slot][11] : -1;
+	tempRehealth = (g_iSlotOverrideMask[slot] & (1 << 12)) ? g_iSlotOverride[slot][12] : -1;
+	tempReammo = (g_iSlotOverrideMask[slot] & (1 << 13)) ? g_iSlotOverride[slot][13] : -1;
+	tempSIDamage = (g_iSlotOverrideMask[slot] & (1 << 15)) ? g_iSlotOverride[slot][15] : -1;
 }
 
 public void TankDmgVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
@@ -388,7 +413,7 @@ public void TankDmgVoteResultHandler(Handle vote, int num_votes, int num_clients
 		if (item_info[i][BUILTINVOTEINFO_ITEM_INDEX] == BUILTINVOTES_VOTE_YES) {
 			if (item_info[i][BUILTINVOTEINFO_ITEM_VOTES] > (num_votes / 2)) {
 				DisplayBuiltinVotePass(vote, "正在更改 Tank 伤害...");
-				ApplyGameplaySetting(1, tempTankDmg, false);
+		ApplyVoteSetting(1, tempTankDmg);
 				return;
 			}
 		}
@@ -403,7 +428,7 @@ public void TankBhopVoteResultHandler(Handle vote, int num_votes, int num_client
 		if (item_info[i][BUILTINVOTEINFO_ITEM_INDEX] == BUILTINVOTES_VOTE_YES) {
 			if (item_info[i][BUILTINVOTEINFO_ITEM_VOTES] > (num_votes / 2)) {
 				DisplayBuiltinVotePass(vote, "正在更改 Tank 连跳...");
-				ApplyGameplaySetting(2, tempTankBhop, false);
+		ApplyVoteSetting(2, tempTankBhop);
 				return;
 			}
 		}
@@ -419,7 +444,7 @@ public void TankRockVoteResultHandler(Handle vote, int num_votes, int num_client
 		if (item_info[i][BUILTINVOTEINFO_ITEM_INDEX] == BUILTINVOTES_VOTE_YES) {
 			if (item_info[i][BUILTINVOTEINFO_ITEM_VOTES] > (num_votes / 2)) {
 				DisplayBuiltinVotePass(vote, "正在更改 Tank 丢石头...");
-				ApplyGameplaySetting(3, tempTankRock, false);
+		ApplyVoteSetting(3, tempTankRock);
 				return;
 			}
 		}
@@ -437,7 +462,7 @@ public void PlayerInfectedVoteResultHandler(Handle vote, int num_votes, int num_
 				char sBuffer[64];
 				Format(sBuffer, sizeof(sBuffer), "正在更改特感玩家数量为 %d ...", tempPlayerInfected);
 				DisplayBuiltinVotePass(vote, sBuffer);
-				ApplyGameplaySetting(4, tempPlayerInfected, false);
+		ApplyVoteSetting(4, tempPlayerInfected);
 				return;
 			}
 		}
@@ -455,7 +480,7 @@ public void PlayerTankVoteResultHandler(Handle vote, int num_votes, int num_clie
 				tempPlayerTank == 0 ? Format(sBuffer, sizeof(sBuffer), "禁止") : Format(sBuffer, sizeof(sBuffer), "允许");
 				Format(sBuffer, sizeof(sBuffer), "%s玩家扮演 Tank", sBuffer);
 				DisplayBuiltinVotePass(vote, sBuffer);
-				ApplyGameplaySetting(5, tempPlayerTank, false);
+		ApplyVoteSetting(5, tempPlayerTank);
 				return;
 			}
 		}
@@ -473,7 +498,7 @@ public void MorePillsVoteResultHandler(Handle vote, int num_votes, int num_clien
 				tempMorePills == 0 ? Format(sBuffer, sizeof(sBuffer), "关闭") : Format(sBuffer, sizeof(sBuffer), "开启");
 				Format(sBuffer, sizeof(sBuffer), "正在 %s 额外发药...", sBuffer);
 				DisplayBuiltinVotePass(vote, sBuffer);
-				ApplyGameplaySetting(7, tempMorePills, false);
+		ApplyVoteSetting(7, tempMorePills);
 				return;
 			}
 		}
@@ -491,7 +516,7 @@ public void KillMapPillsVoteResultHandler(Handle vote, int num_votes, int num_cl
 				tempKillMapPills == 0 ? Format(sBuffer, sizeof(sBuffer), "保留") : Format(sBuffer, sizeof(sBuffer), "删除");
 				Format(sBuffer, sizeof(sBuffer), "已设置为 %s 地图药，下回合生效", sBuffer);
 				DisplayBuiltinVotePass(vote, sBuffer);
-				ApplyGameplaySetting(8, tempKillMapPills, false);
+		ApplyVoteSetting(8, tempKillMapPills);
 				return;
 			}
 		}
@@ -514,7 +539,7 @@ public void RatioDamageVoteResultHandler(Handle vote, int num_votes, int num_cli
 {
 	if (DidVotePass(num_votes, num_items, item_info)) {
 		DisplayBuiltinVotePass(vote, "正在更改比例伤害设置...");
-		ApplyGameplaySetting(11, tempRatioDamage, false);
+		ApplyVoteSetting(11, tempRatioDamage);
 		return;
 	}
 	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
@@ -524,7 +549,7 @@ public void RehealthVoteResultHandler(Handle vote, int num_votes, int num_client
 {
 	if (DidVotePass(num_votes, num_items, item_info)) {
 		DisplayBuiltinVotePass(vote, "正在更改击杀回血设置...");
-		ApplyGameplaySetting(12, tempRehealth, false);
+		ApplyVoteSetting(12, tempRehealth);
 		return;
 	}
 	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
@@ -534,7 +559,7 @@ public void ReammoVoteResultHandler(Handle vote, int num_votes, int num_clients,
 {
 	if (DidVotePass(num_votes, num_items, item_info)) {
 		DisplayBuiltinVotePass(vote, "正在更改击杀回备弹设置...");
-		ApplyGameplaySetting(13, tempReammo, false);
+		ApplyVoteSetting(13, tempReammo);
 		return;
 	}
 	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
@@ -543,7 +568,7 @@ public void ReammoVoteResultHandler(Handle vote, int num_votes, int num_clients,
 public void ResetVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
 {
 	if (DidVotePass(num_votes, num_items, item_info)) {
-		DisplayBuiltinVotePass(vote, "正在恢复当前模式默认设置...");
+		DisplayBuiltinVotePass(vote, "正在清除临时调整并恢复当前基线...");
 		ResetSettings(true);
 		return;
 	}
@@ -554,7 +579,7 @@ public void SIDamageVoteResultHandler(Handle vote, int num_votes, int num_client
 {
 	if (DidVotePass(num_votes, num_items, item_info)) {
 		DisplayBuiltinVotePass(vote, "正在更改特感基础伤害...");
-		ApplyGameplaySetting(15, tempSIDamage, false);
+		ApplyVoteSetting(15, tempSIDamage);
 		return;
 	}
 	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
@@ -564,7 +589,7 @@ public void MobLimitVoteResultHandler(Handle vote, int num_votes, int num_client
 {
 	if (DidVotePass(num_votes, num_items, item_info)) {
 		DisplayBuiltinVotePass(vote, "正在更改有限尸潮设置...");
-		ApplyGameplaySetting(16, pendingMobLimit, false);
+		ApplyVoteSetting(16, pendingMobLimit);
 		pendingMobLimit = -1;
 		return;
 	}
@@ -576,11 +601,13 @@ public void VoteHandler(Handle vote, BuiltinVoteAction action, int param1, int p
 {
 	switch (action) {
 		case BuiltinVoteAction_End: {
+			g_iPendingSlot = 0;
 			g_hVote = INVALID_HANDLE;
 			CloseHandle(vote);
 			return;
 		}
 		case BuiltinVoteAction_Cancel: {
+			g_iPendingSlot = 0;
 			pendingMobLimit = -1;
 			DisplayBuiltinVoteFail( vote, view_as<BuiltinVoteFailReason>(param1) );
 			return;
@@ -668,18 +695,49 @@ public void ResetSettings(bool announce)
 	tempRehealth = -1;
 	tempReammo = -1;
 	tempSIDamage = -1;
-	tempMobLimit = -1;
 	pendingMobLimit = -1;
-	ServerCommand("sm_wave_reset_override");
-	ServerCommand("sm_profile_reapply");
+	ClearAllSlotOverrides();
+	if (CanUseWaveSpawner()) WaveSpawner_ResetAllOverrides();
+	else LogError("[Ast] wave_spawner.smx is not available; wave overrides were not reset.");
+	if (CanUseProfileController()) ProfileController_Reapply();
+	else LogError("[Ast] profile_controller.smx is not available; profile baseline was not reapplied.");
 	if (announce) {
-		PrintToChatAll("\x04[Ast] \x01已恢复当前模式和人数档位的默认设置.");
+		PrintToChatAll("\x04[Ast] \x01已清除所有人数档位的临时调整，并恢复当前人数基线.");
 	}
 }
 
 public void ProfileController_OnProfileApplied(int profile)
 {
 	ReapplyGameplayOverrides();
+}
+
+int GetCurrentProfile()
+{
+	if (CanUseProfileController()) return ProfileController_GetCurrentProfile();
+	ConVar profile = FindConVar("profile_current");
+	return profile == null ? 1 : profile.IntValue;
+}
+
+bool CanUseProfileController()
+{
+	return LibraryExists("profile_controller") && GetFeatureStatus(FeatureType_Native, "ProfileController_GetCurrentProfile") == FeatureStatus_Available;
+}
+
+bool CanUseWaveSpawner()
+{
+	return LibraryExists("wave_spawner") && GetFeatureStatus(FeatureType_Native, "WaveSpawner_ResetAllOverrides") == FeatureStatus_Available;
+}
+
+void ClearAllSlotOverrides()
+{
+	for (int slot = 1; slot <= 4; slot++)
+	{
+		g_iSlotOverrideMask[slot] = 0;
+		for (int target = 0; target <= 16; target++)
+		{
+			g_iSlotOverride[slot][target] = -1;
+		}
+	}
 }
 
 public Action Menu_MorePills(int client, int args)
@@ -724,11 +782,11 @@ public int Menu_MorePillsHandler(Handle menu, MenuAction action, int client, int
 
 public Action Menu_PlayerInfected(int client, int args)
 {
-	ConVar hMaxInfected = FindConVar("ast_maxinfected");
-	ConVar hAllowHumanTank = FindConVar("ast_allowhumantank");
+	ConVar hMaxInfected = FindConVar("coop_player_infected_limit");
+	ConVar hAllowHumanTank = FindConVar("coop_player_allow_human_tank");
 
 	if (hMaxInfected == null) {
-		PrintToChat(client, "\x04[Ast] \x05jointeam.smx \x01插件未安装，请联系管理员.");
+		PrintToChat(client, "\x04[Ast] \x05player_manager.smx \x01插件未安装，请联系管理员.");
 		drawPanel(client, 0);
 		return Plugin_Handled;
 	}
@@ -784,24 +842,21 @@ public Action OnChangeTeam(Handle event, const char[] name, bool dontBroadcast)
 	int oldteam = GetEventInt(event, "oldteam");
 	if (client > 0 && IsClientInGame(client) && IsFakeClient(client)
 	&& (newteam == TEAM_SURVIVORS || oldteam == TEAM_SURVIVORS)) {
-		ArrayList cvar = new ArrayList();
-		cvar.Push(tempTankBhop);
-		cvar.Push(tempTankRock);
-
-		CreateTimer(1.0, Timer_SetTankConVar, cvar);
+		CreateTimer(1.0, Timer_SetTankConVar);
 	}
 	return Plugin_Continue;
 }
 
-public Action Timer_SetTankConVar(Handle timer, ArrayList cvar)
+public Action Timer_SetTankConVar(Handle timer)
 {
-	if (cvar.Get(0) != -1) {
-		SetConVarInt(FindConVar("ai_tank_bhop"), tempTankBhop);
+	int slot = GetCurrentProfile();
+	if (slot >= 1 && slot <= 4 && (g_iSlotOverrideMask[slot] & (1 << 2)) != 0) {
+		SetConVarInt(FindConVar("ai_tank_bhop"), g_iSlotOverride[slot][2]);
 	}
-	if (cvar.Get(1) != -1) {
-		SetConVarInt(FindConVar("ai_tank_rock"), tempTankRock);
+	if (slot >= 1 && slot <= 4 && (g_iSlotOverrideMask[slot] & (1 << 3)) != 0) {
+		SetConVarInt(FindConVar("ai_tank_rock"), g_iSlotOverride[slot][3]);
 	}
-	return Plugin_Continue;
+	return Plugin_Stop;
 }
 
 stock bool IsClientAndInGame(int index) {
@@ -863,15 +918,20 @@ int CountHumanPlayers()
 
 int CountOverrides()
 {
-	int mask = g_iOverrideMask;
+	return CountBits(g_iOverrideMask) + CountBits(GetWaveOverrideMask());
+}
+
+int CountBits(int mask)
+{
 	int count;
-	while (mask != 0) {
-		count += mask & 1;
-		mask >>>= 1;
-	}
-	ConVar waveOverride = FindConVar("wave_override_active");
-	if (waveOverride != null && waveOverride.BoolValue) count++;
+	while (mask != 0) { count += mask & 1; mask >>>= 1; }
 	return count;
+}
+
+int GetWaveOverrideMask()
+{
+	if (!CanUseWaveSpawner()) return 0;
+	return WaveSpawner_GetCurrentOverrideMask();
 }
 
 void GetGameplayStatus(char[] buffer, int maxlen)
@@ -883,15 +943,96 @@ void GetGameplayStatus(char[] buffer, int maxlen)
 
 void PrintGameplayStatus(int client)
 {
-	char status[64];
-	GetGameplayStatus(status, sizeof(status));
 	ConVar waveTimer = FindConVar("wave_interval");
 	ConVar waveLimit = FindConVar("wave_size");
 	if (waveTimer != null && waveLimit != null) {
-		PrintToChat(client, "\x04[Ast] \x01当前：\x03%s\x01，刷新 %.1f 秒 / %d 特.", status, waveTimer.FloatValue, waveLimit.IntValue);
+		PrintToChat(client, "\x04[Ast] \x01%t", "InfoHeader", GetDifficulty(), waveTimer.FloatValue, waveLimit.IntValue);
 	} else {
-		PrintToChat(client, "\x04[Ast] \x01当前：\x03%s\x01.", status);
+		PrintToChat(client, "\x04[Ast] \x01%t", "InfoWaveUnavailable");
 	}
+	PrintOverrideSummary(client);
+}
+
+void PrintOverrideSummary(int client)
+{
+	int count = CountOverrides();
+	if (count == 0) PrintToChat(client, "\x04[Ast] \x01%t", "InfoNoOverrides");
+	else PrintToChat(client, "\x04[Ast] \x01%t", "InfoOverridesSummary", count);
+}
+
+void PrintOverrideDetails(int client)
+{
+	int mask = g_iOverrideMask;
+	for (int target = 1; target <= 16; target++)
+	{
+		if ((mask & (1 << target)) == 0) continue;
+		char value[32];
+		if (IsBooleanChallengeTarget(target))
+		{
+			Format(value, sizeof(value), "%T", g_iSlotOverride[GetCurrentProfile()][target] ? "InfoEnabled" : "InfoDisabled", client);
+		}
+		else
+		{
+			IntToString(g_iSlotOverride[GetCurrentProfile()][target], value, sizeof(value));
+		}
+		char phrase[32];
+		GetChallengePhrase(target, phrase, sizeof(phrase));
+		PrintToChat(client, "\x04[Ast] \x01%t", phrase, value);
+	}
+
+	mask = GetWaveOverrideMask();
+	ConVar waveFields[9];
+	waveFields[0] = FindConVar("wave_interval");
+	waveFields[1] = FindConVar("wave_size");
+	waveFields[2] = FindConVar("wave_hunter_limit");
+	waveFields[3] = FindConVar("wave_smoker_limit");
+	waveFields[4] = FindConVar("wave_boomer_limit");
+	waveFields[5] = FindConVar("wave_spitter_limit");
+	waveFields[6] = FindConVar("wave_jockey_limit");
+	waveFields[7] = FindConVar("wave_charger_limit");
+	waveFields[8] = FindConVar("wave_preferred_direction");
+	for (int field = 0; field < 9; field++)
+	{
+		if ((mask & (1 << field)) == 0 || waveFields[field] == null) continue;
+		char value[32];
+		if (field == 0) Format(value, sizeof(value), "%.1f", waveFields[field].FloatValue);
+		else IntToString(waveFields[field].IntValue, value, sizeof(value));
+		char phrase[32];
+		GetWavePhrase(field, phrase, sizeof(phrase));
+		PrintToChat(client, "\x04[Ast] \x01%t", phrase, value);
+	}
+}
+
+bool IsBooleanChallengeTarget(int target)
+{
+	return target == 2 || target == 3 || target == 5 || target == 7 || target == 8
+		|| target == 11 || target == 12 || target == 13 || target == 16;
+}
+
+void GetChallengePhrase(int target, char[] phrase, int maxlen)
+{
+	switch (target)
+	{
+		case 1: strcopy(phrase, maxlen, "InfoTankDamage");
+		case 2: strcopy(phrase, maxlen, "InfoTankBhop");
+		case 3: strcopy(phrase, maxlen, "InfoTankRock");
+		case 4: strcopy(phrase, maxlen, "InfoPlayerInfected");
+		case 5: strcopy(phrase, maxlen, "InfoPlayerTank");
+		case 7: strcopy(phrase, maxlen, "InfoExtraPills");
+		case 8: strcopy(phrase, maxlen, "InfoMapPills");
+		case 11: strcopy(phrase, maxlen, "InfoRatioDamage");
+		case 12: strcopy(phrase, maxlen, "InfoRehealth");
+		case 13: strcopy(phrase, maxlen, "InfoReammo");
+		case 15: strcopy(phrase, maxlen, "InfoSIDamage");
+		case 16: strcopy(phrase, maxlen, "InfoMobLimit");
+		default: strcopy(phrase, maxlen, "InfoNoOverrides");
+	}
+}
+
+void GetWavePhrase(int field, char[] phrase, int maxlen)
+{
+	static char phrases[][] = {"InfoWaveInterval", "InfoWaveSize", "InfoHunterLimit", "InfoSmokerLimit", "InfoBoomerLimit", "InfoSpitterLimit", "InfoJockeyLimit", "InfoChargerLimit", "InfoWaveDirection"};
+	strcopy(phrase, maxlen, phrases[field]);
 }
 
 public Action Timer_RemindOverrides(Handle timer)

@@ -1,0 +1,41 @@
+"Phrases"
+{
+    "InfoHeader"
+    {
+        "#format" "{1:d},{2:.1f},{3:d}"
+        "en" "Current {1}P: waves every {2:.1f} sec / {3} SI"
+    }
+    "InfoNoOverrides"
+    {
+        "en" "No temporary overrides."
+    }
+    "InfoOverridesSummary"
+    {
+        "#format" "{1:d}"
+        "en" "Temporary overrides: {1}"
+    }
+    "InfoWaveUnavailable" { "en" "Wave status is unavailable." }
+    "InfoEnabled" { "en" "enabled" }
+    "InfoDisabled" { "en" "disabled" }
+    "InfoTankDamage" { "#format" "{1:s}" "en" "Tank damage: {1}" }
+    "InfoTankBhop" { "#format" "{1:s}" "en" "Tank bhop: {1}" }
+    "InfoTankRock" { "#format" "{1:s}" "en" "Tank rock: {1}" }
+    "InfoPlayerInfected" { "#format" "{1:s}" "en" "Player infected: {1}" }
+    "InfoPlayerTank" { "#format" "{1:s}" "en" "Player Tank: {1}" }
+    "InfoExtraPills" { "#format" "{1:s}" "en" "Extra pills: {1}" }
+    "InfoMapPills" { "#format" "{1:s}" "en" "Map pills: {1}" }
+    "InfoRatioDamage" { "#format" "{1:s}" "en" "Ratio damage: {1}" }
+    "InfoRehealth" { "#format" "{1:s}" "en" "Rehealth: {1}" }
+    "InfoReammo" { "#format" "{1:s}" "en" "Reammo: {1}" }
+    "InfoSIDamage" { "#format" "{1:s}" "en" "SI damage: {1}" }
+    "InfoMobLimit" { "#format" "{1:s}" "en" "Mob limit: {1}" }
+    "InfoWaveInterval" { "#format" "{1:s}" "en" "Wave interval: {1}" }
+    "InfoWaveSize" { "#format" "{1:s}" "en" "Wave size: {1}" }
+    "InfoHunterLimit" { "#format" "{1:s}" "en" "Hunter limit: {1}" }
+    "InfoSmokerLimit" { "#format" "{1:s}" "en" "Smoker limit: {1}" }
+    "InfoBoomerLimit" { "#format" "{1:s}" "en" "Boomer limit: {1}" }
+    "InfoSpitterLimit" { "#format" "{1:s}" "en" "Spitter limit: {1}" }
+    "InfoJockeyLimit" { "#format" "{1:s}" "en" "Jockey limit: {1}" }
+    "InfoChargerLimit" { "#format" "{1:s}" "en" "Charger limit: {1}" }
+    "InfoWaveDirection" { "#format" "{1:s}" "en" "Preferred direction: {1}" }
+}

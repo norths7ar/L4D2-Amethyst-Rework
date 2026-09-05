@@ -6,6 +6,7 @@
 #include <builtinvotes>
 #include <left4dhooks>
 #include <script_reloader>
+#include <profile_controller>
 
 #define TEAM_SURVIVORS 2
 #define TEAM_INFECTED 3
@@ -21,11 +22,10 @@ public Plugin myinfo =
     url = "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
 };
 
-ConVar g_cvDefaultInterval;
-ConVar g_cvDefaultSize;
 ConVar g_cvInterval;
 ConVar g_cvSize;
 ConVar g_cvOverrideActive;
+ConVar g_cvWaveFields[9];
 
 float g_fWaveInterval;
 int g_iWaveSize;
@@ -38,18 +38,26 @@ float g_fBonusSpawnTime;
 
 float g_fPendingInterval = -1.0;
 int g_iPendingSize = -1;
+int g_iPendingWaveSlot;
 Handle g_hVote = INVALID_HANDLE;
 Handle g_hWaveTimer;
 bool g_bApplyingEffectiveWave;
+bool g_bProfileApplying;
+bool g_bInternalWrite;
+float g_fSlotInterval[5];
+int g_iSlotSize[5];
+int g_iSlotLimits[5][6];
+int g_iSlotDirection[5];
+int g_iSlotOverrideMask[5];
 
 public void OnPluginStart()
 {
     CreateConVar("wave_spawner_version", "1.0.0", "Coop Wave Spawner version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
-    g_cvDefaultInterval = CreateConVar("wave_default_interval", "8.0", "Profile default interval between SI waves.", FCVAR_DONTRECORD, true, 0.0, true, 10000.0);
-    g_cvDefaultSize = CreateConVar("wave_default_size", "3", "Profile default number of SI in each wave.", FCVAR_DONTRECORD, true, 1.0, true, 32.0);
     g_cvInterval = CreateConVar("wave_interval", "8.0", "Effective interval between SI waves.", FCVAR_NOTIFY, true, 0.0, true, 10000.0);
     g_cvSize = CreateConVar("wave_size", "3", "Effective number of SI in each wave.", FCVAR_NOTIFY, true, 1.0, true, 32.0);
     g_cvOverrideActive = CreateConVar("wave_override_active", "0", "Whether effective wave parameters are a player override.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_cvWaveFields[0] = g_cvInterval;
+    g_cvWaveFields[1] = g_cvSize;
 
     CreateConVar("wave_hunter_limit", "1", "Hunter limit for the Coop VScript.", FCVAR_DONTRECORD, true, 0.0);
     CreateConVar("wave_smoker_limit", "1", "Smoker limit for the Coop VScript.", FCVAR_DONTRECORD, true, 0.0);
@@ -67,18 +75,24 @@ public void OnPluginStart()
     HookEvent("round_start", Event_RoundBoundary, EventHookMode_PostNoCopy);
     HookEvent("tank_spawn", Event_TankSpawn, EventHookMode_PostNoCopy);
     HookEvent("player_death", Event_PlayerDeath, EventHookMode_PostNoCopy);
-    HookConVarChange(g_cvInterval, OnEffectiveWaveChanged);
-    HookConVarChange(g_cvSize, OnEffectiveWaveChanged);
+    g_cvWaveFields[2] = FindConVar("wave_hunter_limit");
+    g_cvWaveFields[3] = FindConVar("wave_smoker_limit");
+    g_cvWaveFields[4] = FindConVar("wave_boomer_limit");
+    g_cvWaveFields[5] = FindConVar("wave_spitter_limit");
+    g_cvWaveFields[6] = FindConVar("wave_jockey_limit");
+    g_cvWaveFields[7] = FindConVar("wave_charger_limit");
+    g_cvWaveFields[8] = FindConVar("wave_preferred_direction");
+    for (int field = 0; field < 9; field++) HookConVarChange(g_cvWaveFields[field], OnEffectiveWaveChanged);
+
+    RegPluginLibrary("wave_spawner");
+    CreateNative("WaveSpawner_ResetAllOverrides", Native_ResetAllOverrides);
+    CreateNative("WaveSpawner_GetCurrentOverrideMask", Native_GetCurrentOverrideMask);
 
     RefreshEffectiveWave();
 }
 
 public void OnConfigsExecuted()
 {
-    if (!g_cvOverrideActive.BoolValue)
-    {
-        SetEffectiveWave(g_cvDefaultInterval.FloatValue, g_cvDefaultSize.IntValue);
-    }
     ApplyDirectorSettings();
 }
 
@@ -90,25 +104,27 @@ public void OnMapEnd()
 
 public void ProfileController_OnProfileApplied(int profile)
 {
-    if (!g_cvOverrideActive.BoolValue)
-    {
-        SetEffectiveWave(g_cvDefaultInterval.FloatValue, g_cvDefaultSize.IntValue);
-    }
-    else
-    {
-        RefreshEffectiveWave();
-    }
+    g_bProfileApplying = false;
+    ApplySlotOrCurrent(profile);
     ApplyDirectorSettings();
+}
+
+public void ProfileController_OnProfilePreApply(int profile)
+{
+    g_bProfileApplying = true;
 }
 
 public void OnEffectiveWaveChanged(ConVar convar, const char[] oldValue, const char[] newValue)
 {
-    if (g_bApplyingEffectiveWave)
+    if (g_bApplyingEffectiveWave || g_bProfileApplying || g_bInternalWrite)
     {
         return;
     }
 
-    g_cvOverrideActive.BoolValue = true;
+    int slot = GetCurrentProfile();
+    if (slot < 1 || slot > 4) return;
+    CaptureField(slot, convar);
+    g_cvOverrideActive.BoolValue = g_iSlotOverrideMask[slot] != 0;
     RefreshEffectiveWave();
     RescheduleActiveWave();
     ApplyDirectorSettings();
@@ -272,7 +288,7 @@ public Action Command_WaveOverride(int client, int args)
 
     if (CountHumanSurvivors() <= 1)
     {
-        ApplyWaveOverride(g_fPendingInterval, g_iPendingSize);
+        ApplyWaveOverride(g_fPendingInterval, g_iPendingSize, GetCurrentProfile());
         PrintToChatAll("\x04[Wave] \x01已将特感刷新速度调整为 \x03%.1f秒%d特\x01。", g_fPendingInterval, g_iPendingSize);
         return Plugin_Handled;
     }
@@ -282,6 +298,8 @@ public Action Command_WaveOverride(int client, int args)
         ReplyToCommand(client, "\x04[Wave] \x01当前无法发起新投票。");
         return Plugin_Handled;
     }
+
+    g_iPendingWaveSlot = GetCurrentProfile();
 
     int players[MAXPLAYERS];
     int playerCount;
@@ -313,7 +331,8 @@ public void WaveVoteResultHandler(Handle vote, int numVotes, int numClients, con
             char voteText[64];
             Format(voteText, sizeof(voteText), "修改特感刷新速度为 [%.1f秒%d特]", g_fPendingInterval, g_iPendingSize);
             DisplayBuiltinVotePass(vote, voteText);
-            ApplyWaveOverride(g_fPendingInterval, g_iPendingSize);
+            ApplyWaveOverride(g_fPendingInterval, g_iPendingSize, g_iPendingWaveSlot);
+            g_iPendingWaveSlot = 0;
             return;
         }
     }
@@ -324,26 +343,40 @@ public void VoteHandler(Handle vote, BuiltinVoteAction action, int param1, int p
 {
     if (action == BuiltinVoteAction_End)
     {
+        g_iPendingWaveSlot = 0;
         g_hVote = INVALID_HANDLE;
         CloseHandle(vote);
     }
     else if (action == BuiltinVoteAction_Cancel)
     {
+        g_iPendingWaveSlot = 0;
         DisplayBuiltinVoteFail(vote, view_as<BuiltinVoteFailReason>(param1));
     }
 }
 
 public Action Command_ResetWaveOverride(int args)
 {
+    int slot = GetCurrentProfile();
+    if (slot >= 1 && slot <= 4) g_iSlotOverrideMask[slot] = 0;
     g_cvOverrideActive.BoolValue = false;
-    SetEffectiveWave(g_cvDefaultInterval.FloatValue, g_cvDefaultSize.IntValue);
+    RefreshEffectiveWave();
+    if (LibraryExists("profile_controller") && GetFeatureStatus(FeatureType_Native, "ProfileController_Reapply") == FeatureStatus_Available)
+    {
+        ProfileController_Reapply();
+    }
     ApplyDirectorSettings();
     return Plugin_Handled;
 }
 
-void ApplyWaveOverride(float interval, int size)
+void ApplyWaveOverride(float interval, int size, int slot)
 {
-    g_cvOverrideActive.BoolValue = true;
+	if (slot < 1 || slot > 4) slot = GetCurrentProfile();
+    if (slot < 1 || slot > 4) return;
+    g_fSlotInterval[slot] = interval;
+    g_iSlotSize[slot] = size;
+    g_iSlotOverrideMask[slot] |= (1 << 0) | (1 << 1);
+    if (slot != GetCurrentProfile()) return;
+    g_cvOverrideActive.BoolValue = g_iSlotOverrideMask[slot] != 0;
     SetEffectiveWave(interval, size);
     ApplyDirectorSettings();
 }
@@ -356,6 +389,56 @@ void SetEffectiveWave(float interval, int size)
     g_bApplyingEffectiveWave = false;
     RefreshEffectiveWave();
     RescheduleActiveWave();
+}
+
+int GetCurrentProfile()
+{
+    ConVar profile = FindConVar("profile_current");
+    return profile == null ? 1 : profile.IntValue;
+}
+
+void CaptureField(int slot, ConVar convar)
+{
+    for (int field = 0; field < 9; field++)
+    {
+        if (convar != g_cvWaveFields[field]) continue;
+        if (field == 0) g_fSlotInterval[slot] = convar.FloatValue;
+        else if (field == 1) g_iSlotSize[slot] = convar.IntValue;
+        else if (field < 8) g_iSlotLimits[slot][field - 2] = convar.IntValue;
+        else g_iSlotDirection[slot] = convar.IntValue;
+        g_iSlotOverrideMask[slot] |= (1 << field);
+        return;
+    }
+}
+
+void ApplySlotOrCurrent(int slot)
+{
+    if (slot < 1 || slot > 4) slot = GetCurrentProfile();
+    if (slot < 1 || slot > 4) return;
+    if (g_iSlotOverrideMask[slot] != 0)
+    {
+        g_bInternalWrite = true;
+        if (g_iSlotOverrideMask[slot] & (1 << 0)) g_cvWaveFields[0].FloatValue = g_fSlotInterval[slot];
+        if (g_iSlotOverrideMask[slot] & (1 << 1)) g_cvWaveFields[1].IntValue = g_iSlotSize[slot];
+        for (int field = 2; field < 8; field++) if (g_iSlotOverrideMask[slot] & (1 << field)) g_cvWaveFields[field].IntValue = g_iSlotLimits[slot][field - 2];
+        if (g_iSlotOverrideMask[slot] & (1 << 8)) g_cvWaveFields[8].IntValue = g_iSlotDirection[slot];
+        g_bInternalWrite = false;
+    }
+    g_cvOverrideActive.BoolValue = g_iSlotOverrideMask[slot] != 0;
+    RefreshEffectiveWave();
+}
+
+public int Native_ResetAllOverrides(Handle plugin, int numParams)
+{
+    for (int slot = 1; slot <= 4; slot++) g_iSlotOverrideMask[slot] = 0;
+    g_cvOverrideActive.BoolValue = false;
+    return 0;
+}
+
+public int Native_GetCurrentOverrideMask(Handle plugin, int numParams)
+{
+    int slot = GetCurrentProfile();
+    return (slot >= 1 && slot <= 4) ? g_iSlotOverrideMask[slot] : 0;
 }
 
 void RefreshEffectiveWave()
