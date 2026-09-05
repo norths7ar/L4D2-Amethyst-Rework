@@ -36,6 +36,7 @@ bool g_bProfilesLoaded;
 
 public void OnPluginStart()
 {
+    LoadTranslations("profile_controller.phrases");
     CreateConVar("profile_controller_version", "0.4.0", "Profile Controller version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
     g_cvCurrentProfile = CreateConVar("profile_current", "1", "Currently applied player profile.", FCVAR_NOTIFY, true, 1.0, true, 4.0);
     g_cvForcedProfile = CreateConVar("profile_forced", "0", "Force a profile; 0 follows human survivor count.", FCVAR_NOTIFY, true, 0.0, true, 4.0);
@@ -156,7 +157,9 @@ public Action Command_ProfileStatus(int client, int args)
 
     ReplyToCommand(
         client,
-        "[Profile Controller] profile=%d (%s) forced=%d humans=%d",
+        "[%t] %t",
+        "ProfileTag",
+        "Status",
         g_iCurrentProfile,
         label,
         g_cvForcedProfile.IntValue,
@@ -169,7 +172,7 @@ public Action Command_ForceProfile(int client, int args)
 {
     if (args != 1)
     {
-        ReplyToCommand(client, "[Profile Controller] Usage: sm_profile_force <0-4>");
+        ReplyToCommand(client, "[%t] %t", "ProfileTag", "Usage");
         return Plugin_Handled;
     }
 
@@ -178,7 +181,7 @@ public Action Command_ForceProfile(int client, int args)
     int profile;
     if (StringToIntEx(argument, profile) != strlen(argument) || profile < 0 || profile > MAX_PROFILES)
     {
-        ReplyToCommand(client, "[Profile Controller] Profile must be 0-4; 0 restores automatic selection.");
+        ReplyToCommand(client, "[%t] %t", "ProfileTag", "InvalidProfile");
         return Plugin_Handled;
     }
 
@@ -284,7 +287,7 @@ bool ApplyProfile(int profile, const char[] reason)
     Call_Finish();
 
     LogMessage("[Profile Controller] Applied players_%d (%s), reason=%s, cvars=%d.", profile, g_profiles[profile].label, reason, cvarNames.Length);
-    PrintToChatAll("\x04[Profile Controller]\x01 Profile changed to \x03%s\x01.", g_profiles[profile].label);
+    PrintToChatAll("\x04[%t]\x01 %t", "ProfileTag", "Changed", g_profiles[profile].label);
     return true;
 }
 

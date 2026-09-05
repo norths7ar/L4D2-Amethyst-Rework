@@ -4,7 +4,7 @@
 #include <sourcemod>
 #include <sdktools>
 #include <left4dhooks>
-#include <coop_player_manager>
+#include <player_manager>
 
 #define TEAM_SURVIVORS 2
 
@@ -22,9 +22,8 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-	LoadTranslations("coop_flow.phrases");
-	g_preserveWeapons = CreateConVar("coop_loadout_preserve_weapons", "0", "Keep weapons across map transitions.");
-	g_startPills = CreateConVar("coop_loadout_start_pills", "1", "Give starting pain pills when the round goes live.", _, true, 0.0, true, 1.0);
+	g_preserveWeapons = CreateConVar("preserve_transition_weapons", "0", "Keep weapons across map transitions.");
+	g_startPills = CreateConVar("give_start_pills", "1", "Give starting pain pills when the round goes live.", _, true, 0.0, true, 1.0);
 	HookEvent("map_transition", EventMapTransition, EventHookMode_Post);
 }
 

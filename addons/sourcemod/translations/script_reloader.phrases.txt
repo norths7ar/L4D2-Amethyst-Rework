@@ -1,0 +1,12 @@
+"Phrases"
+{
+    "Usage"
+    {
+        "en" "Usage: sm_reloadscript <filename>"
+    }
+    "ReloadFailed"
+    {
+        "#format" "{1:s}"
+        "en" "Could not reload VScript file: {1}"
+    }
+}

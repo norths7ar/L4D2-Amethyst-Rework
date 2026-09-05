@@ -8,26 +8,14 @@
 #define TEAM_SPECTATORS 1
 #define TEAM_SURVIVORS 2
 #define TEAM_INFECTED 3
-#define ZC_TANK 8
 #define MAX_RESERVATIONS 64
 #define RESERVATION_TTL 120.0
 #define RESERVATION_SURVIVOR 1
 #define RESERVATION_SPECTATOR 2
 
 ConVar g_maxSurvivors;
-ConVar g_maxInfected;
-ConVar g_allowHumanTank;
-ConVar g_humanTankHp;
 ConVar g_allowBotSurvivors;
 ConVar g_slayBotTime;
-ConVar g_botTankAttackRange;
-ConVar g_botTankSwingRange;
-ConVar g_botTankFistRadius;
-ConVar g_botTankAttackInterval;
-ConVar g_humanTankAttackRange;
-ConVar g_humanTankSwingRange;
-ConVar g_humanTankFistRadius;
-ConVar g_humanTankAttackInterval;
 
 bool g_roundLive;
 Handle g_cleanupTimer;
@@ -53,36 +41,23 @@ public Plugin myinfo =
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
 {
 	CreateNative("Coop_GetHumanSurvivorCount", Native_GetHumanSurvivorCount);
-	CreateNative("Coop_GetHumanInfectedCount", Native_GetHumanInfectedCount);
 	CreateNative("Coop_GetTotalSurvivorCount", Native_GetTotalSurvivorCount);
 	CreateNative("Coop_IsHumanSurvivor", Native_IsHumanSurvivor);
-	CreateNative("Coop_IsHumanInfected", Native_IsHumanInfected);
 	CreateNative("Coop_IsRoundLive", Native_IsRoundLive);
 	CreateNative("Coop_ShouldKeepSurvivorBots", Native_ShouldKeepSurvivorBots);
-	RegPluginLibrary("coop_player_manager");
+	RegPluginLibrary("player_manager");
 	return APLRes_Success;
 }
 
 public void OnPluginStart()
 {
-	LoadTranslations("coop_flow.phrases");
+	LoadTranslations("player_manager.phrases");
 	g_reservations = new StringMap();
 	CreateTimer(5.0, TimerReservationCleanup, _, TIMER_REPEAT);
 
-	g_maxSurvivors = CreateConVar("coop_player_survivor_limit", "4", "Maximum human survivor slots.");
-	g_maxInfected = CreateConVar("coop_player_infected_limit", "0", "Maximum human special infected.");
-	g_allowHumanTank = CreateConVar("coop_player_allow_human_tank", "0", "Allow a human special infected to take Tank.");
-	g_humanTankHp = CreateConVar("coop_player_human_tank_health", "2750", "Health for a human-controlled Tank.");
-	g_allowBotSurvivors = CreateConVar("coop_player_keep_survivor_bots", "0", "Keep survivor bots after the round starts.");
-	g_slayBotTime = CreateConVar("coop_player_empty_survivor_end_delay", "10.0", "Seconds before bots are slain after the last survivor leaves.");
-	g_botTankAttackRange = CreateConVar("coop_player_bot_tank_attack_range", "70", "Bot Tank attack range.");
-	g_botTankSwingRange = CreateConVar("coop_player_bot_tank_swing_range", "75", "Bot Tank swing range.");
-	g_botTankFistRadius = CreateConVar("coop_player_bot_tank_fist_radius", "50", "Bot Tank fist radius.");
-	g_botTankAttackInterval = CreateConVar("coop_player_bot_tank_attack_interval", "1.25", "Bot Tank attack interval.");
-	g_humanTankAttackRange = CreateConVar("coop_player_human_tank_attack_range", "50", "Human Tank attack range.");
-	g_humanTankSwingRange = CreateConVar("coop_player_human_tank_swing_range", "56", "Human Tank swing range.");
-	g_humanTankFistRadius = CreateConVar("coop_player_human_tank_fist_radius", "15", "Human Tank fist radius.");
-	g_humanTankAttackInterval = CreateConVar("coop_player_human_tank_attack_interval", "1.5", "Human Tank attack interval.");
+	g_maxSurvivors = CreateConVar("human_survivor_limit", "4", "Maximum human survivor slots.");
+	g_allowBotSurvivors = CreateConVar("keep_survivor_bots", "0", "Keep survivor bots after the round starts.");
+	g_slayBotTime = CreateConVar("survivor_bot_cleanup_delay", "10.0", "Seconds before bots are slain after the last survivor leaves.");
 
 	RegConsoleCmd("sm_join", CommandJoin, "Join the survivor team.");
 	RegConsoleCmd("sm_joingame", CommandJoin, "Join the survivor team.");
@@ -98,7 +73,6 @@ public void OnPluginStart()
 
 	HookEvent("round_start", EventRoundStart, EventHookMode_PostNoCopy);
 	HookEvent("map_transition", EventMapTransition, EventHookMode_Post);
-	HookEvent("player_death", EventPlayerDeath, EventHookMode_Post);
 }
 
 public void OnMapStart()
@@ -109,7 +83,6 @@ public void OnMapStart()
 	g_transitionCaptured = false;
 	for (int client = 1; client <= MaxClients; client++)
 		g_pendingReservation[client] = -1;
-	ApplyTankAttackProfile(false);
 	SetServerInt("director_no_survivor_bots", 0);
 	SetServerInt("survivor_limit", g_maxSurvivors.IntValue);
 }
@@ -212,7 +185,6 @@ public Action EventRoundStart(Event event, const char[] name, bool dontBroadcast
 {
 	g_roundLive = false;
 	CancelBotCleanup();
-	ApplyTankAttackProfile(false);
 	return Plugin_Continue;
 }
 
@@ -224,53 +196,10 @@ public Action EventMapTransition(Event event, const char[] name, bool dontBroadc
 	return Plugin_Continue;
 }
 
-public Action EventPlayerDeath(Event event, const char[] name, bool dontBroadcast)
-{
-	int client = GetClientOfUserId(event.GetInt("userid"));
-	if (client > 0 && IsClientInGame(client) && GetClientTeam(client) == TEAM_INFECTED && L4D2_GetPlayerZombieClass(client) == ZC_TANK)
-		ApplyTankAttackProfile(false);
-	return Plugin_Continue;
-}
-
 public void L4D_OnFirstSurvivorLeftSafeArea_Post(int client)
 {
 	g_roundLive = true;
 	ReconcileBots();
-}
-
-public Action L4D_OnEnterGhostStatePre(int client)
-{
-	if (g_maxInfected.IntValue <= 0 || GetHumanInfected() >= g_maxInfected.IntValue + 1)
-	{
-		if (IsClientInGame(client)) ChangeClientTeam(client, TEAM_SPECTATORS);
-		return Plugin_Handled;
-	}
-	return Plugin_Continue;
-}
-
-public Action L4D_OnTryOfferingTankBot(int tank, bool &enterStasis)
-{
-	if (!IsClientInGame(tank)) return Plugin_Continue;
-	if (IsFakeClient(tank))
-	{
-		if (g_maxInfected.IntValue > 0 && g_allowHumanTank.BoolValue && GetHumanInfected() >= 1)
-		{
-			SetEntityHealth(tank, g_humanTankHp.IntValue);
-			ApplyTankAttackProfile(true);
-			PrintToChatAll("%t", "HumanTankHealth", g_humanTankHp.IntValue);
-			return Plugin_Continue;
-		}
-		return Plugin_Handled;
-	}
-	SetEntProp(tank, Prop_Send, "m_frustration", 0);
-	L4D2Direct_SetTankPassedCount(L4D2Direct_GetTankPassedCount() + 1);
-	for (int client = 1; client <= MaxClients; client++)
-	{
-		if (!IsClientInGame(client) || GetClientTeam(client) != TEAM_INFECTED) continue;
-		if (client == tank) PrintToChat(client, "%t", "TankRageRefilledSelf");
-		else PrintToChat(client, "%t", "TankRageRefilledOther", tank);
-	}
-	return Plugin_Handled;
 }
 
 public void L4D2_OnEndVersusModeRound_Post()
@@ -553,24 +482,10 @@ void KickSurvivorBots()
 			}
 }
 
-void ApplyTankAttackProfile(bool human)
-{
-	SetServerInt("tank_attack_range", human ? g_humanTankAttackRange.IntValue : g_botTankAttackRange.IntValue);
-	SetServerInt("tank_swing_range", human ? g_humanTankSwingRange.IntValue : g_botTankSwingRange.IntValue);
-	SetServerInt("tank_fist_radius", human ? g_humanTankFistRadius.IntValue : g_botTankFistRadius.IntValue);
-	SetServerFloat("z_tank_attack_interval", human ? g_humanTankAttackInterval.FloatValue : g_botTankAttackInterval.FloatValue);
-}
-
 void SetServerInt(const char[] name, int value)
 {
 	ConVar cvar = FindConVar(name);
 	if (cvar != null) cvar.IntValue = value;
-}
-
-void SetServerFloat(const char[] name, float value)
-{
-	ConVar cvar = FindConVar(name);
-	if (cvar != null) cvar.FloatValue = value;
 }
 
 bool IsHumanClient(int client)
@@ -583,22 +498,10 @@ bool IsHumanSurvivor(int client)
 	return IsHumanClient(client) && GetClientTeam(client) == TEAM_SURVIVORS;
 }
 
-bool IsHumanInfected(int client)
-{
-	return IsHumanClient(client) && GetClientTeam(client) == TEAM_INFECTED;
-}
-
 int GetHumanSurvivors()
 {
 	int count;
 	for (int client = 1; client <= MaxClients; client++) if (IsHumanSurvivor(client)) count++;
-	return count;
-}
-
-int GetHumanInfected()
-{
-	int count;
-	for (int client = 1; client <= MaxClients; client++) if (IsHumanInfected(client)) count++;
 	return count;
 }
 
@@ -610,9 +513,7 @@ int GetTotalSurvivors()
 }
 
 int Native_GetHumanSurvivorCount(Handle plugin, int params) { return GetHumanSurvivors(); }
-int Native_GetHumanInfectedCount(Handle plugin, int params) { return GetHumanInfected(); }
 int Native_GetTotalSurvivorCount(Handle plugin, int params) { return GetTotalSurvivors(); }
 int Native_IsHumanSurvivor(Handle plugin, int params) { return IsHumanSurvivor(GetNativeCell(1)); }
-int Native_IsHumanInfected(Handle plugin, int params) { return IsHumanInfected(GetNativeCell(1)); }
 int Native_IsRoundLive(Handle plugin, int params) { return g_roundLive; }
 int Native_ShouldKeepSurvivorBots(Handle plugin, int params) { return g_allowBotSurvivors.BoolValue; }

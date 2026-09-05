@@ -1,0 +1,28 @@
+"Phrases"
+{
+    "ProfileTag"
+    {
+        /* Context: Chat prefix for the component that selects parameter profiles by survivor count. */
+        "en" "Difficulty"
+    }
+    "Status"
+    {
+        /* Context: Admin status output. forced=0 means the profile follows the current human survivor count. */
+        "#format" "{1:d},{2:s},{3:d},{4:d}"
+        "en" "profile={1} ({2}) forced={3} humans={4}"
+    }
+    "Usage"
+    {
+        "en" "Usage: sm_profile_force <0-4>"
+    }
+    "InvalidProfile"
+    {
+        "en" "Profile must be 0-4; 0 restores automatic selection."
+    }
+    "Changed"
+    {
+        /* Context: Broadcast after a player-count profile or an administrator-forced profile is applied. */
+        "#format" "{1:s}"
+        "en" "Profile changed to {1}."
+    }
+}

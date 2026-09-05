@@ -1,0 +1,9 @@
+"Phrases"
+{
+    "DamageSummary"
+    {
+        "#format" "{1:d},{2:.1f}"
+        /* Context: The damage-control rule kills the attacking SI, then reports its pre-kill remaining health and accumulated damage. */
+        "chi" "还剩 {1} 点生命值！造成了 {2:.1f} 点伤害！"
+    }
+}

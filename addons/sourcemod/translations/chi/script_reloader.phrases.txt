@@ -1,0 +1,12 @@
+"Phrases"
+{
+    "Usage"
+    {
+        "chi" "用法：sm_reloadscript <文件名>"
+    }
+    "ReloadFailed"
+    {
+        "#format" "{1:s}"
+        "chi" "无法重新加载 VScript 文件：{1}"
+    }
+}

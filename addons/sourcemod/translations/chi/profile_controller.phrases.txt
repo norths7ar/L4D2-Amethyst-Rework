@@ -1,0 +1,28 @@
+"Phrases"
+{
+    "ProfileTag"
+    {
+        /* Context: Chat prefix for the component that selects parameter profiles by survivor count. */
+        "chi" "难度"
+    }
+    "Status"
+    {
+        /* Context: Admin status output. forced=0 means the profile follows the current human survivor count. */
+        "#format" "{1:d},{2:s},{3:d},{4:d}"
+        "chi" "配置={1}（{2}）强制={3} 玩家={4}"
+    }
+    "Usage"
+    {
+        "chi" "用法：sm_profile_force <0-4>"
+    }
+    "InvalidProfile"
+    {
+        "chi" "配置必须为 0-4；0 恢复自动选择。"
+    }
+    "Changed"
+    {
+        /* Context: Broadcast after a player-count profile or an administrator-forced profile is applied. */
+        "#format" "{1:s}"
+        "chi" "配置已切换为 {1}。"
+    }
+}

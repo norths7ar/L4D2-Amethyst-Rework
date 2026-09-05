@@ -1,23 +1,5 @@
 "Phrases"
 {
-	"JoinAfterStart"
-	{
-	    "en" "Survivor joining is unavailable after the team leaves the saferoom."
-	}
-	"PlayerSpectated"
-	{
-	    "#format" "{1:N}"
-	    "en" "{1} is now spectating."
-	}
-	"RoundNotStarted"
-	{
-	    "en" "The round has not started."
-	}
-	"HumanTankHealth"
-	{
-	    "#format" "{1:d}"
-	    "en" "The human Tank has {1} health."
-	}
 	"WaitingForPlayers"
 	{
 	    "en" "Waiting for all players to load..."
@@ -134,55 +116,5 @@
 	"LoadingTimeout"
 	{
 	    "en" "Loading timed out."
-	}
-	"AdminCleanupSyntax"
-	{
-	    "en" "Usage: !fuck <special infected name|all>."
-	}
-	"AdminCleanupAll"
-	{
-	    "#format" "{1:N},{2:d}"
-	    "en" "{1} removed {2} AI special infected."
-	}
-	"AdminCleanupSome"
-	{
-	    "#format" "{1:N},{2:d},{3:s}"
-	    "en" "{1} removed {2} AI infected matching {3}."
-	}
-	"AdminCleanupNone"
-	{
-	    "#format" "{1:s}"
-	    "en" "No AI special infected matched {1}."
-	}
-	"AdminCleanupAllConsole"
-	{
-	    "#format" "{1:d}"
-	    "en" "Console removed {1} AI special infected."
-	}
-	"AdminCleanupSomeConsole"
-	{
-	    "#format" "{1:d},{2:s}"
-	    "en" "Console removed {1} AI infected matching {2}."
-	}
-	"TankRageRefilledSelf"
-	{
-	    "en" "Tank rage refilled."
-	}
-	"TankRageRefilledOther"
-	{
-	    "#format" "{1:N}"
-	    "en" "{1}'s Tank rage was refilled."
-	}
-	"BotSetupFailed"
-	{
-	    "en" "Coop survivor bot setup failed."
-	}
-	"BotPlaceholder"
-	{
-	    "en" "Coop survivor placeholder removed."
-	}
-	"BotCleanup"
-	{
-	    "en" "Coop survivor bot cleanup."
 	}
 }

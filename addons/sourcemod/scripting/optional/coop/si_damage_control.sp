@@ -47,6 +47,7 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
+    LoadTranslations("si_damage_control.phrases");
 	g_cvEnable = CreateConVar("si_damage_enable", "1", "Enable special-infected damage control.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 	g_cvBaseDamage = CreateConVar("si_damage_base", "12.0", "Base special-infected damage.", FCVAR_NOTIFY, true, 1.0, true, 100.0);
 	g_cvRatioEnable = CreateConVar("si_damage_ratio_enable", "0", "Use proportional special-infected damage.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
@@ -269,7 +270,7 @@ public Action Event_PlayerHurt(Event event, const char[] name, bool dontBroadcas
 	{
 		int remainingHealth = GetClientHealth(attacker);
 		ForcePlayerSuicide(attacker);
-		CPrintToChatAll("[{olive}Ast{default}] {red}%N{default}({green}%s{default}) 还剩下 {olive}%d{default} 血! 造成了 {olive}%2.1f{default} 点伤害!", attacker, g_sSINames[zombieClass], remainingHealth, g_fDamagePrint);
+		CPrintToChatAll("[{olive}Ast{default}] {red}%N{default}({green}%s{default}) %t", attacker, g_sSINames[zombieClass], "DamageSummary", remainingHealth, g_fDamagePrint);
 		if (g_cvFastGetupEnable.BoolValue && (zombieClass == ZC_HUNTER || zombieClass == ZC_CHARGER))
 		{
 			CancelGetupLater(victim);

@@ -1,0 +1,139 @@
+"Phrases"
+{
+    "CampaignTag"
+    {
+        "chi" "地图"
+    }
+    "ChapterTag"
+    {
+        "chi" "章节"
+    }
+    "NextMapTag"
+    {
+        /* Context: Chat prefix for the finale ballot that selects the campaign loaded after the current finale. */
+        "chi" "下一张地图"
+    }
+    "RegistryReloaded"
+    {
+        "#format" "{1:d}"
+        "chi" "已载入 {1} 张地图。"
+    }
+    "RegistryEmpty"
+    {
+        "chi" "没有可用地图，请检查 Mission Cache 与 missioncycle.txt。"
+    }
+    "ChapterDisplay"
+    {
+        /* Context: A Map is a complete campaign/mission; a Chapter is one BSP within it. */
+        "#format" "{1:d},{2:s}"
+        "chi" "第 {1} 关 - {2}"
+    }
+    "NoMapsForVote"
+    {
+        "chi" "当前没有可投票的地图。"
+    }
+    "ImmediateMapMenuTitle"
+    {
+        /* Context: Selecting an item starts a vote to change immediately, rather than choosing the post-finale Map. */
+        "#format" "{1:d}"
+        "chi" "投票立即更换地图\n共 {1} 张"
+    }
+    "MapNoLongerAvailable"
+    {
+        "chi" "该地图已不可用，请重新打开菜单。"
+    }
+    "CurrentMapUnknown"
+    {
+        "chi" "无法识别当前地图。"
+    }
+    "NoChaptersAvailable"
+    {
+        "chi" "当前地图没有可用关卡信息。"
+    }
+    "ChapterMenuTitle"
+    {
+        /* Context: Selecting a Chapter starts an immediate live vote to change to that BSP. */
+        "#format" "{1:s}"
+        "chi" "{1}\n选择章节后发起实时投票"
+    }
+    "NoValidChapters"
+    {
+        "chi" "当前地图没有有效章节。"
+    }
+    "ChapterNoLongerAvailable"
+    {
+        "chi" "该章节已不可用。"
+    }
+    "VoteStartFailed"
+    {
+        "chi" "无法启动投票。"
+    }
+    "VoteAlreadyRunning"
+    {
+        "chi" "已有投票正在进行。"
+    }
+    "VoteDelay"
+    {
+        "#format" "{1:d}"
+        "chi" "请等待 {1} 秒再发起投票。"
+    }
+    "FinaleOnly"
+    {
+        /* Context: !nextmap records the campaign to load after a successful finale; it is unavailable on non-finale Chapters. */
+        "chi" "只能在救援关选择下一张地图。"
+    }
+    "NextMapMenuNoVotes"
+    {
+        "#format" "{1:d},{2:d}"
+        "chi" "选择下一张地图（已投 {1}/{2}）\n尚无人投票"
+    }
+    "NextMapMenuTied"
+    {
+        "#format" "{1:d},{2:d},{3:d},{4:d}"
+        "chi" "选择下一张地图（已投 {1}/{2}）\n{3} 张地图以 {4} 票并列领先"
+    }
+    "NextMapMenuLeader"
+    {
+        "#format" "{1:d},{2:d},{3:s},{4:d}"
+        "chi" "选择下一张地图（已投 {1}/{2}）\n领先：{3} [{4} 票]"
+    }
+    "NextMapItemSelected"
+    {
+        "#format" "{1:d},{2:s}"
+        "chi" "[✓ {1} 票] {2}"
+    }
+    "NextMapItem"
+    {
+        "#format" "{1:d},{2:s}"
+        "chi" "[{1} 票] {2}"
+    }
+    "NextMapNoLongerAvailable"
+    {
+        "chi" "该地图已不可用。"
+    }
+    "NextMapSelected"
+    {
+        "#format" "{1:N},{2:s}"
+        "chi" "{1} 选择了 {2}。"
+    }
+    "NextMapVoteResult"
+    {
+        "#format" "{1:s}"
+        "chi" "投票结果：{1}。"
+    }
+    "NextMapRandomOfficial"
+    {
+        /* Context: When nobody votes during the finale, the plugin picks an official campaign from the allow-list. */
+        "#format" "{1:s}"
+        "chi" "无人投票，随机官图：{1}。"
+    }
+    "ChangeTargetUnavailable"
+    {
+        "chi" "换图失败：目标章节已不可用。"
+    }
+    "ChangingMap"
+    {
+        "#format" "{1:s}"
+        "chi" "正在载入 {1}……"
+    }
+}

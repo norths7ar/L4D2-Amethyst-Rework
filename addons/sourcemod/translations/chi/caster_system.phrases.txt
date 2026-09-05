@@ -8,7 +8,7 @@
 
 	"SelfCast1"
 	{
-		"chi"		"{blue}[{default}Cast{blue}] 你已经被认证成为了解说"
+		"chi"		"{blue}[{default}Cast{blue}] 你已经认证为解说"
 	}
 
 	"SelfCast2"
@@ -19,12 +19,12 @@
 	"RegCasterTarget"
 	{
 		"#format"	"{1:N}"
-		"chi"		"{default}[{olive}!{default}] {blue}管理员 {default}({olive}{1}{default}) 认证了你为解说"
+		"chi"		"{default}[{olive}!{default}] {blue}管理员 {default}({olive}{1}{default}) 将你认证为解说"
 	}
 
 	"Reconnect1"
 	{
-		"chi"		"{blue}[{default}Reconnect{blue}] 你将会被重连至服务器..."
+		"chi"		"{blue}[{default}Reconnect{blue}] 你会重新连接服务器..."
 	}
 
 	"Reconnect2"
@@ -138,7 +138,7 @@
 	
 	"KickSpecsVoteSuccess"
 	{
-		"chi"		"撒尤娜拉"
+		"chi"		"再见了"
 	}
 	
 	"KickSpecsReason"

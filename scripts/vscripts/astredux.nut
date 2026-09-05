@@ -76,8 +76,10 @@ function ApplyDirectorOptions()
 		baseTotal += limit;
 	}
 
-	// 基础阵容只定义起点。额外名额只分配给原始上限大于 0 的职业，
-	// 每轮使用 Fisher-Yates 洗牌且不重复；超过一轮时再开始新一轮。
+	// 在wave size大于基础阵容的总和之后，额外名额只分配给原始上限大于 0 的特感类型。
+	// 额外名额小于允许特感类型时，从中抽取不重复项；
+	// 额外名额等于特感类型时，完整刷一套；
+	// 额外名额大于特感类型时，先刷一整套，然后将差值作为新的额外名额，继续刷新。
 	local eligible = [];
 	foreach (index, limit in limits) {
 		if (limit > 0) eligible.append(index);

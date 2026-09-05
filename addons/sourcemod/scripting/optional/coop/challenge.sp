@@ -15,8 +15,6 @@
 int tempTankDmg = -1;
 int tempTankBhop = -1;
 int tempTankRock = -1;
-int tempPlayerInfected = -1;
-int tempPlayerTank = -1;
 int tempMorePills = -1;
 int tempKillMapPills = -1;
 int tempRatioDamage = -1;
@@ -35,6 +33,7 @@ ConVar hRehealth;
 ConVar hReammo;
 
 Handle g_hVote;
+int g_iVoteInitiator;
 
 ConVar hDmgThreshold;
 ConVar hRatioDamage;
@@ -51,10 +50,10 @@ public Plugin myinfo =
 public void OnPluginStart()
 {
 	LoadTranslations("challenge.phrases");
-	RegConsoleCmd("sm_tz", challengeRequest, "打开难度控制系统菜单");
-	RegConsoleCmd("sm_ast", challengeRequest, "打开 Ast 玩法调整菜单");
-	RegConsoleCmd("sm_info", Command_Info, "显示当前 Coop 玩法状态");
-	RegAdminCmd("sm_reset", ResetSettingsCommand, ADMFLAG_CONFIG, "清除所有人数档位的临时调整，并恢复当前基线");
+	RegConsoleCmd("sm_tz", challengeRequest, "Open the difficulty menu");
+	RegConsoleCmd("sm_ast", challengeRequest, "Open the Ast gameplay menu");
+	RegConsoleCmd("sm_info", Command_Info, "Show current Coop status");
+	RegAdminCmd("sm_reset", ResetSettingsCommand, ADMFLAG_CONFIG, "Clear temporary overrides and restore the baseline");
 	HookEvent("player_team", OnChangeTeam, EventHookMode_Post);
 
 	hRehealth = FindConVar("kill_rewards_health_enable");
@@ -71,7 +70,7 @@ public void L4D_OnFirstSurvivorLeftSafeArea_Post(int client)
 	// 出门输出特感刷新参数
 	float fTimerCurrent = GetConVarFloat(FindConVar("wave_interval"));
 	int iLimitCurrent = GetConVarInt(FindConVar("wave_size"));
-	PrintToChatAll("\x04[Ast] \x01当前刷新速率：\x03%.1f秒%i特\x01.", fTimerCurrent, iLimitCurrent);
+	PrintToChatAll("\x04[Ast] \x01%t", "WaveStart", fTimerCurrent, iLimitCurrent);
 }
 
 public Action challengeRequest(int client, int args)
@@ -103,26 +102,25 @@ public Action drawPanel(int client, int first_item)
 	char buffer[64];
 	Menu menu = CreateMenu(MenuHandler);
 	char status[64];
-	GetGameplayStatus(status, sizeof(status));
-	SetMenuTitle(menu, "Ast 玩法调整 | %s", status);
+	GetGameplayStatus(client, status, sizeof(status));
+	char title[128]; FormatEx(title, sizeof(title), "%T", "MainTitle", client, status); SetMenuTitle(menu, title);
 	SetMenuExitButton(menu, true);
 
-	AddNamedToggleMenuItem(menu, "tank_bhop", "Tank 连跳", GetConVarBool(FindConVar("ai_tank_bhop")));
-	AddNamedToggleMenuItem(menu, "tank_rock", "Tank 石头", GetConVarBool(FindConVar("ai_tank_rock")));
-	Format(buffer, sizeof(buffer), "修改 Tank 伤害 [%i]", GetConVarInt(FindConVar("vs_tank_damage")));
+	FormatEx(buffer, sizeof(buffer), "%T", "TankBhop", client); AddNamedToggleMenuItem(menu, "tank_bhop", buffer, GetConVarBool(FindConVar("ai_tank_bhop")));
+	FormatEx(buffer, sizeof(buffer), "%T", "TankRock", client); AddNamedToggleMenuItem(menu, "tank_rock", buffer, GetConVarBool(FindConVar("ai_tank_rock")));
+	FormatEx(buffer, sizeof(buffer), "%T", "TankDamageMenu", client, GetConVarInt(FindConVar("vs_tank_damage")));
 	AddMenuItem(menu, "tank_damage", buffer);
-	AddMenuItem(menu, "si", "特感刷新：使用 !si <间隔> <数量>");
-	Format(buffer, sizeof(buffer), "[单人] 特感基础伤害 [%i]", GetConVarInt(hDmgThreshold));
+	FormatEx(buffer, sizeof(buffer), "%T", "SIWavesMenu", client); AddMenuItem(menu, "si", buffer);
+	FormatEx(buffer, sizeof(buffer), "%T", "SIDamageMenu", client, GetConVarInt(hDmgThreshold));
 	AddMenuItem(menu, "si_damage", buffer);
-	AddNamedToggleMenuItem(menu, "ratio_damage", "[单人] 按特感血量比例扣血", GetConVarBool(hRatioDamage));
-	AddNamedToggleMenuItem(menu, "rehealth", "击杀特感回血", GetConVarBool(hRehealth));
-	AddNamedToggleMenuItem(menu, "reammo", "击杀回复备弹", GetConVarBool(hReammo));
+	FormatEx(buffer, sizeof(buffer), "%T", "RatioDamageMenu", client); AddNamedToggleMenuItem(menu, "ratio_damage", buffer, GetConVarBool(hRatioDamage));
+	FormatEx(buffer, sizeof(buffer), "%T", "RehealthMenu", client); AddNamedToggleMenuItem(menu, "rehealth", buffer, GetConVarBool(hRehealth));
+	FormatEx(buffer, sizeof(buffer), "%T", "ReammoMenu", client); AddNamedToggleMenuItem(menu, "reammo", buffer, GetConVarBool(hReammo));
 	ConVar mobLimit = FindConVar("mob_spawn_limit_enabled");
-	if (mobLimit != null) AddNamedToggleMenuItem(menu, "mob_limit", "有限尸潮", mobLimit.BoolValue);
-	else AddMenuItem(menu, "mob_limit", "有限尸潮（插件未就绪）", ITEMDRAW_DISABLED);
-	AddMenuItem(menu, "pills", "额外发药设定");
-	AddMenuItem(menu, "player_infected", "玩家特感设定");
-	AddMenuItem(menu, "reset", "清除临时调整");
+	if (mobLimit != null) { FormatEx(buffer, sizeof(buffer), "%T", "FiniteHordesMenu", client); AddNamedToggleMenuItem(menu, "mob_limit", buffer, mobLimit.BoolValue); }
+	else { FormatEx(buffer, sizeof(buffer), "%T", "FiniteHordesUnavailable", client); AddMenuItem(menu, "mob_limit", buffer, ITEMDRAW_DISABLED); }
+	FormatEx(buffer, sizeof(buffer), "%T", "ExtraPillsMenu", client); AddMenuItem(menu, "pills", buffer);
+	FormatEx(buffer, sizeof(buffer), "%T", "ResetMenu", client); AddMenuItem(menu, "reset", buffer);
 
 	DisplayMenuAtItem(menu, client, first_item, MENU_DISPLAY_TIME);
 	return Plugin_Handled;
@@ -146,12 +144,12 @@ public int MenuHandler(Handle menu, MenuAction action, int client, int param)
 			if (CountHumanSurvivors() == 1 && GetDifficulty() == 1) {
 				Menu_SIDamage(client, false);
 			} else {
-				PrintToChat(client, "\x04[Ast] \x01特感基础伤害只允许单人调整.");
+				PrintToChat(client, "\x04[Ast] \x01%t", "SIDamageSoloOnly");
 				drawPanel(client, 0);
 			}
 		} else if (StrEqual(item, "ratio_damage")) {
 			if (!IsClientSurvivor(client, true) || CountHumanSurvivors() != 1 || GetDifficulty() != 1) {
-				PrintToChat(client, "\x04[Ast] \x01按特感血量比例扣血只允许单人调整.");
+				PrintToChat(client, "\x04[Ast] \x01%t", "RatioDamageSoloOnly");
 				drawPanel(client, 0);
 				return 1;
 			}
@@ -173,13 +171,11 @@ public int MenuHandler(Handle menu, MenuAction action, int client, int param)
 			drawPanel(client, 0);
 		} else if (StrEqual(item, "mob_limit")) {
 			ConVar mobLimit = FindConVar("mob_spawn_limit_enabled");
-			if (mobLimit == null) PrintToChat(client, "\x04[Ast] \x01有限尸潮插件尚未就绪，请稍后再试.");
+			if (mobLimit == null) PrintToChat(client, "\x04[Ast] \x01%t", "FiniteHordesPluginUnavailable");
 			else TZ_CallVote(client, 16, !mobLimit.BoolValue);
 			drawPanel(client, 0);
 		} else if (StrEqual(item, "pills")) {
 			Menu_MorePills(client, false);
-		} else if (StrEqual(item, "player_infected")) {
-			Menu_PlayerInfected(client, false);
 		} else if (StrEqual(item, "reset")) {
 			TZ_CallVote(client, 14, 0);
 			drawPanel(client, 0);
@@ -195,7 +191,9 @@ int g_tankDamages[] = {24, 36, 48, 100};
 public Action Menu_TankDmg(int client, int args)
 {
 	Handle menu = CreateMenu(Menu_TankDmgHandler);
-	SetMenuTitle(menu, "修改 tank 伤害");
+	char title[64];
+	FormatEx(title, sizeof(title), "%T", "TankDamageTitle", client);
+	SetMenuTitle(menu, title);
 	SetMenuExitBackButton(menu, true);
 
 	int currentDmg = GetConVarInt(FindConVar("vs_tank_damage"));
@@ -254,73 +252,60 @@ public void TZ_CallVote(int client, int target, int value)
 
 		char sBuffer[64];
 		g_hVote = CreateBuiltinVote(VoteHandler, BuiltinVoteType_Custom_YesNo, BuiltinVoteAction_Cancel | BuiltinVoteAction_VoteEnd | BuiltinVoteAction_End);
+		g_iVoteInitiator = client;
 
 		switch (target) {
 			case 1: { // Tank 伤害
-				Format(sBuffer, sizeof(sBuffer), "修改 Tank 伤害为 [%i]", value);
+				FormatEx(sBuffer, sizeof(sBuffer), "%T", "VoteTankDamage", client, value);
 				tempTankDmg = value;
 				SetBuiltinVoteResultCallback(g_hVote, TankDmgVoteResultHandler);
 			}
 			case 2: { // Tank 连跳
-				value ? Format(sBuffer, sizeof(sBuffer), "开启 Tank 连跳") : Format(sBuffer, sizeof(sBuffer), "关闭 Tank 连跳");
+				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteEnableTankBhop" : "VoteDisableTankBhop", client);
 				tempTankBhop = value;
 				SetBuiltinVoteResultCallback(g_hVote, TankBhopVoteResultHandler);
 			}
 			case 3: { // Tank 石头
-				value ? Format(sBuffer, sizeof(sBuffer), "开启 Tank 丢石头") : Format(sBuffer, sizeof(sBuffer), "关闭 Tank 丢石头");
+				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteEnableTankRock" : "VoteDisableTankRock", client);
 				tempTankRock = value;
 				SetBuiltinVoteResultCallback(g_hVote, TankRockVoteResultHandler);
 			}
-			case 4: { // 玩家特感
-				if (value == 0) {
-					Format(sBuffer, sizeof(sBuffer), "禁止玩家加入特感");
-				} else {
-					Format(sBuffer, sizeof(sBuffer), "允许 %d 名玩家加入特感", value);
-				}
-				tempPlayerInfected = value;
-				SetBuiltinVoteResultCallback(g_hVote, PlayerInfectedVoteResultHandler);
-			}
-			case 5: { // 玩家 Tank
-				value ? Format(sBuffer, sizeof(sBuffer), "允许玩家扮演 Tank") : Format(sBuffer, sizeof(sBuffer), "禁止玩家扮演 Tank");
-				tempPlayerTank = value;
-				SetBuiltinVoteResultCallback(g_hVote, PlayerTankVoteResultHandler);
-			}
 			case 7: { // 额外发药
-				value ? Format(sBuffer, sizeof(sBuffer), "开启额外发药") : Format(sBuffer, sizeof(sBuffer), "关闭额外发药");
+				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteEnableExtraPills" : "VoteDisableExtraPills", client);
 				tempMorePills = value;
 				SetBuiltinVoteResultCallback(g_hVote, MorePillsVoteResultHandler);
 			}
 			case 8: { // 删除地图药
-				value ? Format(sBuffer, sizeof(sBuffer), "删除地图药（下回合生效）") : Format(sBuffer, sizeof(sBuffer), "保留地图药（下回合生效）");
+				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteRemoveMapPills" : "VoteKeepMapPills", client);
 				tempKillMapPills = value;
 				SetBuiltinVoteResultCallback(g_hVote, KillMapPillsVoteResultHandler);
 			}
 			case 11: {
-				value ? Format(sBuffer, sizeof(sBuffer), "开启按特感血量扣血") : Format(sBuffer, sizeof(sBuffer), "关闭按特感血量扣血");
+				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteEnableRatioDamage" : "VoteDisableRatioDamage", client);
 				tempRatioDamage = value;
 				SetBuiltinVoteResultCallback(g_hVote, RatioDamageVoteResultHandler);
 			}
 			case 12: {
-				value ? Format(sBuffer, sizeof(sBuffer), "开启击杀特感回血") : Format(sBuffer, sizeof(sBuffer), "关闭击杀特感回血");
+				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteEnableRehealth" : "VoteDisableRehealth", client);
 				tempRehealth = value;
 				SetBuiltinVoteResultCallback(g_hVote, RehealthVoteResultHandler);
 			}
 			case 13: {
-				value ? Format(sBuffer, sizeof(sBuffer), "开启击杀回复备弹") : Format(sBuffer, sizeof(sBuffer), "关闭击杀回复备弹");
+				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteEnableReammo" : "VoteDisableReammo", client);
 				tempReammo = value;
 				SetBuiltinVoteResultCallback(g_hVote, ReammoVoteResultHandler);
 			}
 			case 14: {
-				Format(sBuffer, sizeof(sBuffer), "清除所有人数档位的临时调整");
+				FormatEx(sBuffer, sizeof(sBuffer), "%T", "VoteResetAll", client);
 				SetBuiltinVoteResultCallback(g_hVote, ResetVoteResultHandler);
 			}
 			case 15: {
-				Format(sBuffer, sizeof(sBuffer), "修改特感基础伤害为 [%d]", value);
+				FormatEx(sBuffer, sizeof(sBuffer), "%T", "VoteSIDamage", client, value);
 				tempSIDamage = value;
 				SetBuiltinVoteResultCallback(g_hVote, SIDamageVoteResultHandler);
 			}
 			case 16: {
-				value ? Format(sBuffer, sizeof(sBuffer), "开启有限尸潮") : Format(sBuffer, sizeof(sBuffer), "关闭有限尸潮");
+				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteEnableFiniteHordes" : "VoteDisableFiniteHordes", client);
 				pendingMobLimit = value;
 				SetBuiltinVoteResultCallback(g_hVote, MobLimitVoteResultHandler);
 			}
@@ -345,8 +330,6 @@ void ApplyGameplaySetting(int target, int value, bool announce, int slot)
 		case 1: { tempTankDmg = value; SetConVarInt(FindConVar("vs_tank_damage"), value); }
 		case 2: { tempTankBhop = value; SetConVarInt(FindConVar("ai_tank_bhop"), value); }
 		case 3: { tempTankRock = value; SetConVarInt(FindConVar("ai_tank_rock"), value); }
-		case 4: { tempPlayerInfected = value; SetConVarInt(FindConVar("coop_player_infected_limit"), value); }
-		case 5: { tempPlayerTank = value; SetConVarInt(FindConVar("coop_player_allow_human_tank"), value); }
 		case 7: { tempMorePills = value; SetConVarInt(FindConVar("ast_pills_enabled"), value); }
 		case 8: { tempKillMapPills = value; SetConVarInt(FindConVar("ast_pills_map_kill"), value); }
 		case 11: { tempRatioDamage = value; SetConVarInt(hRatioDamage, value); }
@@ -366,7 +349,7 @@ void ApplyGameplaySetting(int target, int value, bool announce, int slot)
 	}
 
 	if (announce) {
-		PrintToChatAll("\x04[Ast] \x01单人调整已直接生效；使用 \x03!ast \x01查看当前状态.");
+		PrintToChatAll("\x04[Ast] \x01%t", "SoloOverrideApplied");
 	}
 }
 
@@ -398,8 +381,6 @@ void SyncTempMirrors(int slot)
 	tempTankDmg = (g_iSlotOverrideMask[slot] & (1 << 1)) ? g_iSlotOverride[slot][1] : -1;
 	tempTankBhop = (g_iSlotOverrideMask[slot] & (1 << 2)) ? g_iSlotOverride[slot][2] : -1;
 	tempTankRock = (g_iSlotOverrideMask[slot] & (1 << 3)) ? g_iSlotOverride[slot][3] : -1;
-	tempPlayerInfected = (g_iSlotOverrideMask[slot] & (1 << 4)) ? g_iSlotOverride[slot][4] : -1;
-	tempPlayerTank = (g_iSlotOverrideMask[slot] & (1 << 5)) ? g_iSlotOverride[slot][5] : -1;
 	tempMorePills = (g_iSlotOverrideMask[slot] & (1 << 7)) ? g_iSlotOverride[slot][7] : -1;
 	tempKillMapPills = (g_iSlotOverrideMask[slot] & (1 << 8)) ? g_iSlotOverride[slot][8] : -1;
 	tempRatioDamage = (g_iSlotOverrideMask[slot] & (1 << 11)) ? g_iSlotOverride[slot][11] : -1;
@@ -413,7 +394,7 @@ public void TankDmgVoteResultHandler(Handle vote, int num_votes, int num_clients
 	for (int i = 0; i < num_items; i++) {
 		if (item_info[i][BUILTINVOTEINFO_ITEM_INDEX] == BUILTINVOTES_VOTE_YES) {
 			if (item_info[i][BUILTINVOTEINFO_ITEM_VOTES] > (num_votes / 2)) {
-				DisplayBuiltinVotePass(vote, "正在更改 Tank 伤害...");
+				DisplayVotePassPhrase(vote, "VotePassTankDamage");
 		ApplyVoteSetting(1, tempTankDmg);
 				return;
 			}
@@ -428,7 +409,7 @@ public void TankBhopVoteResultHandler(Handle vote, int num_votes, int num_client
 	for (int i = 0; i < num_items; i++) {
 		if (item_info[i][BUILTINVOTEINFO_ITEM_INDEX] == BUILTINVOTES_VOTE_YES) {
 			if (item_info[i][BUILTINVOTEINFO_ITEM_VOTES] > (num_votes / 2)) {
-				DisplayBuiltinVotePass(vote, "正在更改 Tank 连跳...");
+				DisplayVotePassPhrase(vote, "VotePassTankBhop");
 		ApplyVoteSetting(2, tempTankBhop);
 				return;
 			}
@@ -444,7 +425,7 @@ public void TankRockVoteResultHandler(Handle vote, int num_votes, int num_client
 	for (int i = 0; i < num_items; i++) {
 		if (item_info[i][BUILTINVOTEINFO_ITEM_INDEX] == BUILTINVOTES_VOTE_YES) {
 			if (item_info[i][BUILTINVOTEINFO_ITEM_VOTES] > (num_votes / 2)) {
-				DisplayBuiltinVotePass(vote, "正在更改 Tank 丢石头...");
+				DisplayVotePassPhrase(vote, "VotePassTankRock");
 		ApplyVoteSetting(3, tempTankRock);
 				return;
 			}
@@ -455,50 +436,12 @@ public void TankRockVoteResultHandler(Handle vote, int num_votes, int num_client
 	return;
 }
 
-public void PlayerInfectedVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
-{
-	for (int i = 0; i < num_items; i++) {
-		if (item_info[i][BUILTINVOTEINFO_ITEM_INDEX] == BUILTINVOTES_VOTE_YES) {
-			if (item_info[i][BUILTINVOTEINFO_ITEM_VOTES] > (num_votes / 2)) {
-				char sBuffer[64];
-				Format(sBuffer, sizeof(sBuffer), "正在更改特感玩家数量为 %d ...", tempPlayerInfected);
-				DisplayBuiltinVotePass(vote, sBuffer);
-		ApplyVoteSetting(4, tempPlayerInfected);
-				return;
-			}
-		}
-	}
-	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
-	return;
-}
-
-public void PlayerTankVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
-{
-	for (int i = 0; i < num_items; i++) {
-		if (item_info[i][BUILTINVOTEINFO_ITEM_INDEX] == BUILTINVOTES_VOTE_YES) {
-			if (item_info[i][BUILTINVOTEINFO_ITEM_VOTES] > (num_votes / 2)) {
-				char sBuffer[64];
-				tempPlayerTank == 0 ? Format(sBuffer, sizeof(sBuffer), "禁止") : Format(sBuffer, sizeof(sBuffer), "允许");
-				Format(sBuffer, sizeof(sBuffer), "%s玩家扮演 Tank", sBuffer);
-				DisplayBuiltinVotePass(vote, sBuffer);
-		ApplyVoteSetting(5, tempPlayerTank);
-				return;
-			}
-		}
-	}
-	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
-	return;
-}
-
 public void MorePillsVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
 {
 	for (int i = 0; i < num_items; i++) {
 		if (item_info[i][BUILTINVOTEINFO_ITEM_INDEX] == BUILTINVOTES_VOTE_YES) {
 			if (item_info[i][BUILTINVOTEINFO_ITEM_VOTES] > (num_votes / 2)) {
-				char sBuffer[64];
-				tempMorePills == 0 ? Format(sBuffer, sizeof(sBuffer), "关闭") : Format(sBuffer, sizeof(sBuffer), "开启");
-				Format(sBuffer, sizeof(sBuffer), "正在 %s 额外发药...", sBuffer);
-				DisplayBuiltinVotePass(vote, sBuffer);
+				DisplayVotePassPhrase(vote, tempMorePills ? "VotePassEnableExtraPills" : "VotePassDisableExtraPills");
 		ApplyVoteSetting(7, tempMorePills);
 				return;
 			}
@@ -513,10 +456,7 @@ public void KillMapPillsVoteResultHandler(Handle vote, int num_votes, int num_cl
 	for (int i = 0; i < num_items; i++) {
 		if (item_info[i][BUILTINVOTEINFO_ITEM_INDEX] == BUILTINVOTES_VOTE_YES) {
 			if (item_info[i][BUILTINVOTEINFO_ITEM_VOTES] > (num_votes / 2)) {
-				char sBuffer[64];
-				tempKillMapPills == 0 ? Format(sBuffer, sizeof(sBuffer), "保留") : Format(sBuffer, sizeof(sBuffer), "删除");
-				Format(sBuffer, sizeof(sBuffer), "已设置为 %s 地图药，下回合生效", sBuffer);
-				DisplayBuiltinVotePass(vote, sBuffer);
+				DisplayVotePassPhrase(vote, tempKillMapPills ? "VotePassRemoveMapPills" : "VotePassKeepMapPills");
 		ApplyVoteSetting(8, tempKillMapPills);
 				return;
 			}
@@ -539,7 +479,7 @@ bool DidVotePass(int num_votes, int num_items, const int[][] item_info)
 public void RatioDamageVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
 {
 	if (DidVotePass(num_votes, num_items, item_info)) {
-		DisplayBuiltinVotePass(vote, "正在更改比例伤害设置...");
+		DisplayVotePassPhrase(vote, "VotePassRatioDamage");
 		ApplyVoteSetting(11, tempRatioDamage);
 		return;
 	}
@@ -549,7 +489,7 @@ public void RatioDamageVoteResultHandler(Handle vote, int num_votes, int num_cli
 public void RehealthVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
 {
 	if (DidVotePass(num_votes, num_items, item_info)) {
-		DisplayBuiltinVotePass(vote, "正在更改击杀回血设置...");
+		DisplayVotePassPhrase(vote, "VotePassRehealth");
 		ApplyVoteSetting(12, tempRehealth);
 		return;
 	}
@@ -559,7 +499,7 @@ public void RehealthVoteResultHandler(Handle vote, int num_votes, int num_client
 public void ReammoVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
 {
 	if (DidVotePass(num_votes, num_items, item_info)) {
-		DisplayBuiltinVotePass(vote, "正在更改击杀回备弹设置...");
+		DisplayVotePassPhrase(vote, "VotePassReammo");
 		ApplyVoteSetting(13, tempReammo);
 		return;
 	}
@@ -569,7 +509,7 @@ public void ReammoVoteResultHandler(Handle vote, int num_votes, int num_clients,
 public void ResetVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
 {
 	if (DidVotePass(num_votes, num_items, item_info)) {
-		DisplayBuiltinVotePass(vote, "正在清除临时调整并恢复当前基线...");
+		DisplayVotePassPhrase(vote, "VotePassResetAll");
 		ResetSettings(true);
 		return;
 	}
@@ -579,7 +519,7 @@ public void ResetVoteResultHandler(Handle vote, int num_votes, int num_clients, 
 public void SIDamageVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
 {
 	if (DidVotePass(num_votes, num_items, item_info)) {
-		DisplayBuiltinVotePass(vote, "正在更改特感基础伤害...");
+		DisplayVotePassPhrase(vote, "VotePassSIDamage");
 		ApplyVoteSetting(15, tempSIDamage);
 		return;
 	}
@@ -589,7 +529,7 @@ public void SIDamageVoteResultHandler(Handle vote, int num_votes, int num_client
 public void MobLimitVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
 {
 	if (DidVotePass(num_votes, num_items, item_info)) {
-		DisplayBuiltinVotePass(vote, "正在更改有限尸潮设置...");
+		DisplayVotePassPhrase(vote, "VotePassFiniteHordes");
 		ApplyVoteSetting(16, pendingMobLimit);
 		pendingMobLimit = -1;
 		return;
@@ -603,6 +543,7 @@ public void VoteHandler(Handle vote, BuiltinVoteAction action, int param1, int p
 	switch (action) {
 		case BuiltinVoteAction_End: {
 			g_iPendingSlot = 0;
+			g_iVoteInitiator = 0;
 			g_hVote = INVALID_HANDLE;
 			CloseHandle(vote);
 			return;
@@ -617,19 +558,31 @@ public void VoteHandler(Handle vote, BuiltinVoteAction action, int param1, int p
 	return;
 }
 
+void DisplayVotePassPhrase(Handle vote, const char[] phrase)
+{
+	char message[128];
+	int languageClient = IsClientAndInGame(g_iVoteInitiator) ? g_iVoteInitiator : LANG_SERVER;
+	FormatEx(message, sizeof(message), "%T", phrase, languageClient);
+	DisplayBuiltinVotePass(vote, message);
+}
+
 
 public Action Menu_SITimer(int client, int args)
 {
 	Menu menu = new Menu(Menu_SITimerHandler);
 	ConVar waveTimer = FindConVar("wave_interval");
 	ConVar waveLimit = FindConVar("wave_size");
+	char title[96];
 	if (waveTimer != null && waveLimit != null) {
-		menu.SetTitle("当前刷新速率：%.1f秒%i特", waveTimer.FloatValue, waveLimit.IntValue);
+		FormatEx(title, sizeof(title), "%T", "SIWaveTitle", client, waveTimer.FloatValue, waveLimit.IntValue);
 	} else {
-		menu.SetTitle("特感刷新参数尚未就绪");
+		FormatEx(title, sizeof(title), "%T", "SIWaveUnavailableTitle", client);
 	}
+	menu.SetTitle(title);
 	menu.ExitBackButton = true;
-	menu.AddItem("", "使用 !si 修改刷新参数", ITEMDRAW_DISABLED);
+	char instruction[64];
+	FormatEx(instruction, sizeof(instruction), "%T", "SIWaveInstruction", client);
+	menu.AddItem("", instruction, ITEMDRAW_DISABLED);
 	menu.Display(client, MENU_DISPLAY_TIME);
 	return Plugin_Handled;
 }
@@ -650,7 +603,9 @@ public Action Menu_SIDamage(int client, int args)
 {
 	Handle menu = CreateMenu(Menu_SIDamageHandler);
 	int dmg = GetConVarInt(hDmgThreshold);
-	SetMenuTitle(menu, "修改特感基础伤害");
+	char title[64];
+	FormatEx(title, sizeof(title), "%T", "SIDamageTitle", client);
+	SetMenuTitle(menu, title);
 	SetMenuExitBackButton(menu, true);
 
 	char sBuffer[16];
@@ -688,8 +643,6 @@ public void ResetSettings(bool announce)
 	tempTankBhop = -1;
 	tempTankRock = -1;
 	tempTankDmg = -1;
-	tempPlayerInfected = -1;
-	tempPlayerTank = -1;
 	tempMorePills = -1;
 	tempKillMapPills = -1;
 	tempRatioDamage = -1;
@@ -703,7 +656,7 @@ public void ResetSettings(bool announce)
 	if (CanUseProfileController()) ProfileController_Reapply();
 	else LogError("[Ast] profile_controller.smx is not available; profile baseline was not reapplied.");
 	if (announce) {
-		PrintToChatAll("\x04[Ast] \x01已清除所有人数档位的临时调整，并恢复当前人数基线.");
+		PrintToChatAll("\x04[Ast] \x01%t", "ResetComplete");
 	}
 }
 
@@ -744,18 +697,22 @@ void ClearAllSlotOverrides()
 public Action Menu_MorePills(int client, int args)
 {
 	if (FindConVar("ast_pills_map_kill") == null) {
-		PrintToChat(client, "\x04[Ast] \x05pills_giver.smx \x01插件未安装，请联系管理员.");
+		PrintToChat(client, "\x04[Ast] \x01%t", "PillsPluginUnavailable");
 		drawPanel(client, 0);
 		return Plugin_Handled;
 	}
 
 	// 开关，删除地图药
 	Handle menu = CreateMenu(Menu_MorePillsHandler);
-	SetMenuTitle(menu, "额外发药设定");
+	char buffer[64];
+	FormatEx(buffer, sizeof(buffer), "%T", "ExtraPillsTitle", client);
+	SetMenuTitle(menu, buffer);
 	SetMenuExitBackButton(menu, true);
 
-	AddToggleMenuItem(menu, "自动发药", GetConVarBool(FindConVar("ast_pills_enabled")));
-	AddToggleMenuItem(menu, "删除地图药", GetConVarBool(FindConVar("ast_pills_map_kill")));
+	FormatEx(buffer, sizeof(buffer), "%T", "AutomaticPills", client);
+	AddToggleMenuItem(menu, buffer, GetConVarBool(FindConVar("ast_pills_enabled")));
+	FormatEx(buffer, sizeof(buffer), "%T", "RemoveMapPills", client);
+	AddToggleMenuItem(menu, buffer, GetConVarBool(FindConVar("ast_pills_map_kill")));
 
 	DisplayMenu(menu, client, MENU_DISPLAY_TIME);
 	return Plugin_Handled;
@@ -775,57 +732,6 @@ public int Menu_MorePillsHandler(Handle menu, MenuAction action, int client, int
 				TZ_CallVote(client, 8, !bPillsMapKill);
 			}
 		}
-		drawPanel(client, 7);
-	}
-	else if (action == MenuAction_Cancel) drawPanel(client, 7);
-	return 1;
-}
-
-public Action Menu_PlayerInfected(int client, int args)
-{
-	ConVar hMaxInfected = FindConVar("coop_player_infected_limit");
-	ConVar hAllowHumanTank = FindConVar("coop_player_allow_human_tank");
-
-	if (hMaxInfected == null) {
-		PrintToChat(client, "\x04[Ast] \x05player_manager.smx \x01插件未安装，请联系管理员.");
-		drawPanel(client, 0);
-		return Plugin_Handled;
-	}
-
-	Handle menu = CreateMenu(Menu_PlayerInfectedHandler);
-	SetMenuTitle(menu, "玩家特感设定");
-	SetMenuExitBackButton(menu, true);
-
-	int iMaxInfected = GetConVarInt(hMaxInfected);
-
-	for (int i = 0; i <= 4; i++) {
-		if (i == 0)
-			AddToggleMenuItem(menu, "禁止玩家加入特感", !iMaxInfected);
-		else {
-			char buffer[32];
-			Format(buffer, sizeof(buffer), "允许 %d 位特感", i);
-			AddToggleMenuItem(menu, buffer, iMaxInfected == i);
-		}
-	}
-
-	bool bAllowHumanTank = GetConVarBool(hAllowHumanTank);
-	AddToggleMenuItem(menu, "禁止玩家扮演 Tank", !bAllowHumanTank);
-	AddToggleMenuItem(menu, "允许玩家扮演 Tank", bAllowHumanTank);
-
-	DisplayMenu(menu, client, MENU_DISPLAY_TIME);
-	return Plugin_Handled;
-
-}
-
-public int Menu_PlayerInfectedHandler(Handle menu, MenuAction action, int client, int param)
-{
-	if (action == MenuAction_Select) {
-		if (param >= 0 && param <= 4) {
-			TZ_CallVote(client, 4, param);
-		} else if (param == 5 || param == 6) {
-			TZ_CallVote(client, 5, param - 5);
-		}
-		// DisplayMenu(menu, client, MENU_DISPLAY_TIME);
 		drawPanel(client, 7);
 	}
 	else if (action == MenuAction_Cancel) drawPanel(client, 7);
@@ -868,7 +774,7 @@ public bool IsClientSurvivor(int client, bool isMenu) {
 	if ( !IsClientAndInGame(client) ) return false;
 	if (!isSurvivor(client)) {
 		if (isMenu) {
-			PrintToChat(client, "\x04[Ast] \x01仅限生还者选择!");
+			PrintToChat(client, "\x04[Ast] \x01%t", "SurvivorsOnly");
 		}
 		return false;
 	}
@@ -935,11 +841,11 @@ int GetWaveOverrideMask()
 	return WaveSpawner_GetCurrentOverrideMask();
 }
 
-void GetGameplayStatus(char[] buffer, int maxlen)
+void GetGameplayStatus(int client, char[] buffer, int maxlen)
 {
 	int difficulty = GetDifficulty();
 	if (difficulty < 1 || difficulty > 4) difficulty = CountHumanSurvivors();
-	Format(buffer, maxlen, "%dP | 临时调整 %d", difficulty, CountOverrides());
+	FormatEx(buffer, maxlen, "%T", "GameplayStatus", client, difficulty, CountOverrides());
 }
 
 void PrintGameplayStatus(int client)
@@ -1006,7 +912,7 @@ void PrintOverrideDetails(int client)
 
 bool IsBooleanChallengeTarget(int target)
 {
-	return target == 2 || target == 3 || target == 5 || target == 7 || target == 8
+	return target == 2 || target == 3 || target == 7 || target == 8
 		|| target == 11 || target == 12 || target == 13 || target == 16;
 }
 
@@ -1017,8 +923,6 @@ void GetChallengePhrase(int target, char[] phrase, int maxlen)
 		case 1: strcopy(phrase, maxlen, "InfoTankDamage");
 		case 2: strcopy(phrase, maxlen, "InfoTankBhop");
 		case 3: strcopy(phrase, maxlen, "InfoTankRock");
-		case 4: strcopy(phrase, maxlen, "InfoPlayerInfected");
-		case 5: strcopy(phrase, maxlen, "InfoPlayerTank");
 		case 7: strcopy(phrase, maxlen, "InfoExtraPills");
 		case 8: strcopy(phrase, maxlen, "InfoMapPills");
 		case 11: strcopy(phrase, maxlen, "InfoRatioDamage");
@@ -1039,9 +943,13 @@ void GetWavePhrase(int field, char[] phrase, int maxlen)
 public Action Timer_RemindOverrides(Handle timer)
 {
 	if (CountOverrides() > 0) {
-		char status[64];
-		GetGameplayStatus(status, sizeof(status));
-		PrintToChatAll("\x04[Ast] \x01当前存在临时玩法调整：\x03%s\x01；输入 \x03!ast \x01查看或投票恢复默认.", status);
+		for (int client = 1; client <= MaxClients; client++)
+		{
+			if (!IsClientInGame(client) || IsFakeClient(client)) continue;
+			char status[64];
+			GetGameplayStatus(client, status, sizeof(status));
+			PrintToChat(client, "\x04[Ast] \x01%t", "OverrideReminder", status);
+		}
 	}
 	return Plugin_Continue;
 }

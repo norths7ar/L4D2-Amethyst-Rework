@@ -82,7 +82,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
 
 public void OnPluginStart()
 {
-	LoadTranslations("coop_flow.phrases");
+	LoadTranslations("ready_pause.phrases");
 	g_footer = new ArrayList(ByteCountToCells(MAX_FOOTER_LEN));
 	g_svPausable = FindConVar("sv_pausable");
 	g_svNoclipDuringPause = FindConVar("sv_noclipduringpause");

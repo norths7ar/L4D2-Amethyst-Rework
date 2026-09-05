@@ -1,0 +1,46 @@
+"Phrases"
+{
+    "WaveTag"
+    {
+        "chi" "特感波次"
+    }
+    "WaveSurvivorsOnly"
+    {
+        "chi" "只有生还者可以调整特感刷新参数。"
+    }
+    "WaveCurrent"
+    {
+        "#format" "{1:.1f},{2:d}"
+        "chi" "当前刷新速率：{1:.1f} 秒，{2} 个特感。"
+    }
+    "WaveUsage"
+    {
+        "chi" "用法：!si <刷新时间> <特感数量>。例如：!si 7.5 3 是7.5秒3只特感"
+    }
+    "WaveInvalidRange"
+    {
+        "chi" "刷新时间必须为 0–10000 秒，数量必须为 1–32。"
+    }
+    "WaveApplied"
+    {
+        /* Context: In solo play, !si applies immediately and stores the override only for the current player-count profile. */
+        "#format" "{1:.1f},{2:d}"
+        "chi" "已将特感刷新调整为 {1:.1f} 秒 / {2} 特。"
+    }
+    "WaveVoteUnavailable"
+    {
+        "chi" "当前无法发起新投票。"
+    }
+    "WaveVoteQuestion"
+    {
+        /* Context: In multiplayer, !si opens a vote for the current player-count profile. */
+        "#format" "{1:.1f},{2:d}"
+        "chi" "将特感刷新调整为 [{1:.1f} 秒 / {2} 特]"
+    }
+    "WaveVotePassed"
+    {
+        /* Context: The passed vote is saved as a temporary override for the player-count profile active when voting began. */
+        "#format" "{1:.1f},{2:d}"
+        "chi" "正在将特感刷新调整为 [{1:.1f} 秒 / {2} 特]……"
+    }
+}

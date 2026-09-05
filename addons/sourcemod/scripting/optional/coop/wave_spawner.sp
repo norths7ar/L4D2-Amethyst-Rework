@@ -41,6 +41,7 @@ float g_fPendingInterval = -1.0;
 int g_iPendingSize = -1;
 int g_iPendingWaveSlot;
 Handle g_hVote = INVALID_HANDLE;
+int g_iVoteInitiator;
 Handle g_hWaveTimer;
 bool g_bApplyingEffectiveWave;
 bool g_bProfileApplying;
@@ -53,6 +54,7 @@ int g_iSlotOverrideMask[5];
 
 public void OnPluginStart()
 {
+    LoadTranslations("wave_spawner.phrases");
     CreateConVar("wave_spawner_version", "1.0.0", "Coop Wave Spawner version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
     g_cvInterval = CreateConVar("wave_interval", "8.0", "Effective interval between SI waves.", FCVAR_NOTIFY, true, 0.0, true, 10000.0);
     g_cvSize = CreateConVar("wave_size", "3", "Effective number of SI in each wave.", FCVAR_NOTIFY, true, 1.0, true, 32.0);
@@ -101,6 +103,7 @@ public void OnMapEnd()
 {
     g_hWaveTimer = null;
     g_hVote = INVALID_HANDLE;
+    g_iVoteInitiator = 0;
 }
 
 public void ProfileController_OnProfileApplied(int profile)
@@ -264,14 +267,14 @@ public Action Command_WaveOverride(int client, int args)
 {
     if (client <= 0 || !IsClientInGame(client) || GetClientTeam(client) != TEAM_SURVIVORS)
     {
-        ReplyToCommand(client, "\x04[Wave] \x01只有生还者可以调整特感刷新参数。");
+        ReplyToCommand(client, "\x04[%t] \x01%t", "WaveTag", "WaveSurvivorsOnly");
         return Plugin_Handled;
     }
 
     if (args != 2)
     {
-        ReplyToCommand(client, "\x04[Wave] \x01当前刷新速率：\x03%.1f秒%d特", g_cvInterval.FloatValue, g_cvSize.IntValue);
-        ReplyToCommand(client, "\x04[Wave] \x01使用方法：\x03!si <刷新时间> <特感数量>\x01，例如：\x03!si 7.5 3");
+        ReplyToCommand(client, "\x04[%t] \x01%t", "WaveTag", "WaveCurrent", g_cvInterval.FloatValue, g_cvSize.IntValue);
+        ReplyToCommand(client, "\x04[%t] \x01%t", "WaveTag", "WaveUsage");
         return Plugin_Handled;
     }
 
@@ -283,20 +286,20 @@ public Action Command_WaveOverride(int client, int args)
         || StringToIntEx(sizeArgument, g_iPendingSize) != strlen(sizeArgument)
         || g_fPendingInterval < 0.0 || g_fPendingInterval > 10000.0 || g_iPendingSize < 1 || g_iPendingSize > 32)
     {
-        ReplyToCommand(client, "\x04[Wave] \x01刷新时间必须为 0–10000 秒，数量必须为 1–32。");
+        ReplyToCommand(client, "\x04[%t] \x01%t", "WaveTag", "WaveInvalidRange");
         return Plugin_Handled;
     }
 
     if (CountHumanSurvivors() <= 1)
     {
         ApplyWaveOverride(g_fPendingInterval, g_iPendingSize, GetCurrentProfile());
-        PrintToChatAll("\x04[Wave] \x01已将特感刷新速度调整为 \x03%.1f秒%d特\x01。", g_fPendingInterval, g_iPendingSize);
+        PrintToChatAll("\x04[%t] \x01%t", "WaveTag", "WaveApplied", g_fPendingInterval, g_iPendingSize);
         return Plugin_Handled;
     }
 
     if (!IsNewBuiltinVoteAllowed())
     {
-        ReplyToCommand(client, "\x04[Wave] \x01当前无法发起新投票。");
+        ReplyToCommand(client, "\x04[%t] \x01%t", "WaveTag", "WaveVoteUnavailable");
         return Plugin_Handled;
     }
 
@@ -313,8 +316,9 @@ public Action Command_WaveOverride(int client, int args)
     }
 
     char voteText[64];
-    Format(voteText, sizeof(voteText), "修改特感刷新速度为 [%.1f秒%d特]", g_fPendingInterval, g_iPendingSize);
+    FormatEx(voteText, sizeof(voteText), "%T", "WaveVoteQuestion", client, g_fPendingInterval, g_iPendingSize);
     g_hVote = CreateBuiltinVote(VoteHandler, BuiltinVoteType_Custom_YesNo, BuiltinVoteAction_Cancel | BuiltinVoteAction_VoteEnd | BuiltinVoteAction_End);
+    g_iVoteInitiator = client;
     SetBuiltinVoteResultCallback(g_hVote, WaveVoteResultHandler);
     SetBuiltinVoteArgument(g_hVote, voteText);
     SetBuiltinVoteInitiator(g_hVote, client);
@@ -330,7 +334,9 @@ public void WaveVoteResultHandler(Handle vote, int numVotes, int numClients, con
         if (itemInfo[item][BUILTINVOTEINFO_ITEM_INDEX] == BUILTINVOTES_VOTE_YES && itemInfo[item][BUILTINVOTEINFO_ITEM_VOTES] > (numVotes / 2))
         {
             char voteText[64];
-            Format(voteText, sizeof(voteText), "修改特感刷新速度为 [%.1f秒%d特]", g_fPendingInterval, g_iPendingSize);
+            int languageClient = LANG_SERVER;
+            if (g_iVoteInitiator > 0 && g_iVoteInitiator <= MaxClients && IsClientInGame(g_iVoteInitiator)) languageClient = g_iVoteInitiator;
+            FormatEx(voteText, sizeof(voteText), "%T", "WaveVotePassed", languageClient, g_fPendingInterval, g_iPendingSize);
             DisplayBuiltinVotePass(vote, voteText);
             ApplyWaveOverride(g_fPendingInterval, g_iPendingSize, g_iPendingWaveSlot);
             g_iPendingWaveSlot = 0;
@@ -345,6 +351,7 @@ public void VoteHandler(Handle vote, BuiltinVoteAction action, int param1, int p
     if (action == BuiltinVoteAction_End)
     {
         g_iPendingWaveSlot = 0;
+        g_iVoteInitiator = 0;
         g_hVote = INVALID_HANDLE;
         CloseHandle(vote);
     }

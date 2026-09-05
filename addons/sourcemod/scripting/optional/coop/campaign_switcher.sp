@@ -57,6 +57,7 @@ bool g_finaleChangeScheduled;
 public void OnPluginStart()
 {
 	LoadTranslations("imatchext.phrases");
+	LoadTranslations("campaign_switcher.phrases");
 
 	g_mapMissions = new ArrayList();
 	g_mapFirstChapters = new ArrayList(MAX_MAP_NAME);
@@ -280,9 +281,9 @@ public Action Timer_ReloadRegistry(Handle timer)
 public Action Command_ReloadMaps(int client, int args)
 {
 	if (ReloadMapRegistry())
-		ReplyToCommand(client, "[地图] 已载入 %d 张 Map。", g_mapMissions.Length);
+		ReplyToCommand(client, "[%t] %t", "CampaignTag", "RegistryReloaded", g_mapMissions.Length);
 	else
-		ReplyToCommand(client, "[地图] 没有可用 Map，请检查 Mission Cache 与 missioncycle.txt。");
+		ReplyToCommand(client, "[%t] %t", "CampaignTag", "RegistryEmpty");
 
 	return Plugin_Handled;
 }
@@ -429,11 +430,11 @@ bool GetChapterInfo(
 	{
 		char localized[MAX_MAP_NAME];
 		if (TranslateGamePhrase(rawDisplayName, localized, sizeof(localized), client))
-			FormatEx(displayName, displayNameLength, "第%d关 - %s", chapter, localized);
+			FormatEx(displayName, displayNameLength, "%T", "ChapterDisplay", client, chapter, localized);
 		else if (rawDisplayName[0] && rawDisplayName[0] != '#')
-			FormatEx(displayName, displayNameLength, "第%d关 - %s", chapter, rawDisplayName);
+			FormatEx(displayName, displayNameLength, "%T", "ChapterDisplay", client, chapter, rawDisplayName);
 		else
-			FormatEx(displayName, displayNameLength, "第%d关 - %s", chapter, mapName);
+			FormatEx(displayName, displayNameLength, "%T", "ChapterDisplay", client, chapter, mapName);
 	}
 
 	return true;
@@ -470,12 +471,14 @@ public Action Command_MapVote(int client, int args)
 
 	if (!g_mapMissions.Length)
 	{
-		PrintToChat(client, "\x04[地图] \x01当前没有可投票的 Map。");
+		PrintToChat(client, "\x04[%t] \x01%t", "CampaignTag", "NoMapsForVote");
 		return Plugin_Handled;
 	}
 
 	Menu menu = new Menu(MapSelectionHandler);
-	menu.SetTitle("投票立即更换 Map\n共 %d 张", g_mapMissions.Length);
+	char title[192];
+	FormatEx(title, sizeof(title), "%T", "ImmediateMapMenuTitle", client, g_mapMissions.Length);
+	menu.SetTitle(title);
 	menu.ExitButton = true;
 
 	char firstChapter[MAX_MAP_NAME];
@@ -500,7 +503,7 @@ public int MapSelectionHandler(Menu menu, MenuAction action, int client, int ite
 		int mapIndex = FindMapIndex(firstChapter);
 		if (mapIndex == -1)
 		{
-			PrintToChat(client, "\x04[地图] \x01该 Map 已不可用，请重新打开菜单。");
+			PrintToChat(client, "\x04[%t] \x01%t", "CampaignTag", "MapNoLongerAvailable");
 			return 0;
 		}
 
@@ -524,14 +527,14 @@ public Action Command_ChapterVote(int client, int args)
 	MissionSymbol mission = CurrentMission;
 	if (!MissionSymbol.IsValid(mission) || !ModeSymbol.IsValid(CurrentMode))
 	{
-		PrintToChat(client, "\x04[章节] \x01无法识别当前 Map。");
+		PrintToChat(client, "\x04[%t] \x01%t", "ChapterTag", "CurrentMapUnknown");
 		return Plugin_Handled;
 	}
 
 	int chapterCount = CurrentMode.GetNumChapters(mission);
 	if (chapterCount < 1)
 	{
-		PrintToChat(client, "\x04[章节] \x01当前 Map 没有可用 Chapter。");
+		PrintToChat(client, "\x04[%t] \x01%t", "ChapterTag", "NoChaptersAvailable");
 		return Plugin_Handled;
 	}
 
@@ -543,7 +546,9 @@ public Action Command_ChapterVote(int client, int args)
 		mission.GetName(mapTitle, sizeof(mapTitle));
 
 	Menu menu = new Menu(ChapterSelectionHandler);
-	menu.SetTitle("%s\n选择 Chapter 后发起实时投票", mapTitle);
+	char title[192];
+	FormatEx(title, sizeof(title), "%T", "ChapterMenuTitle", client, mapTitle);
+	menu.SetTitle(title);
 	menu.ExitButton = true;
 
 	for (int chapter = 1; chapter <= chapterCount; chapter++)
@@ -560,7 +565,7 @@ public Action Command_ChapterVote(int client, int args)
 	if (!menu.ItemCount)
 	{
 		delete menu;
-		PrintToChat(client, "\x04[章节] \x01当前 Map 没有有效 Chapter。");
+		PrintToChat(client, "\x04[%t] \x01%t", "ChapterTag", "NoValidChapters");
 		return Plugin_Handled;
 	}
 
@@ -577,7 +582,7 @@ public int ChapterSelectionHandler(Menu menu, MenuAction action, int client, int
 		menu.GetItem(item, mapName, sizeof(mapName), _, displayName, sizeof(displayName));
 		if (!IsMapValid(mapName))
 		{
-			PrintToChat(client, "\x04[章节] \x01该 Chapter 已不可用。");
+			PrintToChat(client, "\x04[%t] \x01%t", "ChapterTag", "ChapterNoLongerAvailable");
 			return 0;
 		}
 		StartImmediateChangeVote(client, mapName, displayName);
@@ -621,7 +626,7 @@ bool StartImmediateChangeVote(int client, const char[] mapName, const char[] dis
 	if (!DisplayBuiltinVote(vote, players, total, FindConVar("sv_vote_timer_duration").IntValue))
 	{
 		delete vote;
-		PrintToChat(client, "\x04[地图] \x01无法启动投票。");
+		PrintToChat(client, "\x04[%t] \x01%t", "CampaignTag", "VoteStartFailed");
 		return false;
 	}
 
@@ -635,14 +640,14 @@ bool CheckVoteAccess(int client)
 
 	if (IsBuiltinVoteInProgress())
 	{
-		PrintToChat(client, "\x04[地图] \x01已有投票正在进行。");
+		PrintToChat(client, "\x04[%t] \x01%t", "CampaignTag", "VoteAlreadyRunning");
 		return false;
 	}
 
 	int delay = CheckBuiltinVoteDelay();
 	if (delay > 0)
 	{
-		PrintToChat(client, "\x04[地图] \x01请等待 %d 秒再发起投票。", delay);
+		PrintToChat(client, "\x04[%t] \x01%t", "CampaignTag", "VoteDelay", delay);
 		return false;
 	}
 
@@ -701,7 +706,7 @@ public Action Command_NextMap(int client, int args)
 
 	if (!IsMissionFinalMap())
 	{
-		PrintToChat(client, "\x04[下一张图] \x01只能在救援关选择下一张 Map。");
+		PrintToChat(client, "\x04[%t] \x01%t", "NextMapTag", "FinaleOnly");
 		return Plugin_Handled;
 	}
 
@@ -723,16 +728,18 @@ void ShowNextMapMenu(int client, int firstItem = 0)
 	int eligible = CountEligibleHumans();
 
 	Menu menu = new Menu(NextMapMenuHandler);
+	char title[256];
 	if (leader == -1)
-		menu.SetTitle("选择下一张 Map（已投 %d/%d）\n尚无人投票", votesCast, eligible);
+		FormatEx(title, sizeof(title), "%T", "NextMapMenuNoVotes", client, votesCast, eligible);
 	else if (tiedMaps > 1)
-		menu.SetTitle("选择下一张 Map（已投 %d/%d）\n%d 张 Map 以 %d 票并列领先", votesCast, eligible, tiedMaps, highestVotes);
+		FormatEx(title, sizeof(title), "%T", "NextMapMenuTied", client, votesCast, eligible, tiedMaps, highestVotes);
 	else
 	{
 		char leaderName[MAX_MAP_NAME];
 		g_mapDisplayNames.GetString(leader, leaderName, sizeof(leaderName));
-		menu.SetTitle("选择下一张 Map（已投 %d/%d）\n领先：%s [%d票]", votesCast, eligible, leaderName, highestVotes);
+		FormatEx(title, sizeof(title), "%T", "NextMapMenuLeader", client, votesCast, eligible, leaderName, highestVotes);
 	}
+	menu.SetTitle(title);
 
 	char firstChapter[MAX_MAP_NAME];
 	char displayName[MAX_MAP_NAME];
@@ -744,7 +751,9 @@ void ShowNextMapMenu(int client, int firstItem = 0)
 		FormatEx(
 			itemText,
 			sizeof(itemText),
-			StrEqual(g_nextMapVote[client], firstChapter, false) ? "[✓ %d票] %s" : "[%d票] %s",
+			"%T",
+			StrEqual(g_nextMapVote[client], firstChapter, false) ? "NextMapItemSelected" : "NextMapItem",
+			client,
 			counts[i],
 			displayName
 		);
@@ -765,14 +774,14 @@ public int NextMapMenuHandler(Menu menu, MenuAction action, int client, int item
 		int mapIndex = FindMapIndex(firstChapter);
 		if (mapIndex == -1)
 		{
-			PrintToChat(client, "\x04[下一张图] \x01该 Map 已不可用。");
+			PrintToChat(client, "\x04[%t] \x01%t", "NextMapTag", "NextMapNoLongerAvailable");
 			return 0;
 		}
 
 		strcopy(g_nextMapVote[client], sizeof(g_nextMapVote[]), firstChapter);
 		char displayName[MAX_MAP_NAME];
 		g_mapDisplayNames.GetString(mapIndex, displayName, sizeof(displayName));
-		PrintToChatAll("\x04[下一张图] \x03%N \x01选择了 \x05%s\x01。", client, displayName);
+		PrintToChatAll("\x04[%t] \x01%t", "NextMapTag", "NextMapSelected", client, displayName);
 
 		DataPack pack;
 		CreateDataTimer(0.1, Timer_RedisplayNextMap, pack, TIMER_FLAG_NO_MAPCHANGE);
@@ -884,9 +893,9 @@ public Action Event_FinaleWin(Event event, const char[] name, bool dontBroadcast
 	int tiedMaps;
 	BuildNextMapVoteStats(counts, votesCast, highestVotes, tiedMaps);
 	if (votesCast > 0)
-		PrintToChatAll("\x04[下一张图] \x01投票结果：\x05%s\x01。", displayName);
+		PrintToChatAll("\x04[%t] \x01%t", "NextMapTag", "NextMapVoteResult", displayName);
 	else
-		PrintToChatAll("\x04[下一张图] \x01无人投票，随机官图：\x05%s\x01。", displayName);
+		PrintToChatAll("\x04[%t] \x01%t", "NextMapTag", "NextMapRandomOfficial", displayName);
 
 	ScheduleMapChange(firstChapter, displayName, FINALE_CHANGE_DELAY);
 	return Plugin_Continue;
@@ -964,11 +973,11 @@ public Action Timer_ChangeMap(Handle timer, DataPack pack)
 	if (!IsMapValid(mapName))
 	{
 		LogError("Cannot change to invalid Chapter %s (%s)", mapName, displayName);
-		PrintToChatAll("\x04[地图] \x01换图失败：目标 Chapter 已不可用。");
+		PrintToChatAll("\x04[%t] \x01%t", "CampaignTag", "ChangeTargetUnavailable");
 		return Plugin_Stop;
 	}
 
-	PrintToChatAll("\x04[地图] \x01正在载入 \x05%s\x01……", displayName);
+	PrintToChatAll("\x04[%t] \x01%t", "CampaignTag", "ChangingMap", displayName);
 	ForceChangeLevel(mapName, "Campaign Switcher vote");
 	return Plugin_Stop;
 }

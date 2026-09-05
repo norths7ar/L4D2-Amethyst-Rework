@@ -1,0 +1,46 @@
+"Phrases"
+{
+    "WaveTag"
+    {
+        "en" "SI Waves"
+    }
+    "WaveSurvivorsOnly"
+    {
+        "en" "Only survivors can adjust SI wave settings."
+    }
+    "WaveCurrent"
+    {
+        "#format" "{1:.1f},{2:d}"
+        "en" "Current wave rate: {1:.1f} sec, {2} SI."
+    }
+    "WaveUsage"
+    {
+        "en" "Usage: !si <interval> <size>. Example: !si 7.5 3"
+    }
+    "WaveInvalidRange"
+    {
+        "en" "Interval must be 0-10000 seconds and size must be 1-32."
+    }
+    "WaveApplied"
+    {
+        /* Context: In solo play, !si applies immediately and stores the override only for the current player-count profile. */
+        "#format" "{1:.1f},{2:d}"
+        "en" "SI waves are now {1:.1f} sec / {2} SI."
+    }
+    "WaveVoteUnavailable"
+    {
+        "en" "A new vote cannot be started right now."
+    }
+    "WaveVoteQuestion"
+    {
+        /* Context: In multiplayer, !si opens a vote for the current player-count profile. */
+        "#format" "{1:.1f},{2:d}"
+        "en" "Change SI waves to [{1:.1f} sec / {2} SI]"
+    }
+    "WaveVotePassed"
+    {
+        /* Context: The passed vote is saved as a temporary override for the player-count profile active when voting began. */
+        "#format" "{1:.1f},{2:d}"
+        "en" "Changing SI waves to [{1:.1f} sec / {2} SI]..."
+    }
+}

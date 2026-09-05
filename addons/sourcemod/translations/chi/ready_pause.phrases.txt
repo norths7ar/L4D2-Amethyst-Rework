@@ -1,23 +1,5 @@
 "Phrases"
 {
-	"JoinAfterStart"
-	{
-	    "chi" "队伍离开安全屋后暂时无法加入生还者。"
-	}
-	"PlayerSpectated"
-	{
-	    "#format" "{1:N}"
-	    "chi" "{1} 已进入旁观。"
-	}
-	"RoundNotStarted"
-	{
-	    "chi" "回合尚未开始。"
-	}
-	"HumanTankHealth"
-	{
-	    "#format" "{1:d}"
-	    "chi" "玩家 Tank 的生命值为 {1}。"
-	}
 	"WaitingForPlayers"
 	{
 	    "chi" "正在等待所有玩家加载……"
@@ -34,7 +16,7 @@
 	"PauseRequested"
 	{
 	    "#format" "{1:N}"
-	    "chi" "{1} 请求暂停。暂停后每位生还者输入 !r 准备。"
+	    "chi" "{1} 请求暂停。每位生还者均需要输入 !r 准备。"
 	}
 	"PauseDelay"
 	{
@@ -75,11 +57,11 @@
 	}
 	"PauseTitle"
 	{
-	    "chi" "合作模式暂停\n全体生还者准备后继续"
+	    "chi" "暂停\n全体生还者准备后继续"
 	}
 	"PauseAdminTitle"
 	{
-	    "chi" "合作模式暂停\n管理员强制暂停"
+	    "chi" "暂停\n管理员强制暂停"
 	}
 	"PausePlayerReady"
 	{
@@ -116,7 +98,7 @@
 	}
 	"ReadyTitle"
 	{
-	    "chi" "合作模式准备"
+	    "chi" "准备"
 	}
 	"ReadyLoading"
 	{
@@ -134,55 +116,5 @@
 	"LoadingTimeout"
 	{
 	    "chi" "加载超时。"
-	}
-	"AdminCleanupSyntax"
-	{
-	    "chi" "用法：!fuck <特感名称|all>。"
-	}
-	"AdminCleanupAll"
-	{
-	    "#format" "{1:N},{2:d}"
-	    "chi" "{1} 清理了 {2} 个 AI 特感。"
-	}
-	"AdminCleanupSome"
-	{
-	    "#format" "{1:N},{2:d},{3:s}"
-	    "chi" "{1} 清理了 {2} 个匹配 {3} 的 AI 特感。"
-	}
-	"AdminCleanupNone"
-	{
-	    "#format" "{1:s}"
-	    "chi" "没有匹配 {1} 的 AI 特感。"
-	}
-	"AdminCleanupAllConsole"
-	{
-	    "#format" "{1:d}"
-	    "chi" "控制台清理了 {1} 个 AI 特感。"
-	}
-	"AdminCleanupSomeConsole"
-	{
-	    "#format" "{1:d},{2:s}"
-	    "chi" "控制台清理了 {1} 个匹配 {2} 的 AI 特感。"
-	}
-	"TankRageRefilledSelf"
-	{
-	    "chi" "Tank 狂怒值已补满。"
-	}
-	"TankRageRefilledOther"
-	{
-	    "#format" "{1:N}"
-	    "chi" "{1} 的 Tank 狂怒值已补满。"
-	}
-	"BotSetupFailed"
-	{
-	    "chi" "合作模式生还者机器人创建失败。"
-	}
-	"BotPlaceholder"
-	{
-	    "chi" "已移除合作模式生还者占位机器人。"
-	}
-	"BotCleanup"
-	{
-	    "chi" "合作模式生还者机器人已清理。"
 	}
 }

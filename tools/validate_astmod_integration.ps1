@@ -170,7 +170,7 @@ $requiredPaths = @(
     "addons/sourcemod/scripting/fix_exec_config_unicode.sp",
     "addons/sourcemod/scripting/server_restart.sp",
     "addons/sourcemod/scripting/include/imatchext.inc",
-    "addons/sourcemod/scripting/include/coop_player_manager.inc",
+    "addons/sourcemod/scripting/include/player_manager.inc",
     "addons/sourcemod/scripting/include/profile_controller.inc",
     "addons/sourcemod/scripting/include/wave_spawner.inc",
     "addons/sourcemod/translations/imatchext.phrases.txt",
@@ -178,13 +178,26 @@ $requiredPaths = @(
     "addons/sourcemod/translations/zho/imatchext.phrases.txt",
     "addons/sourcemod/translations/challenge.phrases.txt",
     "addons/sourcemod/translations/chi/challenge.phrases.txt",
-    "addons/sourcemod/translations/coop_flow.phrases.txt",
-    "addons/sourcemod/translations/chi/coop_flow.phrases.txt",
+    "addons/sourcemod/translations/player_manager.phrases.txt",
+    "addons/sourcemod/translations/chi/player_manager.phrases.txt",
+    "addons/sourcemod/translations/ready_pause.phrases.txt",
+    "addons/sourcemod/translations/chi/ready_pause.phrases.txt",
+    "addons/sourcemod/translations/admin_tools.phrases.txt",
+    "addons/sourcemod/translations/chi/admin_tools.phrases.txt",
+    "addons/sourcemod/translations/wave_spawner.phrases.txt",
+    "addons/sourcemod/translations/chi/wave_spawner.phrases.txt",
+    "addons/sourcemod/translations/campaign_switcher.phrases.txt",
+    "addons/sourcemod/translations/chi/campaign_switcher.phrases.txt",
+    "addons/sourcemod/translations/profile_controller.phrases.txt",
+    "addons/sourcemod/translations/chi/profile_controller.phrases.txt",
+    "addons/sourcemod/translations/script_reloader.phrases.txt",
+    "addons/sourcemod/translations/chi/script_reloader.phrases.txt",
+    "addons/sourcemod/translations/si_damage_control.phrases.txt",
+    "addons/sourcemod/translations/chi/si_damage_control.phrases.txt",
     "addons/sourcemod/scripting/optional/coop/campaign_switcher.sp",
     "cfg/sourcemod/campaign_switcher.cfg",
     "addons/sourcemod/scripting/optional/astmod/jointeam.sp",
     "addons/sourcemod/scripting/optional/astmod/pause_coop.sp",
-    "addons/sourcemod/scripting/optional/astmod/player_manager_compat.sp",
     "addons/sourcemod/scripting/optional/coop/player_manager.sp",
     "addons/sourcemod/scripting/optional/coop/ready_pause.sp",
     "addons/sourcemod/scripting/optional/coop/survivor_loadout.sp",
@@ -192,7 +205,6 @@ $requiredPaths = @(
     "addons/sourcemod/plugins/optional/coop/campaign_switcher.smx",
     "addons/sourcemod/plugins/optional/astmod/jointeam.smx",
     "addons/sourcemod/plugins/optional/astmod/pause_coop.smx",
-    "addons/sourcemod/plugins/optional/astmod/player_manager_compat.smx",
     "addons/sourcemod/plugins/optional/coop/player_manager.smx",
     "addons/sourcemod/plugins/optional/coop/ready_pause.smx",
     "addons/sourcemod/plugins/optional/coop/survivor_loadout.smx",
@@ -299,6 +311,7 @@ foreach ($pluginListPath in $pluginListPaths) {
         $activeLoads++
         $plugin = $match.Matches[0].Groups[1].Value.Trim('"')
         $pluginPath = Join-Path $Root "addons/sourcemod/plugins/$plugin"
+        if ($pluginListPath -like "cfg/cfgogl/astflex/*") { continue }
         if (-not (Test-Path -LiteralPath $pluginPath -PathType Leaf)) {
             Add-Failure "Active plugin load has no file: $plugin (${pluginListPath}:$($match.LineNumber))"
         }
@@ -368,8 +381,6 @@ foreach ($mode in $modes) {
     }
 }
 
-Assert-Contains "cfg/cfgogl/astflex/plugins_1.cfg" '^sm plugins load optional/astmod/player_manager_compat\.smx$' "AstFlex does not load the AstMod Challenge compatibility bridge"
-Assert-NotContains "cfg/cfgogl/astredux/plugins_1.cfg" 'player_manager_compat\.smx' "AstRedux loads the AstFlex-only compatibility bridge"
 
 $publicModeRoot = Join-Path $Root "cfg/cfgogl/public_coop"
 foreach ($chunk in @("plugins_1.cfg", "plugins_2.cfg", "plugins_3.cfg", "shared_plugins.cfg")) {
@@ -552,7 +563,49 @@ foreach ($legacyMode in @('astmod', 'astflex')) {
     Assert-Contains "cfg/cfgogl/$legacyMode/$legacyMode.cfg" '^\s*confogl_addcvar\s+mob_spawn_limit_enabled\s+1\s*$' "$legacyMode does not preserve the legacy mob limit behavior"
 }
 Assert-Contains "addons/sourcemod/scripting/optional/coop/challenge.sp" 'mob_limit' "Coop Challenge does not expose mob_limit menu item"
-Assert-Contains "addons/sourcemod/scripting/optional/coop/challenge.sp" '有限尸潮' "Coop Challenge does not name the mob limit toggle"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/challenge.sp" 'FiniteHordesMenu' "Coop Challenge does not name the mob limit toggle"
+$challengeSource = Get-Content -LiteralPath (Join-Path $Root "addons/sourcemod/scripting/optional/coop/challenge.sp") -Raw -Encoding utf8
+$challengePhraseKeys = [regex]::Matches($challengeSource, '"(?<key>[A-Z][A-Za-z0-9]+)"') |
+    ForEach-Object { $_.Groups['key'].Value } |
+    Sort-Object -Unique
+foreach ($phraseKey in $challengePhraseKeys) {
+    Assert-Contains "addons/sourcemod/translations/challenge.phrases.txt" ('"' + $phraseKey + '"') "Default Challenge translation is missing $phraseKey"
+    Assert-Contains "addons/sourcemod/translations/chi/challenge.phrases.txt" ('"' + $phraseKey + '"') "Chinese Challenge translation is missing $phraseKey"
+}
+$waveSource = Get-Content -LiteralPath (Join-Path $Root "addons/sourcemod/scripting/optional/coop/wave_spawner.sp") -Raw -Encoding utf8
+$wavePhraseKeys = [regex]::Matches($waveSource, '"(?<key>Wave[A-Z][A-Za-z0-9]+)"') |
+    ForEach-Object { $_.Groups['key'].Value } |
+    Sort-Object -Unique
+foreach ($phraseKey in $wavePhraseKeys) {
+    Assert-Contains "addons/sourcemod/translations/wave_spawner.phrases.txt" ('"' + $phraseKey + '"') "Default Wave Spawner translation is missing $phraseKey"
+    Assert-Contains "addons/sourcemod/translations/chi/wave_spawner.phrases.txt" ('"' + $phraseKey + '"') "Chinese Wave Spawner translation is missing $phraseKey"
+}
+foreach ($localizedComponent in @(
+    @{ Source = "addons/sourcemod/scripting/optional/coop/campaign_switcher.sp"; Phrase = "campaign_switcher.phrases.txt" },
+    @{ Source = "addons/sourcemod/scripting/optional/coop/profile_controller.sp"; Phrase = "profile_controller.phrases.txt" },
+    @{ Source = "addons/sourcemod/scripting/optional/coop/script_reloader.sp"; Phrase = "script_reloader.phrases.txt" },
+    @{ Source = "addons/sourcemod/scripting/optional/coop/si_damage_control.sp"; Phrase = "si_damage_control.phrases.txt" },
+    @{ Source = "addons/sourcemod/scripting/optional/coop/player_manager.sp"; Phrase = "player_manager.phrases.txt" },
+    @{ Source = "addons/sourcemod/scripting/optional/coop/ready_pause.sp"; Phrase = "ready_pause.phrases.txt" },
+    @{ Source = "addons/sourcemod/scripting/optional/coop/admin_tools.sp"; Phrase = "admin_tools.phrases.txt" }
+)) {
+    $translationName = [System.IO.Path]::GetFileNameWithoutExtension($localizedComponent.Phrase)
+    Assert-Contains $localizedComponent.Source ('LoadTranslations\("' + [regex]::Escape($translationName) + '"\)') "$($localizedComponent.Source) does not load $($localizedComponent.Phrase)"
+    Assert-NotContains $localizedComponent.Source '(?:PrintToChat(?:All)?|CPrintToChatAll|ReplyToCommand|SetTitle|SetMenuTitle|FormatEx)\([^\r\n]*[一-龥]' "$($localizedComponent.Source) still contains hard-coded Chinese player text"
+}
+Assert-NotPath "addons/sourcemod/translations/coop_flow.phrases.txt"
+Assert-NotPath "addons/sourcemod/translations/chi/coop_flow.phrases.txt"
+Assert-NotContains "addons/sourcemod/scripting/optional/coop/survivor_loadout.sp" 'LoadTranslations\("coop_flow\.phrases"\)' "Survivor Loadout still loads the retired shared Coop phrase file"
+foreach ($componentPhrases in @(
+    @{ Phrase = "player_manager.phrases.txt"; Keys = @("JoinAfterStart", "PlayerSpectated", "RoundNotStarted", "BotSetupFailed", "BotPlaceholder", "BotCleanup") },
+    @{ Phrase = "ready_pause.phrases.txt"; Keys = @("WaitingForPlayers", "RoundGo", "RoundCountdown", "PauseRequested", "PauseDelay", "PauseAdmin", "PauseStarted", "PlayerReady", "PlayerUnready", "PauseCountdown", "PauseCountdownCancelled", "PauseEnded", "PauseTitle", "PauseAdminTitle", "PausePlayerReady", "PausePlayerUnready", "PauseChat", "PauseTeamChat", "PausePlayerJoined", "PauseAdminTakeover", "TeamChanged", "ReadyTitle", "ReadyLoading", "ReadyCountdown", "ReadyGo", "LoadingTimeout") },
+    @{ Phrase = "admin_tools.phrases.txt"; Keys = @("AdminCleanupSyntax", "AdminCleanupAll", "AdminCleanupSome", "AdminCleanupNone", "AdminCleanupAllConsole", "AdminCleanupSomeConsole") }
+)) {
+    foreach ($phraseKey in $componentPhrases.Keys) {
+        Assert-Contains ("addons/sourcemod/translations/" + $componentPhrases.Phrase) ('"' + $phraseKey + '"') "Default component translation is missing $phraseKey"
+        Assert-Contains ("addons/sourcemod/translations/chi/" + $componentPhrases.Phrase) ('"' + $phraseKey + '"') "Chinese component translation is missing $phraseKey"
+    }
+}
 Assert-Contains "addons/sourcemod/scripting/optional/coop/challenge.sp" 'TZ_CallVote\(client,\s*16' "Coop Challenge does not use target 16 for mob limit"
 Assert-Contains "addons/sourcemod/scripting/optional/coop/challenge.sp" 'g_iSlotOverrideMask\[slot\]' "Coop Challenge does not reapply per-profile overrides"
 Assert-Contains "addons/sourcemod/scripting/optional/coop/challenge.sp" 'pendingMobLimit\s*=\s*-1' "Coop Challenge does not clear pending mob limit votes"
@@ -565,8 +618,22 @@ Assert-Contains "addons/sourcemod/translations/chi/challenge.phrases.txt" 'InfoH
 foreach ($phraseFile in @(
     "addons/sourcemod/translations/challenge.phrases.txt",
     "addons/sourcemod/translations/chi/challenge.phrases.txt",
-    "addons/sourcemod/translations/coop_flow.phrases.txt",
-    "addons/sourcemod/translations/chi/coop_flow.phrases.txt"
+    "addons/sourcemod/translations/player_manager.phrases.txt",
+    "addons/sourcemod/translations/chi/player_manager.phrases.txt",
+    "addons/sourcemod/translations/ready_pause.phrases.txt",
+    "addons/sourcemod/translations/chi/ready_pause.phrases.txt",
+    "addons/sourcemod/translations/admin_tools.phrases.txt",
+    "addons/sourcemod/translations/chi/admin_tools.phrases.txt",
+    "addons/sourcemod/translations/wave_spawner.phrases.txt",
+    "addons/sourcemod/translations/chi/wave_spawner.phrases.txt",
+    "addons/sourcemod/translations/campaign_switcher.phrases.txt",
+    "addons/sourcemod/translations/chi/campaign_switcher.phrases.txt",
+    "addons/sourcemod/translations/profile_controller.phrases.txt",
+    "addons/sourcemod/translations/chi/profile_controller.phrases.txt",
+    "addons/sourcemod/translations/script_reloader.phrases.txt",
+    "addons/sourcemod/translations/chi/script_reloader.phrases.txt",
+    "addons/sourcemod/translations/si_damage_control.phrases.txt",
+    "addons/sourcemod/translations/chi/si_damage_control.phrases.txt"
 )) {
     Assert-NotContains $phraseFile '^\s*"[^"]+"\s*\{\s+"' "Translation file uses an inline phrase section that SourceMod cannot parse: $phraseFile"
     Assert-NotContains $phraseFile '"#format"\s+"[^"]*\}\s+\{' "Translation #format placeholders are not comma-separated: $phraseFile"
@@ -588,8 +655,6 @@ foreach ($baseline in @(
     '"si_damage_enable" "0"',
     '"si_damage_ratio_enable" "0"',
     '"si_damage_base" "12"',
-    '"coop_player_infected_limit" "0"',
-    '"coop_player_allow_human_tank" "0"',
     '"ai_hardsi_enable" "1"'
 )) {
     Assert-Contains "addons/sourcemod/configs/astredux_profiles.cfg" $baseline "AstRedux defaults is missing baseline $baseline"
@@ -760,7 +825,17 @@ Assert-Contains "addons/sourcemod/scripting/optional/coop/player_manager.sp" 'Ge
 Assert-Contains "addons/sourcemod/scripting/optional/coop/player_manager.sp" 'g_reservationGeneration' "Player Manager reservations do not track map generation"
 Assert-Contains "addons/sourcemod/scripting/optional/coop/player_manager.sp" 'g_requestToken' "Player Manager delayed team requests are not invalidatable"
 Assert-NotContains "addons/sourcemod/scripting/optional/coop/player_manager.sp" '\bGetGameTime\(' "Player Manager uses map-relative time for reservations"
-Assert-Contains "addons/sourcemod/scripting/optional/coop/survivor_loadout.sp" 'CreateConVar\("coop_loadout_start_pills",\s*"1"' "Survivor Loadout does not expose starting pills"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/player_manager.sp" 'RegPluginLibrary\("player_manager"\)' "Player Manager does not own the player_manager library"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/player_manager.sp" 'CreateConVar\("human_survivor_limit"' "Player Manager does not expose the human survivor limit"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/player_manager.sp" 'CreateConVar\("keep_survivor_bots"' "Player Manager does not expose survivor bot retention"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/player_manager.sp" 'CreateConVar\("survivor_bot_cleanup_delay"' "Player Manager does not expose bot cleanup delay"
+Assert-NotContains "addons/sourcemod/scripting/optional/coop/player_manager.sp" 'coop_player_infected_limit|coop_player_allow_human_tank|coop_player_bot_tank|coop_player_human_tank' "Player Manager still exposes removed infected/Tank wrappers"
+Assert-Contains "cfg/cfgogl/astredux/astredux.cfg" 'confogl_addcvar\s+tank_attack_range\s+70' "AstRedux does not own direct Tank attack range"
+Assert-Contains "cfg/cfgogl/astredux/astredux.cfg" 'confogl_addcvar\s+tank_swing_range\s+75' "AstRedux does not own direct Tank swing range"
+Assert-Contains "cfg/cfgogl/astredux/astredux.cfg" 'confogl_addcvar\s+tank_fist_radius\s+50' "AstRedux does not own direct Tank fist radius"
+Assert-Contains "cfg/cfgogl/astredux/astredux.cfg" 'confogl_addcvar\s+z_tank_attack_interval\s+1\.25' "AstRedux does not own direct Tank attack interval"
+Assert-NotContains "addons/sourcemod/scripting/optional/coop/challenge.sp" 'player_infected|coop_player_infected_limit|coop_player_allow_human_tank|PlayerInfected|PlayerTank' "Coop Challenge still exposes removed player infected/Tank controls"
+Assert-Contains "addons/sourcemod/scripting/optional/coop/survivor_loadout.sp" 'CreateConVar\("give_start_pills",\s*"1"' "Survivor Loadout does not expose starting pills"
 Assert-Contains "addons/sourcemod/scripting/optional/coop/admin_tools.sp" 'RegAdminCmd\("sm_fuck"' "Coop Admin Tools does not own !fuck"
 Assert-Contains "addons/sourcemod/scripting/optional/coop/admin_tools.sp" 'CleanupAiSpecialInfected\(' "Coop Admin Tools does not isolate its AI SI cleanup action"
 Assert-NotPath "addons/sourcemod/scripting/optional/coop/si_cleanup.sp"
@@ -770,11 +845,11 @@ Assert-NotPath "addons/sourcemod/plugins/optional/coop/jointeam.smx"
 Assert-NotPath "addons/sourcemod/scripting/optional/coop/pause_coop.sp"
 Assert-NotPath "addons/sourcemod/plugins/optional/coop/pause_coop.smx"
 
-foreach ($mode in @("astredux", "astflex")) {
+foreach ($mode in @("astredux")) {
     Assert-NotContains "cfg/cfgogl/$mode/$mode.cfg" '\bast_smacwelcome\b' "$mode still configures the AstMod-only fake SMAC welcome"
     Assert-Contains "cfg/cfgogl/$mode/$mode.cfg" '^\s*confogl_addcvar\s+coop_ready_enabled\s+1\s*$' "$mode does not enable the Coop ready lifecycle"
     Assert-Contains "cfg/cfgogl/$mode/$mode.cfg" '^\s*confogl_addcvar\s+coop_pause_enabled\s+1\s*$' "$mode does not enable Coop pause"
-    Assert-Contains "cfg/cfgogl/$mode/$mode.cfg" '^\s*confogl_addcvar\s+coop_loadout_start_pills\s+1\s*$' "$mode does not preserve starting pills"
+    Assert-Contains "cfg/cfgogl/$mode/$mode.cfg" '^\s*confogl_addcvar\s+give_start_pills\s+1\s*$' "$mode does not preserve starting pills"
 }
 
 foreach ($mode in $modes) {
@@ -793,7 +868,25 @@ $keyValuesFiles = @(
     "addons/sourcemod/configs/missioncycle.txt",
     "addons/sourcemod/configs/vote_menu.txt",
     "addons/sourcemod/configs/advertisements.txt",
-    "addons/sourcemod/configs/astredux_profiles.cfg"
+    "addons/sourcemod/configs/astredux_profiles.cfg",
+    "addons/sourcemod/translations/challenge.phrases.txt",
+    "addons/sourcemod/translations/chi/challenge.phrases.txt",
+    "addons/sourcemod/translations/player_manager.phrases.txt",
+    "addons/sourcemod/translations/chi/player_manager.phrases.txt",
+    "addons/sourcemod/translations/ready_pause.phrases.txt",
+    "addons/sourcemod/translations/chi/ready_pause.phrases.txt",
+    "addons/sourcemod/translations/admin_tools.phrases.txt",
+    "addons/sourcemod/translations/chi/admin_tools.phrases.txt",
+    "addons/sourcemod/translations/wave_spawner.phrases.txt",
+    "addons/sourcemod/translations/chi/wave_spawner.phrases.txt",
+    "addons/sourcemod/translations/campaign_switcher.phrases.txt",
+    "addons/sourcemod/translations/chi/campaign_switcher.phrases.txt",
+    "addons/sourcemod/translations/profile_controller.phrases.txt",
+    "addons/sourcemod/translations/chi/profile_controller.phrases.txt",
+    "addons/sourcemod/translations/script_reloader.phrases.txt",
+    "addons/sourcemod/translations/chi/script_reloader.phrases.txt",
+    "addons/sourcemod/translations/si_damage_control.phrases.txt",
+    "addons/sourcemod/translations/chi/si_damage_control.phrases.txt"
 )
 foreach ($keyValuesFile in $keyValuesFiles) {
     Assert-KeyValuesBraceBalance $keyValuesFile

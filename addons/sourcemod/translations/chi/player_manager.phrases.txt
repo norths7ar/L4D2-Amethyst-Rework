@@ -1,0 +1,28 @@
+"Phrases"
+{
+	"JoinAfterStart"
+	{
+	    "chi" "队伍离开安全屋后无法加入生还者。"
+	}
+	"PlayerSpectated"
+	{
+	    "#format" "{1:N}"
+	    "chi" "{1} 已进入旁观。"
+	}
+	"RoundNotStarted"
+	{
+	    "chi" "回合尚未开始。"
+	}
+	"BotSetupFailed"
+	{
+	    "chi" "合作模式生还者机器人创建失败。"
+	}
+	"BotPlaceholder"
+	{
+	    "chi" "已移除合作模式生还者占位机器人。"
+	}
+	"BotCleanup"
+	{
+	    "chi" "合作模式生还者机器人已清理。"
+	}
+}

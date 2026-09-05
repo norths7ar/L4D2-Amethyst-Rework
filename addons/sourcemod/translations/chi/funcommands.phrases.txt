@@ -27,7 +27,7 @@
 
 	"Beacon player"
 	{
-		"chi"		"点玩家灯"
+		"chi"		"点亮玩家"
 	}
 
 	"NoClip player"
@@ -122,7 +122,7 @@
 
 	"Toggled beacon on target"
 	{
-		"chi"		"触发 {1} 身上的灯."
+		"chi"		"触发 {1} 身上的信标."
 	}
 
 	"Toggled TimeBomb on target"

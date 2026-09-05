@@ -25,6 +25,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errorMa
 
 public void OnPluginStart()
 {
+    LoadTranslations("script_reloader.phrases");
     g_cvFilename = CreateConVar("sm_vscript_filename", "", "Gamemode VScript filename.");
     RegConsoleCmd("sm_reloadscript", Command_Reload, "Reload the configured VScript file.");
     HookConVarChange(g_cvFilename, OnFilenameChange);
@@ -51,7 +52,7 @@ public Action Command_Reload(int client, int args)
 {
     if (args > 1)
     {
-        ReplyToCommand(client, "[SM] Usage: sm_reloadscript <filename>");
+        ReplyToCommand(client, "[SM] %t", "Usage");
         return Plugin_Handled;
     }
 
@@ -64,7 +65,7 @@ public Action Command_Reload(int client, int args)
 
     if (!ReloadScript(filename))
     {
-        ReplyToCommand(client, "[SM] Could not reload VScript file: %s", filename);
+        ReplyToCommand(client, "[SM] %t", "ReloadFailed", filename);
     }
     return Plugin_Handled;
 }

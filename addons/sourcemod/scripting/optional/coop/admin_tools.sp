@@ -16,7 +16,7 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-	LoadTranslations("coop_flow.phrases");
+	LoadTranslations("admin_tools.phrases");
 	RegAdminCmd("sm_fuck", CommandCleanup, ADMFLAG_BAN, "Remove matching AI special infected.");
 }
 
