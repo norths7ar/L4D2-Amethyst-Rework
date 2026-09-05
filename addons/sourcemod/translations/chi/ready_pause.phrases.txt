@@ -1,5 +1,41 @@
 "Phrases"
 {
+	"PauseInitiator"
+	{
+		"#format" "{1:s}"
+		"chi" "暂停发起者：{1}"
+	}
+	"PanelSpectators"
+	{
+		"#format" "{1:s}"
+		"chi" "旁观：{1}"
+	}
+	"PanelLoadingPlayer"
+	{
+		"#format" "{1:s}"
+		"chi" "正在加载：{1}"
+	}
+	"PanelReservedPlayer"
+	{
+		"#format" "{1:s},{2:d}"
+		"chi" "等待 {1} 返回（席位保留剩余 {2} 秒）"
+	}
+	"PanelReadyHelp"
+	{
+		"chi" "!r 准备 / !nr 取消准备"
+	}
+	"PanelShowHelp"
+	{
+		"chi" "!hide 隐藏面板 / !show 显示面板"
+	}
+	"PanelVoteHelp"
+	{
+		"chi" "!vote 服务器菜单 / !ast 玩法菜单"
+	}
+	"PanelJoinHelp"
+	{
+		"chi" "!join 加入生还 / !spec 旁观"
+	}
 	"WaitingForPlayers"
 	{
 	    "chi" "正在等待所有玩家加载……"
@@ -66,12 +102,12 @@
 	"PausePlayerReady"
 	{
 	    "#format" "{1:N}"
-	    "chi" "[已准备] {1}"
+	    "chi" "☑ {1}"
 	}
 	"PausePlayerUnready"
 	{
 	    "#format" "{1:N}"
-	    "chi" "[未准备] {1}"
+	    "chi" "☐ {1}"
 	}
 	"PauseChat"
 	{
@@ -102,7 +138,7 @@
 	}
 	"ReadyLoading"
 	{
-	    "chi" "正在等待玩家加载及预留席位恢复……"
+	    "chi" "正在等待玩家进入游戏……"
 	}
 	"ReadyWaiting"
 	{
@@ -120,5 +156,21 @@
 	"LoadingTimeout"
 	{
 	    "chi" "加载超时。"
+	}
+	"PanelShow"
+	{
+		"chi" "面板已显示，输入 !hide 隐藏。"
+	}
+	"PanelHide"
+	{
+		"chi" "面板已隐藏，输入 !show 显示。"
+	}
+	"CountdownCancelled"
+	{
+		"chi" "倒计时已取消。"
+	}
+	"PanelSurvivors"
+	{
+		"chi" "生还者"
 	}
 }

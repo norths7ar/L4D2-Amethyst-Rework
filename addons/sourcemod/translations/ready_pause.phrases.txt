@@ -1,5 +1,41 @@
 "Phrases"
 {
+	"PauseInitiator"
+	{
+		"#format" "{1:s}"
+		"en" "Paused by: {1}"
+	}
+	"PanelSpectators"
+	{
+		"#format" "{1:s}"
+		"en" "Spectators: {1}"
+	}
+	"PanelLoadingPlayer"
+	{
+		"#format" "{1:s}"
+		"en" "Loading: {1}"
+	}
+	"PanelReservedPlayer"
+	{
+		"#format" "{1:s},{2:d}"
+		"en" "Waiting for {1} to return ({2}s reserved)"
+	}
+	"PanelReadyHelp"
+	{
+		"en" "!r ready / !nr unready"
+	}
+	"PanelShowHelp"
+	{
+		"en" "!hide hide panel / !show show panel"
+	}
+	"PanelVoteHelp"
+	{
+		"en" "!vote server menu / !ast gameplay menu"
+	}
+	"PanelJoinHelp"
+	{
+		"en" "!join survivors / !spec spectate"
+	}
 	"WaitingForPlayers"
 	{
 	    "en" "Waiting for all players to load..."
@@ -66,12 +102,12 @@
 	"PausePlayerReady"
 	{
 	    "#format" "{1:N}"
-	    "en" "[ready] {1}"
+	    "en" "☑ {1}"
 	}
 	"PausePlayerUnready"
 	{
 	    "#format" "{1:N}"
-	    "en" "[not ready] {1}"
+	    "en" "☐ {1}"
 	}
 	"PauseChat"
 	{
@@ -102,7 +138,7 @@
 	}
 	"ReadyLoading"
 	{
-	    "en" "Waiting for players to load and reserved seats to settle..."
+	    "en" "Waiting for players to join..."
 	}
 	"ReadyWaiting"
 	{
@@ -120,5 +156,21 @@
 	"LoadingTimeout"
 	{
 	    "en" "Loading timed out."
+	}
+	"PanelShow"
+	{
+		"en" "Panel shown. Use !hide to hide it."
+	}
+	"PanelHide"
+	{
+		"en" "Panel hidden. Use !show to show it."
+	}
+	"CountdownCancelled"
+	{
+		"en" "Countdown cancelled."
+	}
+	"PanelSurvivors"
+	{
+		"en" "Survivors"
 	}
 }

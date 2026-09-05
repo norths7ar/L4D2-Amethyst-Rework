@@ -5,6 +5,7 @@
 #include <sdktools>
 #include <sdkhooks>
 #include <left4dhooks>
+#include <builtinvotes>
 #undef REQUIRE_PLUGIN
 #include <player_manager>
 
@@ -13,14 +14,20 @@
 #define MAX_FOOTER_LEN 65
 
 bool g_readyPhase;
-bool g_countdownFinished;
 bool g_forceStarted;
 int g_loadingTimeout[MAXPLAYERS + 1];
-int g_readyCountdown;
-int g_readyCountdownTotal;
+int g_countdownRemaining;
 bool g_godMode;
 ArrayList g_footer;
 bool g_panelHidden[MAXPLAYERS + 1];
+float g_panelStarted;
+char g_pauseInitiator[MAX_NAME_LENGTH];
+bool g_directorHeld;
+bool g_savedMobRunning;
+float g_savedMobRemaining;
+bool g_savedBotStop;
+bool g_frozenByReady[MAXPLAYERS + 1];
+MoveType g_previousMoveType[MAXPLAYERS + 1];
 
 bool g_isPaused;
 bool g_adminPause;
@@ -28,7 +35,6 @@ bool g_pendingAdminPause;
 bool g_internalPauseCommand;
 bool g_playerReady[MAXPLAYERS + 1];
 int g_pauseDelayRemaining;
-int g_unpauseCountdown;
 
 ConVar g_svPausable;
 ConVar g_svNoclipDuringPause;
@@ -51,12 +57,10 @@ Handle g_forwardPlayerUnready;
 Handle g_forwardPause;
 Handle g_forwardUnpause;
 Handle g_loadingTimer;
-Handle g_readyTimer;
-Handle g_readyPanelTimer;
+Handle g_countdownTimer;
+Handle g_panelTimer;
 Handle g_pauseDelayTimer;
 Handle g_deferredPauseTimer;
-Handle g_unpauseTimer;
-Handle g_pausePanelTimer;
 
 public Plugin myinfo =
 {
@@ -130,7 +134,7 @@ public void OnPluginStart()
 	AddCommandListener(BlockEngineUnpause, "pause");
 	AddCommandListener(ForwardSay, "say");
 	AddCommandListener(ForwardTeamSay, "say_team");
-	HookEvent("round_start", EventRoundBoundary, EventHookMode_PostNoCopy);
+	HookEvent("round_start", EventRoundBoundary, EventHookMode_Pre);
 	HookEvent("round_end", EventRoundBoundary, EventHookMode_PostNoCopy);
 	HookEvent("player_team", EventPlayerTeam, EventHookMode_Post);
 	HookEvent("player_hurt", EventPlayerHurt, EventHookMode_Post);
@@ -142,12 +146,11 @@ public void OnPluginStart()
 public void OnMapStart()
 {
 	g_readyPhase = false;
-	g_countdownFinished = true;
 	g_godMode = false;
-	g_readyCountdown = -1;
+	g_directorHeld = false;
 	CancelTimer(g_loadingTimer);
-	CancelTimer(g_readyTimer);
-	CancelTimer(g_readyPanelTimer);
+	CancelTimer(g_countdownTimer);
+	CancelTimer(g_panelTimer);
 	g_footer.Clear();
 	for (int client = 1; client <= MaxClients; client++)
 	{
@@ -159,20 +162,34 @@ public void OnMapStart()
 	PrecacheSound("player/survivor/voice/coach/worldc2m2b06.wav");
 	PrecacheSound("buttons/blip2.wav");
 	ResetPauseState(false);
+	// Mode loads and the first map must also enter ready-up, not only restarts.
+	BeginReadyPhase();
 }
 
 public void OnMapEnd()
 {
+	ReleaseDirector();
+	SetSurvivorsFrozen(false);
 	CancelTimer(g_loadingTimer);
-	CancelTimer(g_readyTimer);
-	CancelTimer(g_readyPanelTimer);
+	CancelTimer(g_countdownTimer);
+	CancelTimer(g_panelTimer);
 	ResetPauseState(true);
 	g_readyPhase = false;
 }
 
 public void OnPluginEnd()
 {
+	ReleaseDirector();
+	SetSurvivorsFrozen(false);
 	ResetPauseState(true);
+}
+
+public void OnConfigsExecuted()
+{
+	// A mode may load this plugin on an already running map. OnMapStart and
+	// round_start establish the phase; the completed config batch reapplies the
+	// engine hold without clearing player readiness or dispatching Live twice.
+	if (g_readyPhase && g_readyEnabled.BoolValue) HoldDirector();
 }
 
 public void OnReadyEnabledChanged(ConVar convar, const char[] oldValue, const char[] newValue)
@@ -187,6 +204,7 @@ public void OnPauseEnabledChanged(ConVar convar, const char[] oldValue, const ch
 
 public void OnClientPutInServer(int client)
 {
+	g_frozenByReady[client] = false;
 	g_loadingTimeout[client] = 0;
 	g_panelHidden[client] = false;
 	g_playerReady[client] = false;
@@ -197,8 +215,7 @@ public void OnClientPutInServer(int client)
 public void OnClientDisconnect(int client)
 {
 	if (!IsHumanSurvivor(client)) return;
-	CancelReadyCountdown(client, "PlayerDisconnected");
-	CancelPauseCountdown(0);
+	CancelCountdown(client, "PlayerDisconnected");
 }
 
 public void OnClientDisconnect_Post(int client)
@@ -212,30 +229,29 @@ public Action L4D_OnFirstSurvivorLeftSafeArea(int client)
 {
 	if (!g_readyPhase) return Plugin_Continue;
 	if (!g_readyEnabled.BoolValue) return Plugin_Continue;
-	if (!g_forceStarted && !AllClientsLoaded())
-	{
-		ReturnToSaferoom(client);
-		EmitSoundToClient(client, "ui/beep_error01.wav");
-		PrintHintTextToAll("%t", "WaitingForPlayers");
-		return Plugin_Handled;
-	}
-	if (!g_countdownFinished)
-	{
-		ReturnToSaferoom(client);
-		EmitSoundToClient(client, "ui/beep_error01.wav");
-		return Plugin_Handled;
-	}
-	return Plugin_Continue;
+	CreateTimer(0.1, TimerHoldDirector, _, TIMER_FLAG_NO_MAPCHANGE);
+	ReturnToSaferoom(client);
+	if (client > 0 && IsClientInGame(client)) EmitSoundToClient(client, "ui/beep_error01.wav");
+	return Plugin_Handled;
 }
 
 public void L4D_OnFirstSurvivorLeftSafeArea_Post(int client)
+{
+	// Disabled ready-up keeps the original first-exit notification.
+	if (!g_readyPhase || g_readyEnabled.BoolValue) return;
+	StartRound();
+}
+
+void StartRound()
 {
 	if (!g_readyPhase) return;
 	InvokeForward(g_forwardLivePre);
 	g_readyPhase = false;
 	g_godMode = false;
 	CancelTimer(g_loadingTimer);
-	CancelTimer(g_readyPanelTimer);
+	CancelTimer(g_panelTimer);
+	SetSurvivorsFrozen(false);
+	ReleaseDirector();
 	InvokeForward(g_forwardLive);
 }
 
@@ -248,9 +264,11 @@ public Action EventRoundBoundary(Event event, const char[] name, bool dontBroadc
 		return Plugin_Continue;
 	}
 	ResetPauseState(true);
+	ReleaseDirector();
+	SetSurvivorsFrozen(false);
 	CancelTimer(g_loadingTimer);
-	CancelTimer(g_readyTimer);
-	CancelTimer(g_readyPanelTimer);
+	CancelTimer(g_countdownTimer);
+	CancelTimer(g_panelTimer);
 	g_readyPhase = false;
 	g_godMode = false;
 	return Plugin_Continue;
@@ -261,41 +279,114 @@ void BeginReadyPhase()
 	// Keep the pre-live lifecycle active even when the loading gate is disabled.
 	// Consumers still receive OnRoundIsLive on the first real saferoom exit.
 	g_readyPhase = true;
-	g_countdownFinished = !g_readyEnabled.BoolValue;
 	g_forceStarted = false;
 	g_godMode = g_readyEnabled.BoolValue;
-	g_readyCountdown = -1;
+	g_countdownRemaining = 0;
+	g_panelStarted = GetEngineTime();
 	CancelTimer(g_loadingTimer);
-	CancelTimer(g_readyTimer);
-	CancelTimer(g_readyPanelTimer);
+	CancelTimer(g_countdownTimer);
+	CancelTimer(g_panelTimer);
+	SetSurvivorsFrozen(false);
 	for (int client = 1; client <= MaxClients; client++)
 	{
 		g_loadingTimeout[client] = 0;
 		g_panelHidden[client] = false;
 		g_playerReady[client] = false;
 	}
-	if (!g_readyEnabled.BoolValue) return;
+	if (!g_readyEnabled.BoolValue) { ReleaseDirector(); return; }
+	// Same engine countdown suppression as competitive readyup/game.inc.
+	CreateTimer(0.3, TimerHoldDirector, _, TIMER_FLAG_NO_MAPCHANGE);
 	InvokeForward(g_forwardInitiatePre);
+	g_footer.Clear();
 	InvokeForward(g_forwardInitiate);
-	CancelTimer(g_loadingTimer);
 	g_loadingTimer = CreateTimer(1.0, TimerLoading, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
-	RenderReadyPanel();
-	g_readyPanelTimer = CreateTimer(1.0, TimerRefreshReadyPanel, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+	RenderPanel();
+	g_panelTimer = CreateTimer(1.0, TimerRefreshPanel, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+}
+
+public Action TimerHoldDirector(Handle timer)
+{
+	if (g_readyPhase && g_readyEnabled.BoolValue) HoldDirector();
+	return Plugin_Stop;
+}
+
+void HoldDirector()
+{
+	// Rework readyup/game.inc holds both countdowns. Preserve the Director's
+	// actual mob interval here: AstRedux's VScript may override the stock CVar.
+	if (!g_directorHeld)
+	{
+		g_savedBotStop = FindConVar("sb_stop").BoolValue;
+		g_savedMobRunning = L4D2_CTimerHasStarted(L4D2CT_MobSpawnTimer);
+		g_savedMobRemaining = L4D2_CTimerGetRemainingTime(L4D2CT_MobSpawnTimer);
+		g_directorHeld = true;
+	}
+	else if (L4D2_CTimerGetRemainingTime(L4D2CT_MobSpawnTimer) < 90000.0)
+	{
+		// The map or VScript installed a new interval after our first hold.
+		g_savedMobRunning = L4D2_CTimerHasStarted(L4D2CT_MobSpawnTimer);
+		g_savedMobRemaining = L4D2_CTimerGetRemainingTime(L4D2CT_MobSpawnTimer);
+	}
+	FindConVar("sb_stop").BoolValue = true;
+	L4D2_CTimerStart(L4D2CT_VersusStartTimer, 99999.9);
+	L4D2_CTimerStart(L4D2CT_MobSpawnTimer, 99999.9);
+}
+
+void ReleaseDirector()
+{
+	if (!g_directorHeld) return;
+	g_directorHeld = false;
+	FindConVar("sb_stop").BoolValue = g_savedBotStop;
+	L4D2_CTimerStart(L4D2CT_VersusStartTimer, FindConVar("versus_force_start_time").FloatValue);
+	if (g_savedMobRunning) L4D2_CTimerStart(L4D2CT_MobSpawnTimer, g_savedMobRemaining > 0.0 ? g_savedMobRemaining : 0.0);
+	else L4D2_CTimerInvalidate(L4D2CT_MobSpawnTimer);
+}
+
+void SetSurvivorsFrozen(bool frozen)
+{
+	for (int client = 1; client <= MaxClients; client++)
+		if (IsClientInGame(client)) SetReadyFrozen(client, frozen && GetClientTeam(client) == TEAM_SURVIVORS);
+}
+
+void SetReadyFrozen(int client, bool frozen)
+{
+	if (frozen)
+	{
+		MoveType current = GetEntityMoveType(client);
+		// If a map intro releases its own freeze during our countdown, remember
+		// the new movement type instead of restoring the intro's old NONE state.
+		if (!g_frozenByReady[client] || current != MOVETYPE_NONE) g_previousMoveType[client] = current;
+		g_frozenByReady[client] = true;
+		SetEntityMoveType(client, MOVETYPE_NONE);
+	}
+	else if (g_frozenByReady[client])
+	{
+		g_frozenByReady[client] = false;
+		SetEntityMoveType(client, g_previousMoveType[client]);
+	}
+}
+
+public void OnPlayerRunCmdPost(int client)
+{
+	// Map intros can undo the initial freeze (see competitive readyup.sp).
+	if (g_countdownTimer != null && IsClientInGame(client) && GetClientTeam(client) == TEAM_SURVIVORS)
+		if (g_readyPhase) SetReadyFrozen(client, true);
 }
 
 public Action EventPlayerTeam(Event event, const char[] name, bool dontBroadcast)
 {
 	int client = GetClientOfUserId(event.GetInt("userid"));
+	if (client > 0 && IsClientInGame(client) && event.GetInt("team") != TEAM_SURVIVORS) SetReadyFrozen(client, false);
 	bool participantChanged = event.GetInt("team") == TEAM_SURVIVORS || event.GetInt("oldteam") == TEAM_SURVIVORS;
 	if (client > 0 && !IsFakeClient(client) && g_readyPhase && participantChanged)
 	{
 		g_playerReady[client] = false;
-		CancelReadyCountdown(client, "TeamChanged");
+		CancelCountdown(client, "TeamChanged");
 	}
 	if (client > 0 && !IsFakeClient(client) && g_isPaused && participantChanged)
 	{
 		g_playerReady[client] = false;
-		CancelPauseCountdown(0);
+		CancelCountdown(0, "ReadinessChanged");
 		CreateTimer(0.1, TimerReevaluatePause, _, TIMER_FLAG_NO_MAPCHANGE);
 	}
 	return Plugin_Continue;
@@ -308,6 +399,7 @@ public Action TimerLoading(Handle timer)
 		g_loadingTimer = null;
 		return Plugin_Stop;
 	}
+	HoldDirector();
 	for (int client = 1; client <= MaxClients; client++)
 	{
 		if (!IsClientConnected(client) || IsClientInGame(client) || IsFakeClient(client)) continue;
@@ -325,68 +417,87 @@ public Action TimerLoading(Handle timer)
 void EvaluateStartReady()
 {
 	if (!g_readyPhase || !g_readyEnabled.BoolValue || g_forceStarted) return;
-	if (!AllClientsLoaded() || !AllSurvivorsReady())
+	if (!AllClientsLoaded() || !AllSurvivorsReady()) CancelCountdown(0, "ReadinessChanged");
+	else StartCountdown();
+}
+
+// Rework ordinary/forced starts share the same countdown. Pause uses the same
+// per-survivor readiness and presentation; only its completion action differs.
+void StartCountdown()
+{
+	if (g_countdownTimer != null) return;
+	g_countdownRemaining = g_isPaused ? g_unpauseDelay.IntValue : g_readyCountdownCvar.IntValue;
+	if (g_readyPhase)
 	{
-		CancelReadyCountdown(0, "ReadinessChanged");
-		return;
+		InvokeForward(g_forwardCountdownPre);
+		for (int client = 1; client <= MaxClients; client++)
+			if (IsClientInGame(client) && GetClientTeam(client) == TEAM_SURVIVORS && IsPlayerAlive(client)) ReturnToSaferoom(client);
+		SetSurvivorsFrozen(true);
+		InvokeForward(g_forwardCountdown);
 	}
-	if (g_countdownFinished || g_readyTimer != null) return;
-	g_readyCountdown = 0;
-	g_readyCountdownTotal = g_readyCountdownCvar.IntValue;
-	InvokeForward(g_forwardCountdownPre);
-	InvokeForward(g_forwardCountdown);
-	if (g_readyCountdownTotal <= 0) FinishReadyCountdown();
+	if (g_countdownRemaining <= 0) FinishCountdown();
 	else
 	{
-		PrintHintTextToAll("%t", "RoundCountdown", g_readyCountdownTotal);
-		g_readyTimer = CreateTimer(1.0, TimerReadyCountdown, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+		ShowCountdown();
+		g_countdownTimer = CreateTimer(1.0, TimerCountdown, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 	}
 }
 
-public Action TimerReadyCountdown(Handle timer)
+void ShowCountdown()
 {
-	if (!g_readyPhase) { g_readyTimer = null; return Plugin_Stop; }
-	if (!AllClientsLoaded() || !AllSurvivorsReady())
+	PrintHintTextToAll("%t", g_isPaused ? "PauseCountdown" : "RoundCountdown", g_countdownRemaining);
+	if (g_readyBlips.BoolValue) EmitSoundToAll("buttons/blip2.wav");
+}
+
+public Action TimerCountdown(Handle timer)
+{
+	if (!g_isPaused && !g_readyPhase) { g_countdownTimer = null; return Plugin_Stop; }
+	if (!g_forceStarted && (!AllSurvivorsReady() || (g_readyPhase && !AllClientsLoaded()) || (g_isPaused && g_adminPause)))
 	{
-		g_readyTimer = null;
-		CancelReadyCountdown(0, "ReadinessChanged");
+		g_countdownTimer = null;
+		CancelCountdown(0, "ReadinessChanged");
 		return Plugin_Stop;
 	}
-	if (++g_readyCountdown >= g_readyCountdownTotal)
+	if (--g_countdownRemaining <= 0)
 	{
-		g_readyTimer = null;
-		FinishReadyCountdown();
+		g_countdownTimer = null;
+		FinishCountdown();
 		return Plugin_Stop;
 	}
-	PrintHintTextToAll("%t", "RoundCountdown", g_readyCountdownTotal - g_readyCountdown);
+	ShowCountdown();
 	return Plugin_Continue;
 }
 
-void FinishReadyCountdown()
+void FinishCountdown()
 {
-	g_countdownFinished = true;
-	g_readyCountdown = g_readyCountdownTotal;
-	PrintHintTextToAll("%t", "RoundGo");
-	char map[64];
-	GetCurrentMap(map, sizeof(map));
-	EmitSoundToAll(StrContains(map, "c2", false) == 0 || StrContains(map, "dkr", false) == 0 ? "player/survivor/voice/coach/worldc2m2b06.wav" : "npc/virgil/c3end52.wav");
+	g_countdownRemaining = 0;
+	if (g_isPaused) EndPause();
+	else
+	{
+		PrintHintTextToAll("%t", "RoundGo");
+		char map[64];
+		GetCurrentMap(map, sizeof(map));
+		EmitSoundToAll(StrContains(map, "c2", false) == 0 || StrContains(map, "dkr", false) == 0 ? "player/survivor/voice/coach/worldc2m2b06.wav" : "npc/virgil/c3end52.wav");
+		StartRound();
+	}
+	g_forceStarted = false;
 }
 
-void CancelReadyCountdown(int client, const char[] reason)
+void CancelCountdown(int client, const char[] reason)
 {
-	if (!g_readyPhase || !g_readyEnabled.BoolValue || g_forceStarted) return;
-	if (g_readyCountdown >= 0)
+	if (g_forceStarted || g_countdownRemaining <= 0) return;
+	CancelTimer(g_countdownTimer);
+	g_countdownRemaining = 0;
+	PrintHintTextToAll("%t", "CountdownCancelled");
+	if (g_readyPhase)
 	{
-		CancelTimer(g_readyTimer);
+		SetSurvivorsFrozen(false);
 		Call_StartForward(g_forwardCancelled);
 		Call_PushCell(client);
 		Call_PushString(reason);
 		Call_Finish();
 	}
-	g_countdownFinished = false;
-	g_readyCountdown = -1;
 }
-
 void ReturnToSaferoom(int client)
 {
 	if (client <= 0 || !IsClientInGame(client)) return;
@@ -394,6 +505,9 @@ void ReturnToSaferoom(int client)
 	SetCommandFlags("warp_to_start_area", flags & ~FCVAR_CHEAT);
 	FakeClientCommand(client, "warp_to_start_area");
 	SetCommandFlags("warp_to_start_area", flags);
+	float velocity[3];
+	TeleportEntity(client, NULL_VECTOR, NULL_VECTOR, velocity);
+	SetEntPropFloat(client, Prop_Send, "m_flFallVelocity", 0.0);
 }
 
 public Action OnTakeDamageGodMode(int victim, int &attacker, int &inflictor, float &damage, int &damagetype)
@@ -432,6 +546,7 @@ public Action L4D_OnLedgeGrabbed(int client)
 public Action CommandPause(int client, int args)
 {
 	if (!g_pauseEnabled.BoolValue || g_readyPhase || !IsHumanSurvivor(client) || g_isPaused || g_pauseDelayTimer != null || g_deferredPauseTimer != null) return Plugin_Handled;
+	GetClientName(client, g_pauseInitiator, sizeof(g_pauseInitiator));
 	g_pauseDelayRemaining = g_pauseDelay.IntValue;
 	PrintToChatAll("%t", "PauseRequested", client);
 	if (g_pauseDelayRemaining <= 0) AttemptPause(false);
@@ -487,8 +602,11 @@ void BeginPause(bool adminPause)
 {
 	CancelTimer(g_pauseDelayTimer);
 	CancelTimer(g_deferredPauseTimer);
-	CancelTimer(g_unpauseTimer);
+	CancelTimer(g_countdownTimer);
 	g_isPaused = true;
+	g_forceStarted = false;
+	g_countdownRemaining = 0;
+	g_panelStarted = GetEngineTime();
 	g_adminPause = adminPause;
 	g_pendingAdminPause = false;
 	for (int client = 1; client <= MaxClients; client++)
@@ -504,8 +622,8 @@ void BeginPause(bool adminPause)
 		return;
 	}
 	PrintToChatAll("%t", adminPause ? "PauseAdmin" : "PauseStarted");
-	RenderPausePanel();
-	g_pausePanelTimer = CreateTimer(1.0, TimerRefreshPausePanel, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+	RenderPanel();
+	g_panelTimer = CreateTimer(1.0, TimerRefreshPanel, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 	InvokeForward(g_forwardPause);
 }
 
@@ -520,13 +638,23 @@ public Action CommandReady(int client, int args)
 		Call_Finish();
 		PrintToChatAll("%t", "PlayerReady", client);
 	}
-	if (g_isPaused) { EvaluatePauseReady(); RenderPausePanel(); }
-	else { EvaluateStartReady(); RenderReadyPanel(); }
+	if (g_isPaused) EvaluatePauseReady();
+	else EvaluateStartReady();
+	RenderPanel();
 	return Plugin_Handled;
 }
 
 public Action CommandUnready(int client, int args)
 {
+	if ((g_readyPhase || g_isPaused) && g_forceStarted)
+	{
+		if (!CheckCommandAccess(client, "sm_forcestart", ADMFLAG_BAN)) return Plugin_Handled;
+		g_forceStarted = false;
+		CancelCountdown(client, "PlayerUnready");
+		for (int target = 1; target <= MaxClients; target++) g_playerReady[target] = false;
+		RenderPanel();
+		return Plugin_Handled;
+	}
 	if ((!g_isPaused && !(g_readyPhase && g_readyEnabled.BoolValue)) || !IsHumanSurvivor(client)) return Plugin_Handled;
 	if (g_playerReady[client])
 	{
@@ -536,13 +664,14 @@ public Action CommandUnready(int client, int args)
 		Call_Finish();
 		PrintToChatAll("%t", "PlayerUnready", client);
 	}
-	if (g_isPaused) { CancelPauseCountdown(client); RenderPausePanel(); }
-	else { CancelReadyCountdown(client, "PlayerUnready"); RenderReadyPanel(); }
+	CancelCountdown(client, "PlayerUnready");
+	RenderPanel();
 	return Plugin_Handled;
 }
 
 public Action CommandToggleReady(int client, int args)
 {
+	if (client <= 0 || client > MaxClients) return Plugin_Handled;
 	return g_playerReady[client] ? CommandUnready(client, args) : CommandReady(client, args);
 }
 
@@ -553,8 +682,9 @@ void EvaluatePauseReady()
 	for (int client = 1; client <= MaxClients; client++)
 		if (IsHumanSurvivor(client)) humans++;
 	if (humans == 0) { EndPause(); return; }
-	if (!g_adminPause && AllSurvivorsReady()) StartPauseCountdown();
-	else CancelPauseCountdown(0);
+	if (g_forceStarted) return;
+	if (!g_adminPause && AllSurvivorsReady()) StartCountdown();
+	else CancelCountdown(0, "ReadinessChanged");
 }
 
 bool AllSurvivorsReady()
@@ -569,66 +699,32 @@ bool AllSurvivorsReady()
 	return humans > 0;
 }
 
-void StartPauseCountdown()
-{
-	if (g_unpauseTimer != null) return;
-	g_unpauseCountdown = g_unpauseDelay.IntValue;
-	if (g_unpauseCountdown <= 0) EndPause();
-	else
-	{
-		PrintToChatAll("%t", "PauseCountdown", g_unpauseCountdown);
-		g_unpauseTimer = CreateTimer(1.0, TimerPauseCountdown, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
-	}
-}
-
-public Action TimerPauseCountdown(Handle timer)
-{
-	if (!g_isPaused || g_adminPause || !AllSurvivorsReady())
-	{
-		g_unpauseTimer = null;
-		return Plugin_Stop;
-	}
-	if (--g_unpauseCountdown <= 0)
-	{
-		g_unpauseTimer = null;
-		EndPause();
-		return Plugin_Stop;
-	}
-	PrintToChatAll("%t", "PauseCountdown", g_unpauseCountdown);
-	if (g_readyBlips.BoolValue) EmitSoundToAll("buttons/blip2.wav");
-	RenderPausePanel();
-	return Plugin_Continue;
-}
-
-void CancelPauseCountdown(int client)
-{
-	if (g_unpauseTimer == null) return;
-	delete g_unpauseTimer;
-	g_unpauseTimer = null;
-	if (client > 0) PrintToChatAll("%t", "PauseCountdownCancelled", client);
-}
-
 void EndPause()
 {
 	if (!g_isPaused) return;
-	CancelTimer(g_unpauseTimer);
-	CancelTimer(g_pausePanelTimer);
+	CancelTimer(g_countdownTimer);
+	CancelTimer(g_panelTimer);
 	bool changed = SetEnginePaused(false);
 	g_isPaused = false;
 	g_adminPause = false;
 	g_pendingAdminPause = false;
-	PrintToChatAll("%t", "PauseEnded");
+	g_forceStarted = false;
+	g_countdownRemaining = 0;
+	PrintHintTextToAll("%t", "PauseEnded");
 	if (changed) InvokeForward(g_forwardUnpause);
 }
 
 public Action CommandForcePause(int client, int args)
 {
 	if (!g_pauseEnabled.BoolValue || g_readyPhase) return Plugin_Handled;
+	if (client > 0) GetClientName(client, g_pauseInitiator, sizeof(g_pauseInitiator));
+	else strcopy(g_pauseInitiator, sizeof(g_pauseInitiator), "Console");
 	if (!g_isPaused) AttemptPause(true);
 	else
 	{
 		g_adminPause = true;
-		CancelPauseCountdown(0);
+		g_forceStarted = false;
+		CancelCountdown(0, "ReadinessChanged");
 		PrintToChatAll("%t", "PauseAdminTakeover");
 	}
 	return Plugin_Handled;
@@ -639,29 +735,29 @@ public Action CommandForceUnpause(int client, int args)
 	CancelTimer(g_pauseDelayTimer);
 	CancelTimer(g_deferredPauseTimer);
 	g_pendingAdminPause = false;
-	if (g_isPaused) EndPause();
+	if (g_isPaused)
+	{
+		g_adminPause = false;
+		g_forceStarted = true;
+		StartCountdown();
+		RenderPanel();
+	}
 	return Plugin_Handled;
 }
 
 public Action CommandForceStart(int client, int args)
 {
-	if (g_isPaused)
-	{
-		EndPause();
-		return Plugin_Handled;
-	}
+	if (g_isPaused) return CommandForceUnpause(client, args);
 	if (!g_readyPhase) return Plugin_Handled;
-	CancelTimer(g_loadingTimer);
-	CancelTimer(g_readyTimer);
 	g_forceStarted = true;
-	FinishReadyCountdown();
-	RenderReadyPanel();
+	StartCountdown();
+	RenderPanel();
 	return Plugin_Handled;
 }
 
 public Action CommandShowPausePanel(int client, int args)
 {
-	if (client > 0 && g_isPaused) { g_panelHidden[client] = false; RenderPausePanel(); }
+	if (client > 0 && g_isPaused) { g_panelHidden[client] = false; RenderPanel(); }
 	return Plugin_Handled;
 }
 
@@ -670,23 +766,20 @@ public Action CommandShowPanel(int client, int args)
 	if (client > 0)
 	{
 		g_panelHidden[client] = false;
-		if (g_isPaused) RenderPausePanel();
-		else if (g_readyPhase) RenderReadyPanel();
+		PrintToChat(client, "%t", "PanelShow");
+		RenderPanel();
 	}
 	return Plugin_Handled;
 }
 
 public Action CommandHidePanel(int client, int args)
 {
-	if (client > 0) g_panelHidden[client] = true;
+	if (client > 0)
+	{
+		g_panelHidden[client] = true;
+		PrintToChat(client, "%t", "PanelHide");
+	}
 	return Plugin_Handled;
-}
-
-public Action TimerRefreshPausePanel(Handle timer)
-{
-	if (!g_isPaused) { g_pausePanelTimer = null; return Plugin_Stop; }
-	RenderPausePanel();
-	return Plugin_Continue;
 }
 
 public Action TimerReevaluatePause(Handle timer)
@@ -695,31 +788,40 @@ public Action TimerReevaluatePause(Handle timer)
 	return Plugin_Stop;
 }
 
-public Action TimerRefreshReadyPanel(Handle timer)
+public Action TimerRefreshPanel(Handle timer)
 {
-	if (!g_readyPhase)
+	if (!g_isPaused && !(g_readyPhase && g_readyEnabled.BoolValue))
 	{
-		g_readyPanelTimer = null;
+		g_panelTimer = null;
 		return Plugin_Stop;
 	}
-	RenderReadyPanel();
+	RenderPanel();
 	return Plugin_Continue;
 }
 
-void RenderReadyPanel()
+void RenderPanel()
 {
-	if (!g_readyPhase) return;
+	if (!g_isPaused && !(g_readyPhase && g_readyEnabled.BoolValue)) return;
 	for (int target = 1; target <= MaxClients; target++)
 	{
-		if (!IsClientInGame(target) || IsFakeClient(target) || g_panelHidden[target]) continue;
+		if (!CanShowPanel(target)) continue;
 		Panel panel = new Panel();
-		char line[128];
-		FormatEx(line, sizeof(line), "%T", "ReadyTitle", target);
+		char line[192];
+		FormatEx(line, sizeof(line), "%T", g_isPaused ? (g_adminPause ? "PauseAdminTitle" : "PauseTitle") : "ReadyTitle", target);
 		panel.SetTitle(line);
-		if (g_countdownFinished) FormatEx(line, sizeof(line), "%T", "ReadyGo", target);
-		else if (!AllClientsLoaded()) FormatEx(line, sizeof(line), "%T", "ReadyLoading", target);
-		else if (g_readyTimer != null) FormatEx(line, sizeof(line), "%T", "ReadyCountdown", target, g_readyCountdownTotal - g_readyCountdown);
-		else FormatEx(line, sizeof(line), "%T", "ReadyWaiting", target);
+		DrawPanelHeader(panel, target);
+		if (g_isPaused)
+		{
+			FormatEx(line, sizeof(line), "%T", "PauseInitiator", target, g_pauseInitiator);
+			panel.DrawText(line);
+		}
+		if (g_countdownTimer != null)
+			FormatEx(line, sizeof(line), "%T", g_isPaused ? "PauseCountdown" : "RoundCountdown", target, g_countdownRemaining);
+		else if (g_readyPhase && !AllClientsLoaded()) FormatEx(line, sizeof(line), "%T", "ReadyLoading", target);
+		else FormatEx(line, sizeof(line), "%T", g_adminPause ? "PauseAdminTakeover" : "ReadyWaiting", target);
+		panel.DrawText(line);
+		panel.DrawText(" ");
+		FormatEx(line, sizeof(line), "%T", "PanelSurvivors", target);
 		panel.DrawText(line);
 		for (int client = 1; client <= MaxClients; client++)
 		{
@@ -727,40 +829,83 @@ void RenderReadyPanel()
 			FormatEx(line, sizeof(line), "%T", g_playerReady[client] ? "PausePlayerReady" : "PausePlayerUnready", target, client);
 			panel.DrawText(line);
 		}
-		for (int i = 0; i < g_footer.Length; i++)
+		if (g_readyPhase) DrawLoadingPlayers(panel, target);
+		char spectators[192], playerName[MAX_NAME_LENGTH];
+		for (int client = 1; client <= MaxClients; client++)
 		{
-			g_footer.GetString(i, line, sizeof(line));
+			if (!IsClientInGame(client) || IsFakeClient(client) || GetClientTeam(client) != TEAM_SPECTATORS) continue;
+			GetClientName(client, playerName, sizeof(playerName));
+			if (spectators[0]) StrCat(spectators, sizeof(spectators), ", ");
+			StrCat(spectators, sizeof(spectators), playerName);
+		}
+		if (spectators[0])
+		{
+			panel.DrawText(" ");
+			FormatEx(line, sizeof(line), "%T", "PanelSpectators", target, spectators);
 			panel.DrawText(line);
 		}
-		panel.Send(target, PanelHandler, 2);
+		if (g_readyPhase)
+			for (int i = 0; i < g_footer.Length; i++)
+			{
+				g_footer.GetString(i, line, sizeof(line));
+				panel.DrawText(line);
+			}
+		panel.Send(target, PanelHandler, 1);
 		delete panel;
 	}
 }
 
-void RenderPausePanel()
+void DrawLoadingPlayers(Panel panel, int target)
 {
-	if (!g_isPaused) return;
-	for (int target = 1; target <= MaxClients; target++)
+	char line[192], playerName[MAX_NAME_LENGTH];
+	for (int client = 1; client <= MaxClients; client++)
 	{
-		if (!IsClientInGame(target) || IsFakeClient(target) || g_panelHidden[target]) continue;
-		Panel panel = new Panel();
-		char line[128];
-		FormatEx(line, sizeof(line), "%T", g_adminPause ? "PauseAdminTitle" : "PauseTitle", target);
-		panel.SetTitle(line);
-		for (int client = 1; client <= MaxClients; client++)
-		{
-			if (!IsHumanSurvivor(client)) continue;
-			FormatEx(line, sizeof(line), "%T", g_playerReady[client] ? "PausePlayerReady" : "PausePlayerUnready", target, client);
-			panel.DrawText(line);
-		}
-		if (g_unpauseTimer != null)
-		{
-			FormatEx(line, sizeof(line), "%T", "PauseCountdown", target, g_unpauseCountdown);
-			panel.DrawText(line);
-		}
-		panel.Send(target, PanelHandler, 2);
-		delete panel;
+		if (!IsClientConnected(client) || IsClientInGame(client) || IsFakeClient(client) || IsClientInKickQueue(client)) continue;
+		GetClientName(client, playerName, sizeof(playerName));
+		FormatEx(line, sizeof(line), "%T", "PanelLoadingPlayer", target, playerName);
+		panel.DrawText(line);
 	}
+	if (GetFeatureStatus(FeatureType_Native, "Coop_GetWaitingSurvivor") != FeatureStatus_Available) return;
+	int remaining;
+	for (int i = 0; Coop_GetWaitingSurvivor(i, playerName, sizeof(playerName), remaining); i++)
+	{
+		FormatEx(line, sizeof(line), "%T", "PanelReservedPlayer", target, playerName, remaining);
+		panel.DrawText(line);
+	}
+}
+// Keep the readyup/panel.inc presentation: server, elapsed time, rotating
+// command hints and checkboxes. Yield to other menus rather than replacing them.
+bool CanShowPanel(int client)
+{
+	if (!IsClientInGame(client) || IsFakeClient(client) || g_panelHidden[client]) return false;
+	if (BuiltinVote_IsVoteInProgress() && IsClientInBuiltinVotePool(client)) return false;
+	if (Game_IsVoteInProgress())
+	{
+		int team = Game_GetVoteTeam();
+		if (team == -1 || team == GetClientTeam(client)) return false;
+	}
+	MenuSource source = GetClientMenu(client);
+	return source != MenuSource_Normal && source != MenuSource_External;
+}
+
+void DrawPanelHeader(Panel panel, int target)
+{
+	char line[192];
+	FindConVar("hostname").GetString(line, sizeof(line));
+	panel.DrawText(line);
+	int elapsed = RoundToFloor(GetEngineTime() - g_panelStarted);
+	FormatEx(line, sizeof(line), "%02d:%02d", elapsed / 60, elapsed % 60);
+	panel.DrawText(line);
+	panel.DrawText(" ");
+	static const char commands[][] = {
+		"PanelReadyHelp",
+		"PanelShowHelp",
+		"PanelVoteHelp",
+		"PanelJoinHelp"
+	};
+	FormatEx(line, sizeof(line), "%T", commands[(elapsed / 4) % sizeof(commands)], target);
+	panel.DrawText(line);
+	panel.DrawText(" ");
 }
 
 public int PanelHandler(Menu menu, MenuAction action, int param1, int param2) { return 0; }
@@ -796,7 +941,7 @@ public Action BlockEngineUnpause(int client, const char[] command, int argc)
 
 public Action ForwardSay(int client, const char[] command, int argc)
 {
-	if (!g_isPaused) return Plugin_Continue;
+	if (!g_isPaused || client <= 0) return Plugin_Continue;
 	char message[256];
 	GetCmdArgString(message, sizeof(message));
 	StripQuotes(message);
@@ -837,7 +982,7 @@ bool AllClientsLoaded()
 {
 	for (int client = 1; client <= MaxClients; client++)
 	{
-		if (!IsClientConnected(client) || IsFakeClient(client)) continue;
+		if (!IsClientConnected(client) || IsFakeClient(client) || IsClientInKickQueue(client)) continue;
 		if (!IsClientInGame(client)) return false;
 	}
 	return LibraryExists("player_manager")
@@ -850,12 +995,14 @@ void ResetPauseState(bool unpause)
 	if (unpause && g_isPaused) SetEnginePaused(false);
 	CancelTimer(g_pauseDelayTimer);
 	CancelTimer(g_deferredPauseTimer);
-	CancelTimer(g_unpauseTimer);
-	CancelTimer(g_pausePanelTimer);
+	CancelTimer(g_countdownTimer);
+	CancelTimer(g_panelTimer);
 	g_isPaused = false;
 	g_adminPause = false;
 	g_pendingAdminPause = false;
 	g_internalPauseCommand = false;
+	g_forceStarted = false;
+	g_countdownRemaining = 0;
 	for (int client = 1; client <= MaxClients; client++) g_playerReady[client] = false;
 }
 
@@ -909,7 +1056,7 @@ int NativeGetFooterStringAtIndex(Handle plugin, int params)
 	return true;
 }
 
-int NativeIsInReady(Handle plugin, int params) { return g_readyPhase; }
+int NativeIsInReady(Handle plugin, int params) { return g_readyPhase && g_readyEnabled.BoolValue; }
 int NativeIsInPause(Handle plugin, int params) { return g_isPaused; }
 
 int NativeIsReady(Handle plugin, int params)
@@ -928,11 +1075,11 @@ int NativeToggleReadyPanel(Handle plugin, int params)
 	{
 		bool old = !g_panelHidden[target];
 		g_panelHidden[target] = !show;
-		if (show) { if (g_isPaused) RenderPausePanel(); else RenderReadyPanel(); }
+		if (show) RenderPanel();
 		return old;
 	}
 	for (int client = 1; client <= MaxClients; client++)
 		if (IsClientInGame(client) && !IsFakeClient(client)) g_panelHidden[client] = !show;
-	if (show) { if (g_isPaused) RenderPausePanel(); else RenderReadyPanel(); }
+	if (show) RenderPanel();
 	return true;
 }

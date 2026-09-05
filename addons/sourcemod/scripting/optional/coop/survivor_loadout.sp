@@ -25,6 +25,12 @@ public void OnPluginStart()
 	g_preserveWeapons = CreateConVar("preserve_transition_weapons", "0", "Keep weapons across map transitions.");
 	g_startPills = CreateConVar("give_start_pills", "1", "Give starting pain pills when the round goes live.", _, true, 0.0, true, 1.0);
 	HookEvent("map_transition", EventMapTransition, EventHookMode_Post);
+	HookEvent("round_start", EventRoundStart, EventHookMode_PostNoCopy);
+}
+
+public void EventRoundStart(Event event, const char[] name, bool dontBroadcast)
+{
+	g_liveHandled = false;
 }
 
 public void OnMapStart()
