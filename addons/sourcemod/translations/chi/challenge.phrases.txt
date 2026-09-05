@@ -14,28 +14,121 @@
         "#format" "{1:d}"
         "chi" "临时调整：{1} 项"
     }
-    "InfoWaveUnavailable" { "chi" "刷新状态不可用。" }
-    "InfoEnabled" { "chi" "已开启" }
-    "InfoDisabled" { "chi" "已关闭" }
-    "InfoTankDamage" { "#format" "{1:s}" "chi" "Tank 伤害：{1}" }
-    "InfoTankBhop" { "#format" "{1:s}" "chi" "Tank 连跳：{1}" }
-    "InfoTankRock" { "#format" "{1:s}" "chi" "Tank 石头：{1}" }
-    "InfoPlayerInfected" { "#format" "{1:s}" "chi" "玩家特感：{1}" }
-    "InfoPlayerTank" { "#format" "{1:s}" "chi" "玩家 Tank：{1}" }
-    "InfoExtraPills" { "#format" "{1:s}" "chi" "额外发药：{1}" }
-    "InfoMapPills" { "#format" "{1:s}" "chi" "地图药：{1}" }
-    "InfoRatioDamage" { "#format" "{1:s}" "chi" "比例伤害：{1}" }
-    "InfoRehealth" { "#format" "{1:s}" "chi" "击杀回血：{1}" }
-    "InfoReammo" { "#format" "{1:s}" "chi" "击杀回备弹：{1}" }
-    "InfoSIDamage" { "#format" "{1:s}" "chi" "特感伤害：{1}" }
-    "InfoMobLimit" { "#format" "{1:s}" "chi" "有限尸潮：{1}" }
-    "InfoWaveInterval" { "#format" "{1:s}" "chi" "刷新间隔：{1}" }
-    "InfoWaveSize" { "#format" "{1:s}" "chi" "刷新数量：{1}" }
-    "InfoHunterLimit" { "#format" "{1:s}" "chi" "Hunter 上限：{1}" }
-    "InfoSmokerLimit" { "#format" "{1:s}" "chi" "Smoker 上限：{1}" }
-    "InfoBoomerLimit" { "#format" "{1:s}" "chi" "Boomer 上限：{1}" }
-    "InfoSpitterLimit" { "#format" "{1:s}" "chi" "Spitter 上限：{1}" }
-    "InfoJockeyLimit" { "#format" "{1:s}" "chi" "Jockey 上限：{1}" }
-    "InfoChargerLimit" { "#format" "{1:s}" "chi" "Charger 上限：{1}" }
-    "InfoWaveDirection" { "#format" "{1:s}" "chi" "偏好方向：{1}" }
+    "InfoWaveUnavailable"
+    {
+        "chi" "刷新状态不可用。"
+    }
+    "InfoEnabled"
+    {
+        "chi" "已开启"
+    }
+    "InfoDisabled"
+    {
+        "chi" "已关闭"
+    }
+    "InfoTankDamage"
+    {
+        "#format" "{1:s}"
+        "chi" "Tank 伤害：{1}"
+    }
+    "InfoTankBhop"
+    {
+        "#format" "{1:s}"
+        "chi" "Tank 连跳：{1}"
+    }
+    "InfoTankRock"
+    {
+        "#format" "{1:s}"
+        "chi" "Tank 石头：{1}"
+    }
+    "InfoPlayerInfected"
+    {
+        "#format" "{1:s}"
+        "chi" "玩家特感：{1}"
+    }
+    "InfoPlayerTank"
+    {
+        "#format" "{1:s}"
+        "chi" "玩家 Tank：{1}"
+    }
+    "InfoExtraPills"
+    {
+        "#format" "{1:s}"
+        "chi" "额外发药：{1}"
+    }
+    "InfoMapPills"
+    {
+        "#format" "{1:s}"
+        "chi" "地图药：{1}"
+    }
+    "InfoRatioDamage"
+    {
+        "#format" "{1:s}"
+        "chi" "比例伤害：{1}"
+    }
+    "InfoRehealth"
+    {
+        "#format" "{1:s}"
+        "chi" "击杀回血：{1}"
+    }
+    "InfoReammo"
+    {
+        "#format" "{1:s}"
+        "chi" "击杀回备弹：{1}"
+    }
+    "InfoSIDamage"
+    {
+        "#format" "{1:s}"
+        "chi" "特感伤害：{1}"
+    }
+    "InfoMobLimit"
+    {
+        "#format" "{1:s}"
+        "chi" "有限尸潮：{1}"
+    }
+    "InfoWaveInterval"
+    {
+        "#format" "{1:s}"
+        "chi" "刷新间隔：{1}"
+    }
+    "InfoWaveSize"
+    {
+        "#format" "{1:s}"
+        "chi" "刷新数量：{1}"
+    }
+    "InfoHunterLimit"
+    {
+        "#format" "{1:s}"
+        "chi" "Hunter 上限：{1}"
+    }
+    "InfoSmokerLimit"
+    {
+        "#format" "{1:s}"
+        "chi" "Smoker 上限：{1}"
+    }
+    "InfoBoomerLimit"
+    {
+        "#format" "{1:s}"
+        "chi" "Boomer 上限：{1}"
+    }
+    "InfoSpitterLimit"
+    {
+        "#format" "{1:s}"
+        "chi" "Spitter 上限：{1}"
+    }
+    "InfoJockeyLimit"
+    {
+        "#format" "{1:s}"
+        "chi" "Jockey 上限：{1}"
+    }
+    "InfoChargerLimit"
+    {
+        "#format" "{1:s}"
+        "chi" "Charger 上限：{1}"
+    }
+    "InfoWaveDirection"
+    {
+        "#format" "{1:s}"
+        "chi" "偏好方向：{1}"
+    }
 }

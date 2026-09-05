@@ -1,44 +1,188 @@
 "Phrases"
 {
-	"JoinAfterStart" { "en" "Survivor joining is unavailable after the team leaves the saferoom." }
-	"PlayerSpectated" { "#format" "{1:N}" "en" "{1} is now spectating." }
-	"RoundNotStarted" { "en" "The round has not started." }
-	"HumanTankHealth" { "#format" "{1:d}" "en" "The human Tank has {1} health." }
-	"WaitingForPlayers" { "en" "Waiting for all players to load..." }
-	"RoundGo" { "en" "Go!" }
-	"RoundCountdown" { "#format" "{1:d}" "en" "Starting in: {1}" }
-	"PauseRequested" { "#format" "{1:N}" "en" "{1} requested a pause. Each survivor must ready with !r to continue." }
-	"PauseDelay" { "#format" "{1:d}" "en" "Pausing in {1} seconds." }
-	"PauseAdmin" { "en" "An administrator paused the game." }
-	"PauseStarted" { "en" "The game is paused. Each survivor must ready with !r to continue." }
-	"PlayerReady" { "#format" "{1:N}" "en" "{1} is ready." }
-	"PlayerUnready" { "#format" "{1:N}" "en" "{1} is no longer ready." }
-	"PauseCountdown" { "#format" "{1:d}" "en" "Continuing in {1} seconds." }
-	"PauseCountdownCancelled" { "#format" "{1:N}" "en" "{1} cancelled the pause countdown." }
-	"PauseEnded" { "en" "The game is continuing." }
-	"PauseTitle" { "en" "Coop paused\nAll survivors must ready" }
-	"PauseAdminTitle" { "en" "Coop paused\nAdministrator pause" }
-	"PausePlayerReady" { "#format" "{1:N}" "en" "[ready] {1}" }
-	"PausePlayerUnready" { "#format" "{1:N}" "en" "[not ready] {1}" }
-	"PauseChat" { "#format" "{1:N} {2:s}" "en" "{1}: {2}" }
-	"PauseTeamChat" { "#format" "{1:N} {2:s}" "en" "(team) {1}: {2}" }
-	"PausePlayerJoined" { "#format" "{1:N}" "en" "{1} joined the server; ready with !r after joining survivors." }
-	"PauseAdminTakeover" { "en" "The pause now requires an administrator to unpause." }
-	"TeamChanged" { "en" "team changed" }
-	"ReadyTitle" { "en" "Coop ready" }
-	"ReadyLoading" { "en" "Waiting for all players to load..." }
-	"ReadyCountdown" { "#format" "{1:d}" "en" "Starting in: {1}" }
-	"ReadyGo" { "en" "Ready. Leave the saferoom to start." }
-	"LoadingTimeout" { "en" "Loading timed out." }
-	"AdminCleanupSyntax" { "en" "Usage: !fuck <special infected name|all>." }
-	"AdminCleanupAll" { "#format" "{1:N} {2:d}" "en" "{1} removed {2} AI special infected." }
-	"AdminCleanupSome" { "#format" "{1:N} {2:d} {3:s}" "en" "{1} removed {2} AI infected matching {3}." }
-	"AdminCleanupNone" { "#format" "{1:s}" "en" "No AI special infected matched {1}." }
-	"AdminCleanupAllConsole" { "#format" "{1:d}" "en" "Console removed {1} AI special infected." }
-	"AdminCleanupSomeConsole" { "#format" "{1:d} {2:s}" "en" "Console removed {1} AI infected matching {2}." }
-	"TankRageRefilledSelf" { "en" "Tank rage refilled." }
-	"TankRageRefilledOther" { "#format" "{1:N}" "en" "{1}'s Tank rage was refilled." }
-	"BotSetupFailed" { "en" "Coop survivor bot setup failed." }
-	"BotPlaceholder" { "en" "Coop survivor placeholder removed." }
-	"BotCleanup" { "en" "Coop survivor bot cleanup." }
+	"JoinAfterStart"
+	{
+	    "en" "Survivor joining is unavailable after the team leaves the saferoom."
+	}
+	"PlayerSpectated"
+	{
+	    "#format" "{1:N}"
+	    "en" "{1} is now spectating."
+	}
+	"RoundNotStarted"
+	{
+	    "en" "The round has not started."
+	}
+	"HumanTankHealth"
+	{
+	    "#format" "{1:d}"
+	    "en" "The human Tank has {1} health."
+	}
+	"WaitingForPlayers"
+	{
+	    "en" "Waiting for all players to load..."
+	}
+	"RoundGo"
+	{
+	    "en" "Go!"
+	}
+	"RoundCountdown"
+	{
+	    "#format" "{1:d}"
+	    "en" "Starting in: {1}"
+	}
+	"PauseRequested"
+	{
+	    "#format" "{1:N}"
+	    "en" "{1} requested a pause. Each survivor must ready with !r to continue."
+	}
+	"PauseDelay"
+	{
+	    "#format" "{1:d}"
+	    "en" "Pausing in {1} seconds."
+	}
+	"PauseAdmin"
+	{
+	    "en" "An administrator paused the game."
+	}
+	"PauseStarted"
+	{
+	    "en" "The game is paused. Each survivor must ready with !r to continue."
+	}
+	"PlayerReady"
+	{
+	    "#format" "{1:N}"
+	    "en" "{1} is ready."
+	}
+	"PlayerUnready"
+	{
+	    "#format" "{1:N}"
+	    "en" "{1} is no longer ready."
+	}
+	"PauseCountdown"
+	{
+	    "#format" "{1:d}"
+	    "en" "Continuing in {1} seconds."
+	}
+	"PauseCountdownCancelled"
+	{
+	    "#format" "{1:N}"
+	    "en" "{1} cancelled the pause countdown."
+	}
+	"PauseEnded"
+	{
+	    "en" "The game is continuing."
+	}
+	"PauseTitle"
+	{
+	    "en" "Coop paused\nAll survivors must ready"
+	}
+	"PauseAdminTitle"
+	{
+	    "en" "Coop paused\nAdministrator pause"
+	}
+	"PausePlayerReady"
+	{
+	    "#format" "{1:N}"
+	    "en" "[ready] {1}"
+	}
+	"PausePlayerUnready"
+	{
+	    "#format" "{1:N}"
+	    "en" "[not ready] {1}"
+	}
+	"PauseChat"
+	{
+	    "#format" "{1:N},{2:s}"
+	    "en" "{1}: {2}"
+	}
+	"PauseTeamChat"
+	{
+	    "#format" "{1:N},{2:s}"
+	    "en" "(team) {1}: {2}"
+	}
+	"PausePlayerJoined"
+	{
+	    "#format" "{1:N}"
+	    "en" "{1} joined the server; ready with !r after joining survivors."
+	}
+	"PauseAdminTakeover"
+	{
+	    "en" "The pause now requires an administrator to unpause."
+	}
+	"TeamChanged"
+	{
+	    "en" "team changed"
+	}
+	"ReadyTitle"
+	{
+	    "en" "Coop ready"
+	}
+	"ReadyLoading"
+	{
+	    "en" "Waiting for all players to load..."
+	}
+	"ReadyCountdown"
+	{
+	    "#format" "{1:d}"
+	    "en" "Starting in: {1}"
+	}
+	"ReadyGo"
+	{
+	    "en" "Ready. Leave the saferoom to start."
+	}
+	"LoadingTimeout"
+	{
+	    "en" "Loading timed out."
+	}
+	"AdminCleanupSyntax"
+	{
+	    "en" "Usage: !fuck <special infected name|all>."
+	}
+	"AdminCleanupAll"
+	{
+	    "#format" "{1:N},{2:d}"
+	    "en" "{1} removed {2} AI special infected."
+	}
+	"AdminCleanupSome"
+	{
+	    "#format" "{1:N},{2:d},{3:s}"
+	    "en" "{1} removed {2} AI infected matching {3}."
+	}
+	"AdminCleanupNone"
+	{
+	    "#format" "{1:s}"
+	    "en" "No AI special infected matched {1}."
+	}
+	"AdminCleanupAllConsole"
+	{
+	    "#format" "{1:d}"
+	    "en" "Console removed {1} AI special infected."
+	}
+	"AdminCleanupSomeConsole"
+	{
+	    "#format" "{1:d},{2:s}"
+	    "en" "Console removed {1} AI infected matching {2}."
+	}
+	"TankRageRefilledSelf"
+	{
+	    "en" "Tank rage refilled."
+	}
+	"TankRageRefilledOther"
+	{
+	    "#format" "{1:N}"
+	    "en" "{1}'s Tank rage was refilled."
+	}
+	"BotSetupFailed"
+	{
+	    "en" "Coop survivor bot setup failed."
+	}
+	"BotPlaceholder"
+	{
+	    "en" "Coop survivor placeholder removed."
+	}
+	"BotCleanup"
+	{
+	    "en" "Coop survivor bot cleanup."
+	}
 }

@@ -51,9 +51,9 @@ function update_diff()
 	ApplyDirectorOptions();
 
 	if (HUDInfo.hud_mode == "stats") {
-		g_ModeScript.UpdateHUDStats();
+		UpdateHUDStats();
 	} else {
-		g_ModeScript.UpdateHUDSI();
+		UpdateHUDSI();
 	}
 }
 
@@ -118,6 +118,10 @@ function ApplyDirectorOptions()
 }
 
 function InitHUD() {
+	// Script reloads can run before scriptedmode.nuc has published the HUD slots.
+	// Director settings are still valid; defer only the HUD refresh until the mode is ready.
+	if (!("HUD_TICKER" in this)) return;
+
 	// HUD setup
 	ModeHUD <- {
 		Fields = {

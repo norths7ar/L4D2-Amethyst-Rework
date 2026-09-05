@@ -4,6 +4,7 @@
 #include <sourcemod>
 #include <builtinvotes>
 #include <left4dhooks>
+#undef REQUIRE_PLUGIN
 #include <profile_controller>
 #include <wave_spawner>
 

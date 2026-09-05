@@ -562,6 +562,17 @@ Assert-Contains "addons/sourcemod/scripting/include/wave_spawner.inc" 'WAVE_FIEL
 Assert-Contains "addons/sourcemod/scripting/optional/coop/wave_spawner.sp" 'CreateNative\("WaveSpawner_GetCurrentOverrideMask"' "Wave Spawner does not expose current override mask"
 Assert-Contains "addons/sourcemod/translations/challenge.phrases.txt" 'InfoHeader' "Challenge info phrases are missing"
 Assert-Contains "addons/sourcemod/translations/chi/challenge.phrases.txt" 'InfoHeader' "Chinese Challenge info phrases are missing"
+foreach ($phraseFile in @(
+    "addons/sourcemod/translations/challenge.phrases.txt",
+    "addons/sourcemod/translations/chi/challenge.phrases.txt",
+    "addons/sourcemod/translations/coop_flow.phrases.txt",
+    "addons/sourcemod/translations/chi/coop_flow.phrases.txt"
+)) {
+    Assert-NotContains $phraseFile '^\s*"[^"]+"\s*\{\s+"' "Translation file uses an inline phrase section that SourceMod cannot parse: $phraseFile"
+    Assert-NotContains $phraseFile '"#format"\s+"[^"]*\}\s+\{' "Translation #format placeholders are not comma-separated: $phraseFile"
+}
+Assert-RawContains "addons/sourcemod/scripting/optional/coop/wave_spawner.sp" '(?ms)#include <script_reloader>\s*#undef REQUIRE_PLUGIN\s*#include <profile_controller>' "Wave Spawner makes the late-loaded Profile Controller a hard dependency"
+Assert-RawContains "addons/sourcemod/scripting/optional/coop/challenge.sp" '(?ms)#undef REQUIRE_PLUGIN\s*#include <profile_controller>\s*#include <wave_spawner>' "Coop Challenge does not mark its late/optional component natives optional"
 Assert-Contains "addons/sourcemod/configs/astredux_profiles.cfg" '^\s*"mob_spawn_limit_enabled"\s+"0"\s*$' "AstRedux profile defaults do not reset mob limit"
 Assert-NotContains "addons/sourcemod/scripting/optional/coop/challenge.sp" 'ResetConVar\(mobLimit|mobLimit\.(?:IntValue|BoolValue)\s*=\s*0' "Coop Challenge hardcodes the mob limit baseline"
 Assert-NotContains `
@@ -656,6 +667,10 @@ Assert-Contains `
     "scripts/vscripts/astredux.nut" `
     'Fisher-Yates|order\.len\(\) - 1' `
     "AstRedux does not shuffle eligible overflow slots without replacement"
+Assert-RawContains `
+    "scripts/vscripts/astredux.nut" `
+    '(?ms)function InitHUD\(\).*?if \(!\("HUD_TICKER" in this\)\) return;' `
+    "AstRedux HUD refresh does not tolerate pre-scriptedmode reloads"
 Assert-NotContains `
     "scripts/vscripts/astredux.nut" `
     '\bscale\b' `

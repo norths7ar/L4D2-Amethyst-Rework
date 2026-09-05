@@ -6,6 +6,7 @@
 #include <builtinvotes>
 #include <left4dhooks>
 #include <script_reloader>
+#undef REQUIRE_PLUGIN
 #include <profile_controller>
 
 #define TEAM_SURVIVORS 2
