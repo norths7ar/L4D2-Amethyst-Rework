@@ -825,27 +825,61 @@ int CountHumanPlayers()
 
 int CountOverrides()
 {
-	return CountBits(g_iOverrideMask) + CountBits(GetWaveOverrideMask());
-}
-
-int CountBits(int mask)
-{
+	if (!CanReadProfileDefaults()) return -1;
 	int count;
-	while (mask != 0) { count += mask & 1; mask >>>= 1; }
+	for (int target = 1; target <= 16; target++)
+		if (DiffersFromProfile(GetChallengeSetting(target))) count++;
+	for (int field = 0; field < 9; field++)
+		if (DiffersFromProfile(GetWaveSetting(field))) count++;
 	return count;
 }
 
-int GetWaveOverrideMask()
+bool CanReadProfileDefaults()
 {
-	if (!CanUseWaveSpawner()) return 0;
-	return WaveSpawner_GetCurrentOverrideMask();
+	return CanUseProfileController() && GetCurrentProfile() > 0
+		&& GetFeatureStatus(FeatureType_Native, "ProfileController_GetDefaultValue") == FeatureStatus_Available;
+}
+
+bool DiffersFromProfile(ConVar cvar)
+{
+	if (cvar == null || !CanReadProfileDefaults()) return false;
+	char name[64];
+	cvar.GetName(name, sizeof(name));
+	float baseline;
+	return ProfileController_GetDefaultValue(name, baseline) && FloatAbs(cvar.FloatValue - baseline) > 0.0001;
+}
+
+ConVar GetChallengeSetting(int target)
+{
+	switch (target)
+	{
+		case 1: return FindConVar("vs_tank_damage");
+		case 2: return FindConVar("ai_tank_bhop");
+		case 3: return FindConVar("ai_tank_rock");
+		case 7: return FindConVar("ast_pills_enabled");
+		case 8: return FindConVar("ast_pills_map_kill");
+		case 11: return hRatioDamage;
+		case 12: return hRehealth;
+		case 13: return hReammo;
+		case 15: return hDmgThreshold;
+		case 16: return FindConVar("mob_spawn_limit_enabled");
+	}
+	return null;
+}
+
+ConVar GetWaveSetting(int field)
+{
+	static char names[][] = {"wave_interval", "wave_size", "wave_hunter_limit", "wave_smoker_limit", "wave_boomer_limit", "wave_spitter_limit", "wave_jockey_limit", "wave_charger_limit", "wave_preferred_direction"};
+	return FindConVar(names[field]);
 }
 
 void GetGameplayStatus(int client, char[] buffer, int maxlen)
 {
 	int difficulty = GetDifficulty();
 	if (difficulty < 1 || difficulty > 4) difficulty = CountHumanSurvivors();
-	FormatEx(buffer, maxlen, "%T", "GameplayStatus", client, difficulty, CountOverrides());
+	int count = CountOverrides();
+	if (count < 0) FormatEx(buffer, maxlen, "%T", "InfoDefaultsUnavailable", client);
+	else FormatEx(buffer, maxlen, "%T", "GameplayStatus", client, difficulty, count);
 }
 
 void PrintGameplayStatus(int client)
@@ -863,47 +897,37 @@ void PrintGameplayStatus(int client)
 void PrintOverrideSummary(int client)
 {
 	int count = CountOverrides();
-	if (count == 0) PrintToChat(client, "\x04[Ast] \x01%t", "InfoNoOverrides");
+	if (count < 0) PrintToChat(client, "\x04[Ast] \x01%t", "InfoDefaultsUnavailable");
+	else if (count == 0) PrintToChat(client, "\x04[Ast] \x01%t", "InfoNoOverrides");
 	else PrintToChat(client, "\x04[Ast] \x01%t", "InfoOverridesSummary", count);
 }
 
 void PrintOverrideDetails(int client)
 {
-	int mask = g_iOverrideMask;
 	for (int target = 1; target <= 16; target++)
 	{
-		if ((mask & (1 << target)) == 0) continue;
+		ConVar setting = GetChallengeSetting(target);
+		if (!DiffersFromProfile(setting)) continue;
 		char value[32];
 		if (IsBooleanChallengeTarget(target))
 		{
-			Format(value, sizeof(value), "%T", g_iSlotOverride[GetCurrentProfile()][target] ? "InfoEnabled" : "InfoDisabled", client);
+			Format(value, sizeof(value), "%T", setting.BoolValue ? "InfoEnabled" : "InfoDisabled", client);
 		}
 		else
 		{
-			IntToString(g_iSlotOverride[GetCurrentProfile()][target], value, sizeof(value));
+			setting.GetString(value, sizeof(value));
 		}
 		char phrase[32];
 		GetChallengePhrase(target, phrase, sizeof(phrase));
 		PrintToChat(client, "\x04[Ast] \x01%t", phrase, value);
 	}
 
-	mask = GetWaveOverrideMask();
-	ConVar waveFields[9];
-	waveFields[0] = FindConVar("wave_interval");
-	waveFields[1] = FindConVar("wave_size");
-	waveFields[2] = FindConVar("wave_hunter_limit");
-	waveFields[3] = FindConVar("wave_smoker_limit");
-	waveFields[4] = FindConVar("wave_boomer_limit");
-	waveFields[5] = FindConVar("wave_spitter_limit");
-	waveFields[6] = FindConVar("wave_jockey_limit");
-	waveFields[7] = FindConVar("wave_charger_limit");
-	waveFields[8] = FindConVar("wave_preferred_direction");
 	for (int field = 0; field < 9; field++)
 	{
-		if ((mask & (1 << field)) == 0 || waveFields[field] == null) continue;
+		ConVar setting = GetWaveSetting(field);
+		if (!DiffersFromProfile(setting)) continue;
 		char value[32];
-		if (field == 0) Format(value, sizeof(value), "%.1f", waveFields[field].FloatValue);
-		else IntToString(waveFields[field].IntValue, value, sizeof(value));
+		setting.GetString(value, sizeof(value));
 		char phrase[32];
 		GetWavePhrase(field, phrase, sizeof(phrase));
 		PrintToChat(client, "\x04[Ast] \x01%t", phrase, value);

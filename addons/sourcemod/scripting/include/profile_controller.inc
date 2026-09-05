@@ -5,6 +5,8 @@
 
 native int ProfileController_GetCurrentProfile();
 native bool ProfileController_Reapply();
+/** Read the configured baseline for the current profile, before temporary overrides. */
+native bool ProfileController_GetDefaultValue(const char[] cvar, float &value);
 
 public SharedPlugin __pl_profile_controller =
 {
@@ -22,5 +24,6 @@ public void __pl_profile_controller_SetNTVOptional()
 {
     MarkNativeAsOptional("ProfileController_GetCurrentProfile");
     MarkNativeAsOptional("ProfileController_Reapply");
+    MarkNativeAsOptional("ProfileController_GetDefaultValue");
 }
 #endif

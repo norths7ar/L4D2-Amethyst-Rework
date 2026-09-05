@@ -53,6 +53,7 @@ public void OnPluginStart()
     RegPluginLibrary("profile_controller");
     CreateNative("ProfileController_GetCurrentProfile", Native_GetCurrentProfile);
     CreateNative("ProfileController_Reapply", Native_Reapply);
+    CreateNative("ProfileController_GetDefaultValue", Native_GetDefaultValue);
 }
 
 public void OnConfigsExecuted()
@@ -294,6 +295,25 @@ bool ApplyProfile(int profile, const char[] reason)
 public int Native_GetCurrentProfile(Handle plugin, int numParams)
 {
     return g_iCurrentProfile;
+}
+
+public int Native_GetDefaultValue(Handle plugin, int numParams)
+{
+    if (!g_bProfilesLoaded || g_iCurrentProfile < 1 || g_iCurrentProfile > MAX_PROFILES) return false;
+    char name[64], value[64];
+    GetNativeString(1, name, sizeof(name));
+    // Profile-specific values take precedence over the shared defaults, as during apply.
+    int index = g_profiles[g_iCurrentProfile].cvarNames.FindString(name);
+    if (index >= 0) g_profiles[g_iCurrentProfile].cvarValues.GetString(index, value, sizeof(value));
+    else
+    {
+        if (g_defaultCvarNames == null) return false;
+        index = g_defaultCvarNames.FindString(name);
+        if (index < 0) return false;
+        g_defaultCvarValues.GetString(index, value, sizeof(value));
+    }
+    SetNativeCellRef(2, view_as<int>(StringToFloat(value)));
+    return true;
 }
 
 public int Native_Reapply(Handle plugin, int numParams)

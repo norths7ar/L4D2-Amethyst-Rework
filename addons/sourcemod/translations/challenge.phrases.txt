@@ -3,7 +3,7 @@
     "InfoHeader"
     {
         "#format" "{1:d},{2:.1f},{3:d}"
-        "en" "Current {1}P: waves every {2:.1f} sec / {3} SI"
+        "en" "Current {1}P settings: every {2:.1f} sec / {3} SI (apply next wave)"
     }
     "InfoNoOverrides"
     {
@@ -17,6 +17,10 @@
     "InfoWaveUnavailable"
     {
         "en" "Wave status is unavailable."
+    }
+    "InfoDefaultsUnavailable"
+    {
+        "en" "Current profile defaults are unavailable; changes cannot be compared yet."
     }
     "InfoEnabled"
     {

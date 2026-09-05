@@ -3,7 +3,7 @@
     "InfoHeader"
     {
         "#format" "{1:d},{2:.1f},{3:d}"
-        "chi" "当前 {1}P：每 {2:.1f} 秒 / {3} 特感"
+        "chi" "当前 {1}P 设置：每 {2:.1f} 秒 / {3} 特感（从下一波起生效）"
     }
     "InfoNoOverrides"
     {
@@ -17,6 +17,10 @@
     "InfoWaveUnavailable"
     {
         "chi" "刷新状态不可用。"
+    }
+    "InfoDefaultsUnavailable"
+    {
+        "chi" "当前人数档位的默认值尚不可用，暂不能比较调整。"
     }
     "InfoEnabled"
     {
