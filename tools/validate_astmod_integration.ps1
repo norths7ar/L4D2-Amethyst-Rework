@@ -127,7 +127,7 @@ foreach ($mode in $modes) {
 $requiredPlugins = @{
     astmod = @('optional/astmod/jointeam.smx', 'optional/astmod/pause_coop.smx', 'optional/astmod/wave_spawner.smx')
     astredux = @('optional/coop/player_manager.smx', 'optional/coop/ready_pause.smx', 'optional/coop/survivor_loadout.smx', 'optional/coop/wave_spawner.smx', 'optional/coop/profile_controller.smx')
-    public_coop = @('confoglcompmod.smx', 'optional/coop/campaign_switcher.smx')
+    public_coop = @('confoglcompmod.smx', 'match_vote.smx', 'optional/coop/campaign_switcher.smx')
 }
 foreach ($mode in $modes) {
     $loads = $modePlugins[$mode]
