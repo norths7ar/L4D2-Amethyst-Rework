@@ -30,8 +30,8 @@ ConVar g_cvReviveHealth;
 bool g_bCanStart;      // Prevent AutoWipe before survivors have left the start area.
 bool g_bWipePending;   // Prevent multiple wipe timers from being scheduled together.
 bool g_bRoundLive;
-// Health is captured when a survivor is first dominated. A snapshot is valid
-// only while that survivor remains pinned or incapacitated.
+// Health is captured while a survivor is standing. The last standing snapshot
+// remains valid while that survivor is pinned or incapacitated.
 bool g_bHasHealthSnapshot[MAXPLAYERS + 1];
 int g_iSurvivorHealth[MAXPLAYERS + 1];
 float g_fSurvivorTempHealth[MAXPLAYERS + 1];
@@ -39,10 +39,6 @@ float g_fSurvivorTempHealth[MAXPLAYERS + 1];
 public void OnPluginStart()
 {
     g_cvEnabled = CreateConVar("autowipe_enable", "0", "Enable AutoWipe.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
-    HookEvent("tongue_grab", Event_SurvivorDominated);
-    HookEvent("jockey_ride", Event_SurvivorDominated);
-    HookEvent("lunge_pounce", Event_SurvivorDominated);
-    HookEvent("charger_carry_start", Event_SurvivorDominated);
     // Enable only after the round starts; disable again at every round boundary.
     HookEvent("player_left_start_area", Event_EnableAutoWipe, EventHookMode_PostNoCopy);
     HookEvent("map_transition", Event_DisableAutoWipe, EventHookMode_PostNoCopy);
@@ -82,20 +78,6 @@ public Action Event_EnableAutoWipe(Event event, const char[] name, bool dontBroa
 {
     g_bRoundLive = true;
     g_bCanStart = IsEnabled();
-    return Plugin_Continue;
-}
-
-public Action Event_SurvivorDominated(Event event, const char[] name, bool dontBroadcast)
-{
-    int victim = GetClientOfUserId(event.GetInt("victim"));
-    if (!IsSurvivor(victim))
-    {
-        return Plugin_Continue;
-    }
-
-    g_iSurvivorHealth[victim] = GetClientHealth(victim);
-    g_fSurvivorTempHealth[victim] = L4D_GetTempHealth(victim);
-    g_bHasHealthSnapshot[victim] = true;
     return Plugin_Continue;
 }
 
@@ -154,14 +136,13 @@ void WipeSurvivors()
     {
         if (IsSurvivor(client) && IsPlayerAlive(client))
         {
-            if (!g_bHasHealthSnapshot[client])
-            {
-                continue;
-            }
-
-            // Pay the wipe cost from captured permanent health first, then temporary health.
-            int remainingHealth = g_iSurvivorHealth[client] - g_cvWipeDamage.IntValue;
-            float remainingTotal = g_fSurvivorTempHealth[client] + float(remainingHealth);
+            // Pay the wipe cost from the last standing snapshot. If no
+            // standing state was observed, use a conservative 1 permanent /
+            // 0 temporary fallback rather than an incapacitation health pool.
+            int standingHealth = g_bHasHealthSnapshot[client] ? g_iSurvivorHealth[client] : 1;
+            float standingTempHealth = g_bHasHealthSnapshot[client] ? g_fSurvivorTempHealth[client] : 0.0;
+            int remainingHealth = standingHealth - g_cvWipeDamage.IntValue;
+            float remainingTotal = standingTempHealth + float(remainingHealth);
 
             // Stand the survivor up before restoring the captured health state.
             if (IsIncapacitated(client))
@@ -172,12 +153,12 @@ void WipeSurvivors()
             if (remainingHealth >= 1)
             {
                 SetEntityHealth(client, remainingHealth);
-                L4D_SetTempHealth(client, g_fSurvivorTempHealth[client]);
+                L4D_SetTempHealth(client, standingTempHealth);
             }
             else if (remainingTotal >= 1.0)
             {
                 SetEntityHealth(client, 1);
-                L4D_SetTempHealth(client, remainingTotal);
+                L4D_SetTempHealth(client, remainingTotal - 1.0);
             }
             else
             {
@@ -221,9 +202,15 @@ void RefreshHealthSnapshots()
 {
     for (int client = 1; client <= MaxClients; client++)
     {
-        if (g_bHasHealthSnapshot[client] && (!IsSurvivor(client) || (!IsPinned(client) && !IsIncapacitated(client))))
+        if (!IsSurvivor(client))
         {
             g_bHasHealthSnapshot[client] = false;
+        }
+        else if (IsPlayerAlive(client) && !IsPinned(client) && !IsIncapacitated(client))
+        {
+            g_iSurvivorHealth[client] = GetClientHealth(client);
+            g_fSurvivorTempHealth[client] = L4D_GetTempHealth(client);
+            g_bHasHealthSnapshot[client] = true;
         }
     }
 }
