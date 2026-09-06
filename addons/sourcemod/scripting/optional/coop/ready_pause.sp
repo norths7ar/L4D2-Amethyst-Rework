@@ -8,6 +8,7 @@
 #include <builtinvotes>
 #undef REQUIRE_PLUGIN
 #include <player_manager>
+#include <caster_system>
 
 #define TEAM_SPECTATORS 1
 #define TEAM_SURVIVORS 2
@@ -25,7 +26,6 @@ char g_pauseInitiator[MAX_NAME_LENGTH];
 bool g_directorHeld;
 bool g_savedMobRunning;
 float g_savedMobRemaining;
-bool g_savedBotStop;
 bool g_frozenByReady[MAXPLAYERS + 1];
 MoveType g_previousMoveType[MAXPLAYERS + 1];
 
@@ -62,6 +62,8 @@ Handle g_panelTimer;
 Handle g_pauseDelayTimer;
 Handle g_deferredPauseTimer;
 
+#include "ready_pause/panel.inc"
+
 public Plugin myinfo =
 {
 	name = "Coop ready and pause",
@@ -89,6 +91,7 @@ public void OnPluginStart()
 {
 	LoadTranslations("ready_pause.phrases");
 	g_footer = new ArrayList(ByteCountToCells(MAX_FOOTER_LEN));
+	SetupReadyPanel();
 	g_svPausable = FindConVar("sv_pausable");
 	g_svNoclipDuringPause = FindConVar("sv_noclipduringpause");
 	g_pauseDelay = CreateConVar("sm_pausedelay", "0", "Seconds before a normal coop pause begins.", _, true, 0.0);
@@ -151,6 +154,7 @@ public void OnMapStart()
 	CancelTimer(g_loadingTimer);
 	CancelTimer(g_countdownTimer);
 	CancelTimer(g_panelTimer);
+	CancelTimer(g_readyPanelCommandTimer);
 	g_footer.Clear();
 	for (int client = 1; client <= MaxClients; client++)
 	{
@@ -173,6 +177,7 @@ public void OnMapEnd()
 	CancelTimer(g_loadingTimer);
 	CancelTimer(g_countdownTimer);
 	CancelTimer(g_panelTimer);
+	CancelTimer(g_readyPanelCommandTimer);
 	ResetPauseState(true);
 	g_readyPhase = false;
 }
@@ -208,6 +213,7 @@ public void OnClientPutInServer(int client)
 	g_loadingTimeout[client] = 0;
 	g_panelHidden[client] = false;
 	g_playerReady[client] = false;
+	g_panelButtonTime[client] = GetEngineTime();
 	SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamageGodMode);
 	if (g_isPaused && !IsFakeClient(client)) PrintToChatAll("%t", "PausePlayerJoined", client);
 }
@@ -250,6 +256,7 @@ void StartRound()
 	g_godMode = false;
 	CancelTimer(g_loadingTimer);
 	CancelTimer(g_panelTimer);
+	CancelTimer(g_readyPanelCommandTimer);
 	SetSurvivorsFrozen(false);
 	ReleaseDirector();
 	InvokeForward(g_forwardLive);
@@ -269,6 +276,7 @@ public Action EventRoundBoundary(Event event, const char[] name, bool dontBroadc
 	CancelTimer(g_loadingTimer);
 	CancelTimer(g_countdownTimer);
 	CancelTimer(g_panelTimer);
+	CancelTimer(g_readyPanelCommandTimer);
 	g_readyPhase = false;
 	g_godMode = false;
 	return Plugin_Continue;
@@ -286,6 +294,7 @@ void BeginReadyPhase()
 	CancelTimer(g_loadingTimer);
 	CancelTimer(g_countdownTimer);
 	CancelTimer(g_panelTimer);
+	CancelTimer(g_readyPanelCommandTimer);
 	SetSurvivorsFrozen(false);
 	for (int client = 1; client <= MaxClients; client++)
 	{
@@ -300,6 +309,7 @@ void BeginReadyPhase()
 	g_footer.Clear();
 	InvokeForward(g_forwardInitiate);
 	g_loadingTimer = CreateTimer(1.0, TimerLoading, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+	InitReadyPanel();
 	RenderPanel();
 	g_panelTimer = CreateTimer(1.0, TimerRefreshPanel, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 }
@@ -316,7 +326,6 @@ void HoldDirector()
 	// actual mob interval here: AstRedux's VScript may override the stock CVar.
 	if (!g_directorHeld)
 	{
-		g_savedBotStop = FindConVar("sb_stop").BoolValue;
 		g_savedMobRunning = L4D2_CTimerHasStarted(L4D2CT_MobSpawnTimer);
 		g_savedMobRemaining = L4D2_CTimerGetRemainingTime(L4D2CT_MobSpawnTimer);
 		g_directorHeld = true;
@@ -327,7 +336,7 @@ void HoldDirector()
 		g_savedMobRunning = L4D2_CTimerHasStarted(L4D2CT_MobSpawnTimer);
 		g_savedMobRemaining = L4D2_CTimerGetRemainingTime(L4D2CT_MobSpawnTimer);
 	}
-	FindConVar("sb_stop").BoolValue = true;
+	FindConVar("sb_stop").SetBool(true, .notify = false);
 	L4D2_CTimerStart(L4D2CT_VersusStartTimer, 99999.9);
 	L4D2_CTimerStart(L4D2CT_MobSpawnTimer, 99999.9);
 }
@@ -336,7 +345,7 @@ void ReleaseDirector()
 {
 	if (!g_directorHeld) return;
 	g_directorHeld = false;
-	FindConVar("sb_stop").BoolValue = g_savedBotStop;
+	FindConVar("sb_stop").SetBool(false, .notify = false);
 	L4D2_CTimerStart(L4D2CT_VersusStartTimer, FindConVar("versus_force_start_time").FloatValue);
 	if (g_savedMobRunning) L4D2_CTimerStart(L4D2CT_MobSpawnTimer, g_savedMobRemaining > 0.0 ? g_savedMobRemaining : 0.0);
 	else L4D2_CTimerInvalidate(L4D2CT_MobSpawnTimer);
@@ -366,8 +375,21 @@ void SetReadyFrozen(int client, bool frozen)
 	}
 }
 
-public void OnPlayerRunCmdPost(int client)
+public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float vel[3], const float angles[3], int weapon, int subtype, int cmdnum, int tickcount, int seed, const int mouse[2])
 {
+	// readyup.sp: activity only controls the panel's [AFK] marker.
+	if (g_readyPhase && IsClientInGame(client) && !IsFakeClient(client))
+	{
+		static int iLastMouse[MAXPLAYERS+1][2];
+		// Mouse Movement Check
+		if (mouse[0] != iLastMouse[client][0] || mouse[1] != iLastMouse[client][1])
+		{
+			iLastMouse[client][0] = mouse[0];
+			iLastMouse[client][1] = mouse[1];
+			g_panelButtonTime[client] = GetEngineTime();
+		}
+		else if (buttons || impulse) g_panelButtonTime[client] = GetEngineTime();
+	}
 	// Map intros can undo the initial freeze (see competitive readyup.sp).
 	if (g_countdownTimer != null && IsClientInGame(client) && GetClientTeam(client) == TEAM_SURVIVORS)
 		if (g_readyPhase) SetReadyFrozen(client, true);
@@ -376,6 +398,7 @@ public void OnPlayerRunCmdPost(int client)
 public Action EventPlayerTeam(Event event, const char[] name, bool dontBroadcast)
 {
 	int client = GetClientOfUserId(event.GetInt("userid"));
+	if (client > 0 && !IsFakeClient(client)) g_panelButtonTime[client] = GetEngineTime();
 	if (client > 0 && IsClientInGame(client) && event.GetInt("team") != TEAM_SURVIVORS) SetReadyFrozen(client, false);
 	bool participantChanged = event.GetInt("team") == TEAM_SURVIVORS || event.GetInt("oldteam") == TEAM_SURVIVORS;
 	if (client > 0 && !IsFakeClient(client) && g_readyPhase && participantChanged)
@@ -603,6 +626,7 @@ void BeginPause(bool adminPause)
 	CancelTimer(g_pauseDelayTimer);
 	CancelTimer(g_deferredPauseTimer);
 	CancelTimer(g_countdownTimer);
+	CancelTimer(g_panelTimer);
 	g_isPaused = true;
 	g_forceStarted = false;
 	g_countdownRemaining = 0;
@@ -614,16 +638,18 @@ void BeginPause(bool adminPause)
 		g_playerReady[client] = false;
 		g_panelHidden[client] = false;
 	}
+	// pause.sp starts the refresh timer before issuing the engine pause.
+	// Let that refresh send the first panel after the pause command completes.
+	g_panelTimer = CreateTimer(1.0, TimerRefreshPanel, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 	if (!SetEnginePaused(true))
 	{
+		CancelTimer(g_panelTimer);
 		g_isPaused = false;
 		g_adminPause = false;
 		g_pendingAdminPause = false;
 		return;
 	}
 	PrintToChatAll("%t", adminPause ? "PauseAdmin" : "PauseStarted");
-	RenderPanel();
-	g_panelTimer = CreateTimer(1.0, TimerRefreshPanel, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 	InvokeForward(g_forwardPause);
 }
 
@@ -704,6 +730,7 @@ void EndPause()
 	if (!g_isPaused) return;
 	CancelTimer(g_countdownTimer);
 	CancelTimer(g_panelTimer);
+	CancelTimer(g_readyPanelCommandTimer);
 	bool changed = SetEnginePaused(false);
 	g_isPaused = false;
 	g_adminPause = false;
@@ -801,114 +828,9 @@ public Action TimerRefreshPanel(Handle timer)
 
 void RenderPanel()
 {
-	if (!g_isPaused && !(g_readyPhase && g_readyEnabled.BoolValue)) return;
-	for (int target = 1; target <= MaxClients; target++)
-	{
-		if (!CanShowPanel(target)) continue;
-		Panel panel = new Panel();
-		char line[192];
-		FormatEx(line, sizeof(line), "%T", g_isPaused ? (g_adminPause ? "PauseAdminTitle" : "PauseTitle") : "ReadyTitle", target);
-		panel.SetTitle(line);
-		DrawPanelHeader(panel, target);
-		if (g_isPaused)
-		{
-			FormatEx(line, sizeof(line), "%T", "PauseInitiator", target, g_pauseInitiator);
-			panel.DrawText(line);
-		}
-		if (g_countdownTimer != null)
-			FormatEx(line, sizeof(line), "%T", g_isPaused ? "PauseCountdown" : "RoundCountdown", target, g_countdownRemaining);
-		else if (g_readyPhase && !AllClientsLoaded()) FormatEx(line, sizeof(line), "%T", "ReadyLoading", target);
-		else FormatEx(line, sizeof(line), "%T", g_adminPause ? "PauseAdminTakeover" : "ReadyWaiting", target);
-		panel.DrawText(line);
-		panel.DrawText(" ");
-		FormatEx(line, sizeof(line), "%T", "PanelSurvivors", target);
-		panel.DrawText(line);
-		for (int client = 1; client <= MaxClients; client++)
-		{
-			if (!IsHumanSurvivor(client)) continue;
-			FormatEx(line, sizeof(line), "%T", g_playerReady[client] ? "PausePlayerReady" : "PausePlayerUnready", target, client);
-			panel.DrawText(line);
-		}
-		if (g_readyPhase) DrawLoadingPlayers(panel, target);
-		char spectators[192], playerName[MAX_NAME_LENGTH];
-		for (int client = 1; client <= MaxClients; client++)
-		{
-			if (!IsClientInGame(client) || IsFakeClient(client) || GetClientTeam(client) != TEAM_SPECTATORS) continue;
-			GetClientName(client, playerName, sizeof(playerName));
-			if (spectators[0]) StrCat(spectators, sizeof(spectators), ", ");
-			StrCat(spectators, sizeof(spectators), playerName);
-		}
-		if (spectators[0])
-		{
-			panel.DrawText(" ");
-			FormatEx(line, sizeof(line), "%T", "PanelSpectators", target, spectators);
-			panel.DrawText(line);
-		}
-		if (g_readyPhase)
-			for (int i = 0; i < g_footer.Length; i++)
-			{
-				g_footer.GetString(i, line, sizeof(line));
-				panel.DrawText(line);
-			}
-		panel.Send(target, PanelHandler, 1);
-		delete panel;
-	}
+	if (g_isPaused) UpdatePausePanel();
+	else if (g_readyPhase && g_readyEnabled.BoolValue) UpdateReadyPanel();
 }
-
-void DrawLoadingPlayers(Panel panel, int target)
-{
-	char line[192], playerName[MAX_NAME_LENGTH];
-	for (int client = 1; client <= MaxClients; client++)
-	{
-		if (!IsClientConnected(client) || IsClientInGame(client) || IsFakeClient(client) || IsClientInKickQueue(client)) continue;
-		GetClientName(client, playerName, sizeof(playerName));
-		FormatEx(line, sizeof(line), "%T", "PanelLoadingPlayer", target, playerName);
-		panel.DrawText(line);
-	}
-	if (GetFeatureStatus(FeatureType_Native, "Coop_GetWaitingSurvivor") != FeatureStatus_Available) return;
-	int remaining;
-	for (int i = 0; Coop_GetWaitingSurvivor(i, playerName, sizeof(playerName), remaining); i++)
-	{
-		FormatEx(line, sizeof(line), "%T", "PanelReservedPlayer", target, playerName, remaining);
-		panel.DrawText(line);
-	}
-}
-// Keep the readyup/panel.inc presentation: server, elapsed time, rotating
-// command hints and checkboxes. Yield to other menus rather than replacing them.
-bool CanShowPanel(int client)
-{
-	if (!IsClientInGame(client) || IsFakeClient(client) || g_panelHidden[client]) return false;
-	if (BuiltinVote_IsVoteInProgress() && IsClientInBuiltinVotePool(client)) return false;
-	if (Game_IsVoteInProgress())
-	{
-		int team = Game_GetVoteTeam();
-		if (team == -1 || team == GetClientTeam(client)) return false;
-	}
-	MenuSource source = GetClientMenu(client);
-	return source != MenuSource_Normal && source != MenuSource_External;
-}
-
-void DrawPanelHeader(Panel panel, int target)
-{
-	char line[192];
-	FindConVar("hostname").GetString(line, sizeof(line));
-	panel.DrawText(line);
-	int elapsed = RoundToFloor(GetEngineTime() - g_panelStarted);
-	FormatEx(line, sizeof(line), "%02d:%02d", elapsed / 60, elapsed % 60);
-	panel.DrawText(line);
-	panel.DrawText(" ");
-	static const char commands[][] = {
-		"PanelReadyHelp",
-		"PanelShowHelp",
-		"PanelVoteHelp",
-		"PanelJoinHelp"
-	};
-	FormatEx(line, sizeof(line), "%T", commands[(elapsed / 4) % sizeof(commands)], target);
-	panel.DrawText(line);
-	panel.DrawText(" ");
-}
-
-public int PanelHandler(Menu menu, MenuAction action, int param1, int param2) { return 0; }
 
 bool SetEnginePaused(bool pause)
 {
@@ -941,6 +863,7 @@ public Action BlockEngineUnpause(int client, const char[] command, int argc)
 
 public Action ForwardSay(int client, const char[] command, int argc)
 {
+	if (client > 0) g_panelButtonTime[client] = GetEngineTime();
 	if (!g_isPaused || client <= 0) return Plugin_Continue;
 	char message[256];
 	GetCmdArgString(message, sizeof(message));
@@ -952,6 +875,7 @@ public Action ForwardSay(int client, const char[] command, int argc)
 
 public Action ForwardTeamSay(int client, const char[] command, int argc)
 {
+	if (client > 0) g_panelButtonTime[client] = GetEngineTime();
 	if (!g_isPaused || client <= 0) return Plugin_Continue;
 	char message[256];
 	GetCmdArgString(message, sizeof(message));
@@ -997,6 +921,7 @@ void ResetPauseState(bool unpause)
 	CancelTimer(g_deferredPauseTimer);
 	CancelTimer(g_countdownTimer);
 	CancelTimer(g_panelTimer);
+	CancelTimer(g_readyPanelCommandTimer);
 	g_isPaused = false;
 	g_adminPause = false;
 	g_pendingAdminPause = false;
