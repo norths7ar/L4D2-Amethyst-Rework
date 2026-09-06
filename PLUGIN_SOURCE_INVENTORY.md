@@ -23,7 +23,6 @@
 | `AI_HardSI.smx` | 有源码但未复现 | 本仓库维护源码，但当前二进制的构建关系尚未锁定。 |
 | `optional/astmod/jointeam.smx` | 有源码但未复现 | AstMod Legacy 保留源码与原二进制，当前构建关系尚未锁定。 |
 | `versus_coop_mode.smx` | 有源码但未复现 | 本仓库维护源码，但当前二进制的构建关系尚未锁定。 |
-| `confoglcompmod.smx` | 源码重复，来源未确认 | 存在主源码与 archive 副本。 |
 | `l4d_boss_percent.smx` | 源码重复，来源未确认 | 本仓库源码与 AstMod 快照均为候选。 |
 | `pause.smx` | 源码重复，来源未确认 | 本仓库源码与 AstMod 快照均为候选。 |
 | `survivor_mvp.smx` | 源码重复，来源未确认 | 本仓库源码与 AstMod 快照均为候选。 |
