@@ -20,9 +20,7 @@ addons/sourcemod/configs/matchmodes.txt
 
 `astmod` 复用同一条骨架，但它以兼容为主，不主动更新；`astredux` 是当前 Coop/PVE 主线，以 `cfg/cfgogl/astredux/`、`astredux` mutation、模式身份入口和 `addons/sourcemod/configs/astredux_profiles.cfg` 组成规则层。AstRedux 的 generic profile controller 通过 `profile_controller_config` 指向 `configs/astredux_profiles.cfg`。AstMod 与 AstRedux（以及暂停的 AstFlex）共享的 Stripper 资产权威目录是 `cfg/stripper/astredux/`。
 
-服务器无 matchmode 启动时，`cfg/server.cfg` 让 Confogl 在首个客户端进入时自动加载 `public_coop`；空服期间不会自动卸载它。任何加载 `campaign_switcher` 的模式在空服等待后，都会选择一张官方首图，并通过 `campaign_empty_matchmode`（当前为 `public_coop`）切换到该模式再换图。管理员仍可用 `sm_forcechangematch <mode> [map]` 手动切换。
-
-`public_coop` 是普通 Coop 纯净战役：只加载基础管理、依赖、崩溃/过场保护和换图管理，不改变门速、重力等玩法参数，也不加载玩法插件、Stripper、VScript、profile、玩家队伍管理、准备/暂停流程或 match_vote。
+服务器无 matchmode 启动时，`cfg/server.cfg` 让 Confogl 在首个真人客户端完成连接后的下一帧自动加载 `astredux`；该模式通过 `confogl_match_unload_when_empty 0` 保持空服期间的加载状态。任何加载 `campaign_switcher` 的模式在空服等待后，都会选择一张官方首图，并通过 `campaign_empty_matchmode`（当前为 `astredux`）切换到该模式再换图。管理员仍可用 `sm_forcechangematch <mode> [map]` 手动切换。
 
 ## 各层只回答一个问题
 
