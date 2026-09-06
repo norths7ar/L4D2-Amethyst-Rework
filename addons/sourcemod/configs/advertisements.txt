@@ -24,7 +24,7 @@
 	}
 	"2"
 	{
-		"chat"		"{green}AstMod{lightgreen} 的一代图部分长按机关会按人数档缩短；进度条没坏，大家也别急着催。"
+		"chat"		"{lightgreen} 一代图部分长按机关会按人数档缩短；进度条没坏，大家也别急着催。"
 	}
 	"3"
 	{
@@ -38,10 +38,10 @@
 	{
 		"chat"		"{lightgreen}默认难度不一定适合所有人；输入 {olive}!si{lightgreen}，按自己的手感调。"
 	}
-	"5"
-	{
-		"chat"		"{olive}[赞助]{lightgreen} 服务器续费全靠爱发电；愿意搭把手的话，服主会很开心。"
-	}
+	//"5"
+	//{
+	//	"chat"		"{olive}[赞助]{lightgreen} 服务器续费全靠爱发电；愿意搭把手的话，服主会很开心。"
+	//}
 	"6"
 	{
 		"chat"		"{green}[反馈]{lightgreen} 遇到 BUG 请联系服主，并尽量提供地图、模式和发生时间。"

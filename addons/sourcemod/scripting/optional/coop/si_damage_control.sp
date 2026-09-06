@@ -270,7 +270,7 @@ public Action Event_PlayerHurt(Event event, const char[] name, bool dontBroadcas
 	{
 		int remainingHealth = GetClientHealth(attacker);
 		ForcePlayerSuicide(attacker);
-		CPrintToChatAll("[{olive}Ast{default}] {red}%N{default}({green}%s{default}) %t", attacker, g_sSINames[zombieClass], "DamageSummary", remainingHealth, g_fDamagePrint);
+		CPrintToChatAll("[{olive}Ast{default}] {red}%s{default} %t", g_sSINames[zombieClass], "DamageSummary", remainingHealth, g_fDamagePrint);
 		if (g_cvFastGetupEnable.BoolValue && (zombieClass == ZC_HUNTER || zombieClass == ZC_CHARGER))
 		{
 			CancelGetupLater(victim);

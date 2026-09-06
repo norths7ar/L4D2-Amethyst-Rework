@@ -32,14 +32,14 @@
 	}
 	"BotSetupFailed"
 	{
-	    "en" "Coop survivor bot setup failed."
+	    "en" "Bot setup failed."
 	}
 	"BotPlaceholder"
 	{
-	    "en" "Coop survivor placeholder removed."
+	    "en" "Survivor placeholder removed."
 	}
 	"BotCleanup"
 	{
-	    "en" "Coop survivor bot cleanup."
+	    "en" "Bot cleanup."
 	}
 }
