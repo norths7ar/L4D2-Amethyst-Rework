@@ -711,6 +711,7 @@ public Action Command_NextMap(int client, int args)
 	}
 
 	ShowNextMapMenu(client);
+	AnnounceNextMapVoteStatus(client);
 	return Plugin_Handled;
 }
 
@@ -724,21 +725,12 @@ void ShowNextMapMenu(int client, int firstItem = 0)
 	int votesCast;
 	int highestVotes;
 	int tiedMaps;
-	int leader = BuildNextMapVoteStats(counts, votesCast, highestVotes, tiedMaps);
+	BuildNextMapVoteStats(counts, votesCast, highestVotes, tiedMaps);
 	int eligible = CountEligibleHumans();
 
 	Menu menu = new Menu(NextMapMenuHandler);
 	char title[256];
-	if (leader == -1)
-		FormatEx(title, sizeof(title), "%T", "NextMapMenuNoVotes", client, votesCast, eligible);
-	else if (tiedMaps > 1)
-		FormatEx(title, sizeof(title), "%T", "NextMapMenuTied", client, votesCast, eligible, tiedMaps, highestVotes);
-	else
-	{
-		char leaderName[MAX_MAP_NAME];
-		g_mapDisplayNames.GetString(leader, leaderName, sizeof(leaderName));
-		FormatEx(title, sizeof(title), "%T", "NextMapMenuLeader", client, votesCast, eligible, leaderName, highestVotes);
-	}
+	FormatEx(title, sizeof(title), "%T", "NextMapMenuTitle", client, votesCast, eligible);
 	menu.SetTitle(title);
 
 	char firstChapter[MAX_MAP_NAME];
@@ -778,10 +770,14 @@ public int NextMapMenuHandler(Menu menu, MenuAction action, int client, int item
 			return 0;
 		}
 
-		strcopy(g_nextMapVote[client], sizeof(g_nextMapVote[]), firstChapter);
-		char displayName[MAX_MAP_NAME];
-		g_mapDisplayNames.GetString(mapIndex, displayName, sizeof(displayName));
-		PrintToChatAll("\x04[%t] \x01%t", "NextMapTag", "NextMapSelected", client, displayName);
+		if (!StrEqual(g_nextMapVote[client], firstChapter, false))
+		{
+			strcopy(g_nextMapVote[client], sizeof(g_nextMapVote[]), firstChapter);
+			char displayName[MAX_MAP_NAME];
+			g_mapDisplayNames.GetString(mapIndex, displayName, sizeof(displayName));
+			PrintToChatAll("\x04[%t] \x01%t", "NextMapTag", "NextMapSelected", client, displayName);
+			AnnounceNextMapVoteStatus();
+		}
 
 		DataPack pack;
 		CreateDataTimer(0.1, Timer_RedisplayNextMap, pack, TIMER_FLAG_NO_MAPCHANGE);
@@ -851,6 +847,7 @@ public Action Timer_ShowFinaleMenus(Handle timer)
 {
 	if (!IsMissionFinalMap())
 		return Plugin_Stop;
+	AnnounceNextMapVoteStatus();
 
 	for (int client = 1; client <= MaxClients; client++)
 	{
@@ -865,7 +862,10 @@ public Action Timer_ShowFinaleMenuToClient(Handle timer, int userId)
 {
 	int client = GetClientOfUserId(userId);
 	if (client > 0 && IsMissionFinalMap() && !g_nextMapMenuShown[client])
+	{
 		ShowNextMapMenu(client);
+		AnnounceNextMapVoteStatus(client);
+	}
 	return Plugin_Stop;
 }
 
@@ -892,6 +892,7 @@ public Action Event_FinaleWin(Event event, const char[] name, bool dontBroadcast
 	int highestVotes;
 	int tiedMaps;
 	BuildNextMapVoteStats(counts, votesCast, highestVotes, tiedMaps);
+	if (votesCast == 0 || tiedMaps > 1) AnnounceNextMapVoteStatus();
 	if (votesCast > 0)
 		PrintToChatAll("\x04[%t] \x01%t", "NextMapTag", "NextMapVoteResult", displayName);
 	else
@@ -932,6 +933,13 @@ int SelectRandomOfficialMap()
 {
 	int mapCount = g_mapMissions.Length;
 	int[] candidates = new int[mapCount];
+	int candidateCount = CollectOfficialCandidates(candidates);
+	return candidateCount ? candidates[GetRandomInt(0, candidateCount - 1)] : -1;
+}
+
+int CollectOfficialCandidates(int[] candidates)
+{
+	int mapCount = g_mapMissions.Length;
 	int candidateCount;
 	MissionSymbol current = CurrentMission;
 
@@ -951,7 +959,59 @@ int SelectRandomOfficialMap()
 		}
 	}
 
-	return candidateCount ? candidates[GetRandomInt(0, candidateCount - 1)] : -1;
+	return candidateCount;
+}
+
+void AnnounceNextMapVoteStatus(int target = 0)
+{
+	// Explicit menu opens and late joins get their own snapshot, without
+	// rebroadcasting history to everyone or on every menu redisplay.
+	if (!target)
+	{
+		for (int client = 1; client <= MaxClients; client++)
+			if (IsClientInGame(client) && !IsFakeClient(client)) AnnounceNextMapVoteStatus(client);
+		return;
+	}
+	int mapCount = g_mapMissions.Length;
+	if (!mapCount) return;
+	int[] counts = new int[mapCount];
+	int votesCast, highestVotes, tiedMaps;
+	int leader = BuildNextMapVoteStats(counts, votesCast, highestVotes, tiedMaps);
+	if (leader != -1 && tiedMaps == 1)
+	{
+		char displayName[MAX_MAP_NAME];
+		g_mapDisplayNames.GetString(leader, displayName, sizeof(displayName));
+		PrintToChat(target, "\x04[%t] \x01%t", "NextMapTag", "NextMapLeader", displayName, highestVotes, votesCast, CountEligibleHumans());
+		return;
+	}
+
+	int[] candidates = new int[mapCount];
+	int candidateCount;
+	if (leader == -1)
+	{
+		PrintToChat(target, "\x04[%t] \x01%t", "NextMapTag", "NextMapNoVotes");
+		candidateCount = CollectOfficialCandidates(candidates);
+	}
+	else
+	{
+		PrintToChat(target, "\x04[%t] \x01%t", "NextMapTag", "NextMapTied", tiedMaps, highestVotes, votesCast, CountEligibleHumans());
+		for (int i = 0; i < mapCount; i++)
+			if (counts[i] == highestVotes) candidates[candidateCount++] = i;
+	}
+	// Split by byte length so long or Chinese map names fit Source chat messages.
+	char names[192], displayName[MAX_MAP_NAME];
+	for (int i = 0; i < candidateCount; i++)
+	{
+		g_mapDisplayNames.GetString(candidates[i], displayName, sizeof(displayName));
+		if (names[0] && strlen(names) + strlen(displayName) + 3 > 140)
+		{
+			PrintToChat(target, "\x04[%t] \x01%t", "NextMapTag", "NextMapCandidates", names);
+			names[0] = '\0';
+		}
+		if (names[0]) StrCat(names, sizeof(names), " / ");
+		StrCat(names, sizeof(names), displayName);
+	}
+	if (names[0]) PrintToChat(target, "\x04[%t] \x01%t", "NextMapTag", "NextMapCandidates", names);
 }
 
 void ScheduleMapChange(const char[] mapName, const char[] displayName, float delay)

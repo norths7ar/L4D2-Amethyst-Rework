@@ -11,58 +11,58 @@
     "NextMapTag"
     {
         /* Context: Chat prefix for the finale ballot that selects the campaign loaded after the current finale. */
-        "en" "Next Map"
+        "en" "Next map"
     }
     "RegistryReloaded"
     {
         "#format" "{1:d}"
-        "en" "Loaded {1} Maps."
+        "en" "Loaded {1} maps."
     }
     "RegistryEmpty"
     {
-        "en" "No Maps are available. Check Mission Cache and missioncycle.txt."
+        "en" "No maps are available. Check Mission Cache and missioncycle.txt."
     }
     "ChapterDisplay"
     {
-        /* Context: A Map is a complete campaign/mission; a Chapter is one BSP within it. */
+        /* Context: A map is a complete campaign/mission; a chapter is one BSP within it. */
         "#format" "{1:d},{2:s}"
         "en" "Chapter {1} - {2}"
     }
     "NoMapsForVote"
     {
-        "en" "No Maps are currently available for voting."
+        "en" "No maps are currently available for voting."
     }
     "ImmediateMapMenuTitle"
     {
         /* Context: Selecting an item starts a vote to change immediately, rather than choosing the post-finale Map. */
         "#format" "{1:d}"
-        "en" "Vote to change Map now\n{1} Maps available"
+        "en" "Vote to change map now\n{1} maps available"
     }
     "MapNoLongerAvailable"
     {
-        "en" "That Map is no longer available. Please reopen the menu."
+        "en" "That map is no longer available. Please reopen the menu."
     }
     "CurrentMapUnknown"
     {
-        "en" "The current Map could not be identified."
+        "en" "The current map could not be identified."
     }
     "NoChaptersAvailable"
     {
-        "en" "The current Map has no available Chapters."
+        "en" "The current map has no available Chapters."
     }
     "ChapterMenuTitle"
     {
-        /* Context: Selecting a Chapter starts an immediate live vote to change to that BSP. */
+        /* Context: Selecting a chapter starts an immediate live vote to change to that BSP. */
         "#format" "{1:s}"
-        "en" "{1}\nSelect a Chapter to start a vote"
+        "en" "{1}\nSelect a chapter to start a vote"
     }
     "NoValidChapters"
     {
-        "en" "The current Map has no valid Chapters."
+        "en" "The current map has no valid Chapters."
     }
     "ChapterNoLongerAvailable"
     {
-        "en" "That Chapter is no longer available."
+        "en" "That chapter is no longer available."
     }
     "VoteStartFailed"
     {
@@ -80,22 +80,31 @@
     "FinaleOnly"
     {
         /* Context: !nextmap records the campaign to load after a successful finale; it is unavailable on non-finale Chapters. */
-        "en" "The next Map can only be selected during a finale Chapter."
+        "en" "The next map can only be selected during a finale Chapter."
     }
-    "NextMapMenuNoVotes"
+    "NextMapMenuTitle"
     {
         "#format" "{1:d},{2:d}"
-        "en" "Select the next Map ({1}/{2} voted)\nNo votes yet"
+        "en" "Select the next map ({1}/{2} voted)"
     }
-    "NextMapMenuTied"
+    "NextMapNoVotes"
+    {
+        "en" "No votes yet. An official map will be selected at random."
+    }
+    "NextMapTied"
     {
         "#format" "{1:d},{2:d},{3:d},{4:d}"
-        "en" "Select the next Map ({1}/{2} voted)\n{3} Maps tied at {4} votes"
+        "en" "{1} maps tied at {2} votes ({3}/{4} voted); a tie will be resolved at random."
     }
-    "NextMapMenuLeader"
+    "NextMapLeader"
     {
-        "#format" "{1:d},{2:d},{3:s},{4:d}"
-        "en" "Select the next Map ({1}/{2} voted)\nLeader: {3} [{4} votes]"
+        "#format" "{1:s},{2:d},{3:d},{4:d}"
+        "en" "Leader: {1} [{2} votes] ({3}/{4} voted)."
+    }
+    "NextMapCandidates"
+    {
+        "#format" "{1:s}"
+        "en" "Random selection pool: {1}"
     }
     "NextMapItemSelected"
     {
@@ -109,7 +118,7 @@
     }
     "NextMapNoLongerAvailable"
     {
-        "en" "That Map is no longer available."
+        "en" "That map is no longer available."
     }
     "NextMapSelected"
     {
@@ -125,11 +134,11 @@
     {
         /* Context: When nobody votes during the finale, the plugin picks an official campaign from the allow-list. */
         "#format" "{1:s}"
-        "en" "No votes were cast. Random official Map: {1}."
+        "en" "No votes were cast. Random official map: {1}."
     }
     "ChangeTargetUnavailable"
     {
-        "en" "Map change failed because the target Chapter is no longer available."
+        "en" "Map change failed because the target chapter is no longer available."
     }
     "ChangingMap"
     {

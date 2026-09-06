@@ -82,20 +82,29 @@
         /* Context: !nextmap records the campaign to load after a successful finale; it is unavailable on non-finale Chapters. */
         "chi" "只能在救援关选择下一张地图。"
     }
-    "NextMapMenuNoVotes"
+    "NextMapMenuTitle"
     {
         "#format" "{1:d},{2:d}"
-        "chi" "选择下一张地图（已投 {1}/{2}）\n尚无人投票"
+        "chi" "选择下一张地图（已投 {1}/{2}）"
     }
-    "NextMapMenuTied"
+    "NextMapNoVotes"
+    {
+        "chi" "尚无人投票，将从官图中随机选择。"
+    }
+    "NextMapTied"
     {
         "#format" "{1:d},{2:d},{3:d},{4:d}"
-        "chi" "选择下一张地图（已投 {1}/{2}）\n{3} 张地图以 {4} 票并列领先"
+        "chi" "{1} 张地图以 {2} 票并列领先（已投 {3}/{4}），平票时随机选择。"
     }
-    "NextMapMenuLeader"
+    "NextMapLeader"
     {
-        "#format" "{1:d},{2:d},{3:s},{4:d}"
-        "chi" "选择下一张地图（已投 {1}/{2}）\n领先：{3} [{4} 票]"
+        "#format" "{1:s},{2:d},{3:d},{4:d}"
+        "chi" "当前领先：{1} [{2} 票]（已投 {3}/{4}）。"
+    }
+    "NextMapCandidates"
+    {
+        "#format" "{1:s}"
+        "chi" "随机候选：{1}"
     }
     "NextMapItemSelected"
     {
