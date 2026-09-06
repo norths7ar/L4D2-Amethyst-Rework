@@ -34,6 +34,7 @@ int g_iSpawnedSICount;
 int g_iAliveSICount;
 bool g_bHasFirstDeath;
 bool g_bWaveSettingsPending;
+bool g_bMapReady;
 float g_fFirstDeathTime;
 float g_fBonusSpawnTime;
 
@@ -96,13 +97,19 @@ public void OnPluginStart()
 
 public void OnConfigsExecuted()
 {
+    g_bMapReady = true;
     RefreshEffectiveWave();
-    ApplyDirectorSettings();
-    g_bWaveSettingsPending = false;
+    g_bWaveSettingsPending = true;
+    // round_start can precede SourceMod's map-ready boundary. Initialize here
+    // as well so the first round and late plugin loads do not miss their reset.
+    ResetWaveNow();
 }
+
+public void OnMapStart() { g_bMapReady = false; }
 
 public void OnMapEnd()
 {
+    g_bMapReady = false;
     g_hWaveTimer = null;
     g_hVote = INVALID_HANDLE;
     g_iVoteInitiator = 0;
@@ -141,7 +148,8 @@ public void Event_RoundBoundary(Event event, const char[] name, bool dontBroadca
     g_iAliveSICount = 0;
     RefreshEffectiveWave();
     ResetWaveState();
-    ResetWaveNow();
+    // round_end may run during map teardown; only a new round needs a wave.
+    if (StrEqual(name, "round_start")) ResetWaveNow();
 }
 
 public void Event_TankSpawn(Event event, const char[] name, bool dontBroadcast)
@@ -239,7 +247,7 @@ void ResetWaveNow()
     g_iSpawnedSICount = g_iAliveSICount;
     g_bHasFirstDeath = false;
 
-    if (!IsServerProcessing() || FindEntityByClassname(-1, "worldspawn") == -1)
+    if (!g_bMapReady)
     {
         return;
     }
@@ -247,8 +255,7 @@ void ResetWaveNow()
     if (g_bWaveSettingsPending)
     {
         RefreshEffectiveWave();
-        ApplyDirectorSettings();
-        g_bWaveSettingsPending = false;
+        g_bWaveSettingsPending = !ApplyDirectorSettings();
     }
 
     int entity = CreateEntityByName("logic_script");
@@ -457,12 +464,19 @@ void RefreshEffectiveWave()
     g_iWaveSize = g_cvSize.IntValue;
 }
 
-void ApplyDirectorSettings()
+bool ApplyDirectorSettings()
 {
+    // A late load can receive OnConfigsExecuted before Confogl assigns the
+    // mode's script filename. Keep this request pending until it is configured.
+    char filename[PLATFORM_MAX_PATH];
+    FindConVar("sm_vscript_filename").GetString(filename, sizeof(filename));
+    if (!filename[0]) return false;
     if (!VScript_Reload())
     {
         LogError("[Wave] Could not apply Director settings through script_reloader.");
+        return false;
     }
+    return true;
 }
 
 void ResetWaveState()

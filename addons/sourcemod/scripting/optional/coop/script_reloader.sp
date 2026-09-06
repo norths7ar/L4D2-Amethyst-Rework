@@ -6,6 +6,7 @@
 
 ConVar g_cvFilename;
 GlobalForward g_fwdReloaded;
+bool g_mapActive;
 
 public Plugin myinfo =
 {
@@ -36,6 +37,9 @@ public void OnPluginEnd()
 {
     delete g_fwdReloaded;
 }
+
+public void OnMapStart() { g_mapActive = true; }
+public void OnMapEnd() { g_mapActive = false; }
 
 public any Native_Reload(Handle plugin, int numParams)
 {
@@ -89,7 +93,8 @@ void ResolveFilename(char[] filename, int maxLength)
 bool ReloadScript(const char[] filename)
 {
     bool success;
-    int entity = CreateEntityByName("logic_script");
+    // Map teardown can still deliver callbacks, but entity creation is illegal.
+    int entity = g_mapActive && filename[0] ? CreateEntityByName("logic_script") : -1;
     if (entity != -1)
     {
         DispatchSpawn(entity);
