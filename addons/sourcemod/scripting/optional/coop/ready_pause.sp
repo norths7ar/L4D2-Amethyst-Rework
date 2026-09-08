@@ -459,8 +459,8 @@ void StartCountdown()
 	if (g_readyPhase)
 	{
 		InvokeForward(g_forwardCountdownPre);
-		for (int client = 1; client <= MaxClients; client++)
-			if (IsClientInGame(client) && GetClientTeam(client) == TEAM_SURVIVORS && IsPlayerAlive(client)) ReturnToSaferoom(client);
+		// Coop starts where survivors readied up; returning is only needed
+		// for pre-live boundary enforcement or an explicit !return request.
 		SetSurvivorsFrozen(true);
 		InvokeForward(g_forwardCountdown);
 	}
