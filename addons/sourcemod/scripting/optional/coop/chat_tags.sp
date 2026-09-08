@@ -111,8 +111,8 @@ public Action CP_OnChatMessage(int &author, ArrayList recipients, char[] flagstr
 
     // Chat Processor has already selected recipients and preserves its native
     // team/dead/mute behavior. Only change its author-name field.
-    Format(name, MAXLENGTH_NAME, "{green}[%s] {teamcolor}%s", tag, name);
-    processcolors = true;
+    Format(name, MAXLENGTH_NAME, "[%s] %s", tag, name);
+    processcolors = false;
     return Plugin_Changed;
 }
 void GetEffectiveTag(int client, char[] tag, int maxlength)

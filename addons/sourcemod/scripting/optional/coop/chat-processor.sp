@@ -183,8 +183,11 @@ public Action OnSayText2(UserMsg msg_id, BfRead msg, const int[] players, int pl
 	//Retrieve the client sending the message to other clients.
 	int author = g_Proto ? PbReadInt(msg, "ent_idx") : BfReadByte(msg);
 
-	if (author <= 0)
+	if (author <= 0 || author > MaxClients || !IsClientInGame(author))
 		return Plugin_Continue;
+
+	// Bitbuffer SayText2 includes a chat byte before its localization token.
+	int chat = g_Proto ? 1 : BfReadByte(msg);
 
 	//Retrieve the name of template name to use when getting the format.
 	char sFlag[MAXLENGTH_FLAG];
@@ -193,6 +196,10 @@ public Action OnSayText2(UserMsg msg_id, BfRead msg, const int[] players, int pl
 		case true: PbReadString(msg, "msg_name", sFlag, sizeof(sFlag));
 		case false: BfReadString(msg, sFlag, sizeof(sFlag));
 	}
+
+	// Leave plugin notifications and non-chat messages untouched.
+	if (game == Engine_Left4Dead2 && StrContains(sFlag, "L4D_Chat_") != 0)
+		return Plugin_Continue;
 
 	//Trim the flag so there's no potential issues with retrieving the specified format rules.
 	TrimString(sFlag);
@@ -226,6 +233,11 @@ public Action OnSayText2(UserMsg msg_id, BfRead msg, const int[] players, int pl
 		case true: PbReadString(msg, "params", sMessage, sizeof(sMessage), 1);
 		case false: if (BfGetNumBytesLeft(msg)) BfReadString(msg, sMessage, sizeof(sMessage));
 	}
+
+	// Keep the remaining native localization parameters for L4D2 passthrough.
+	char extra1[MAXLENGTH_MESSAGE], extra2[MAXLENGTH_MESSAGE];
+	if (!g_Proto && BfGetNumBytesLeft(msg)) BfReadString(msg, extra1, sizeof(extra1));
+	if (!g_Proto && BfGetNumBytesLeft(msg)) BfReadString(msg, extra2, sizeof(extra2));
 
 	//Clients have the ability to color their chat if they manually type in color tags, this allows server operators to choose if they want their players the ability to do so.
 	//Example: {red}This {white}is {green}a {blue}random {yellow}message.
@@ -320,6 +332,29 @@ public Action OnSayText2(UserMsg msg_id, BfRead msg, const int[] players, int pl
 		return Plugin_Continue;
 	}
 
+		// Plain L4D2 prefixes retain the engine's localization template, colors,
+	// punctuation and recipient list instead of rebuilding a colored chat line.
+	if (game == Engine_Left4Dead2 && !g_Proto && (iResults == Plugin_Continue || !bProcessColors))
+	{
+		if (iResults == Plugin_Stop || iResults == Plugin_Handled)
+		{
+			delete recipients;
+			return Plugin_Stop;
+		}
+		DataPack nativeMessage = new DataPack();
+		nativeMessage.WriteCell(GetClientUserId(author));
+		nativeMessage.WriteCell(recipients);
+		nativeMessage.WriteCell(chat);
+		nativeMessage.WriteCell(reliable);
+		nativeMessage.WriteString(sFlag);
+		nativeMessage.WriteString(sName);
+		nativeMessage.WriteString(sMessage);
+		nativeMessage.WriteString(extra1);
+		nativeMessage.WriteString(extra2);
+		RequestFrame(Frame_NativeChat, nativeMessage);
+		return Plugin_Stop;
+	}
+
 	//Check if our flag has changed and if it has, updating our formatting rules.
 	if (!StrEqual(sFlag, sFlagCopy))
 	{
@@ -353,6 +388,41 @@ public Action OnSayText2(UserMsg msg_id, BfRead msg, const int[] players, int pl
 	RequestFrame(Frame_OnChatMessage, pack);
 
 	return Plugin_Stop;
+}
+
+public void Frame_NativeChat(DataPack pack)
+{
+	pack.Reset();
+	int author = GetClientOfUserId(pack.ReadCell());
+	ArrayList recipients = pack.ReadCell();
+	int chat = pack.ReadCell();
+	bool reliable = pack.ReadCell();
+	char flag[MAXLENGTH_FLAG], name[MAXLENGTH_NAME], message[MAXLENGTH_MESSAGE];
+	char extra1[MAXLENGTH_MESSAGE], extra2[MAXLENGTH_MESSAGE];
+	pack.ReadString(flag, sizeof(flag));
+	pack.ReadString(name, sizeof(name));
+	pack.ReadString(message, sizeof(message));
+	pack.ReadString(extra1, sizeof(extra1));
+	pack.ReadString(extra2, sizeof(extra2));
+	delete pack;
+	if (author > 0 && IsClientInGame(author))
+	{
+		for (int i = 0; i < recipients.Length; i++)
+		{
+			int client = GetClientOfUserId(recipients.Get(i));
+			if (client <= 0 || !IsClientInGame(client)) continue;
+			Handle output = StartMessageOne("SayText2", client, USERMSG_BLOCKHOOKS | (reliable ? USERMSG_RELIABLE : 0));
+			BfWriteByte(output, author);
+			BfWriteByte(output, chat);
+			BfWriteString(output, flag);
+			BfWriteString(output, name);
+			BfWriteString(output, message);
+			BfWriteString(output, extra1);
+			BfWriteString(output, extra2);
+			EndMessage();
+		}
+	}
+	delete recipients;
 }
 
 public void Frame_OnChatMessage(DataPack pack)
