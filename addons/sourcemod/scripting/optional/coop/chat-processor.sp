@@ -215,7 +215,9 @@ public Action OnSayText2(UserMsg msg_id, BfRead msg, const int[] players, int pl
 	//Stops double messages in-general.
 	if (g_NewMSG[author])
 		g_NewMSG[author] = false;
-	else if (reliable)	//Fix for other plugins that use SayText2 I guess?
+	// L4D2 may split one say into separate recipient deliveries, including
+	// the author's echo. Native relays already use USERMSG_BLOCKHOOKS.
+	else if (reliable && game != Engine_Left4Dead2)
 		return Plugin_Stop;
 
 	//Get the name string of the client.
