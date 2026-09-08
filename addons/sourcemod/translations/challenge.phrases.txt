@@ -3,7 +3,7 @@
     "InfoHeader"
     {
         "#format" "{1:d},{2:.1f},{3:d}"
-        "en" "Current {1}P settings: every {2:.1f} sec / {3} SI (apply next wave)"
+        "en" "{1}P: {2:.1f} sec / {3} SI"
     }
     "InfoNoOverrides"
     {

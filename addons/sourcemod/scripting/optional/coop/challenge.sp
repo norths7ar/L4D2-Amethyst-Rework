@@ -898,7 +898,7 @@ void PrintOverrideSummary(int client)
 {
 	int count = CountOverrides();
 	if (count < 0) PrintToChat(client, "\x04[Ast] \x01%t", "InfoDefaultsUnavailable");
-	else if (count == 0) PrintToChat(client, "\x04[Ast] \x01%t", "InfoNoOverrides");
+	else if (count == 0) return;
 	else PrintToChat(client, "\x04[Ast] \x01%t", "InfoOverridesSummary", count);
 }
 
