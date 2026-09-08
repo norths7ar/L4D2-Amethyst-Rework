@@ -1,0 +1,7 @@
+"Phrases"
+{
+	"ChatProcessor_DeadChatCurrentlyRestricted"
+	{
+		"en"		"Dead chat is currently restricted."
+	}
+}

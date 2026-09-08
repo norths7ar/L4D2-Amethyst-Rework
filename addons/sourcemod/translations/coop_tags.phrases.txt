@@ -1,0 +1,23 @@
+"Phrases"
+{
+    "TagMenuTitle"
+    {
+        "chi" "我的称号"
+        "en" "My tag"
+    }
+    "TagShown"
+    {
+        "chi" "[称号] 已显示当前称号。"
+        "en" "[Tag] Your current tag is visible."
+    }
+    "TagHidden"
+    {
+        "chi" "[称号] 已隐藏当前称号。"
+        "en" "[Tag] Your current tag is hidden."
+    }
+    "TagSelected"
+    {
+        "chi" "[称号] 已保存选择；未选择时普通玩家无称号，管理员显示“管理员”。"
+        "en" "[Tag] Selection saved. Players have no tag by default; admins use Administrator."
+    }
+}
