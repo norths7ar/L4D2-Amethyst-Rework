@@ -530,13 +530,67 @@ void CancelCountdown(int client, const char[] reason)
 void ReturnToSaferoom(int client)
 {
 	if (client <= 0 || !IsClientInGame(client)) return;
+	float previous[3], destination[3];
+	GetClientAbsOrigin(client, previous);
+	// Do not replace an already valid start-area position with the engine's
+	// map-dependent warp point (which may intersect custom-map geometry).
+	if (L4D_IsPositionInFirstCheckpoint(previous) && IsReturnPositionClear(client, previous)) return;
 	int flags = GetCommandFlags("warp_to_start_area");
 	SetCommandFlags("warp_to_start_area", flags & ~FCVAR_CHEAT);
 	FakeClientCommand(client, "warp_to_start_area");
 	SetCommandFlags("warp_to_start_area", flags);
+	GetClientAbsOrigin(client, destination);
+	if (!IsReturnPositionClear(client, destination))
+	{
+		bool found;
+		float candidate[3];
+		for (float lift = 4.0; lift <= 32.0; lift += 4.0)
+		{
+			candidate = destination;
+			candidate[2] += lift;
+			if (!IsReturnPositionClear(client, candidate) || !L4D_IsPositionInFirstCheckpoint(candidate)) continue;
+			destination = candidate;
+			found = true;
+			break;
+		}
+		if (!found)
+		{
+			// A valid teammate location is preferable to forcing a bad warp.
+			for (int other = 1; other <= MaxClients; other++)
+			{
+				if (other == client || !IsClientInGame(other) || GetClientTeam(other) != TEAM_SURVIVORS || !IsPlayerAlive(other)) continue;
+				GetClientAbsOrigin(other, candidate);
+				if (!L4D_IsPositionInFirstCheckpoint(candidate) || !IsReturnPositionClear(client, candidate)) continue;
+				destination = candidate;
+				found = true;
+				break;
+			}
+		}
+		if (!found)
+		{
+			destination = previous;
+			LogError("No clear saferoom return position for %N; preserving previous position", client);
+		}
+	}
 	float velocity[3];
-	TeleportEntity(client, NULL_VECTOR, NULL_VECTOR, velocity);
+	TeleportEntity(client, destination, NULL_VECTOR, velocity);
 	SetEntPropFloat(client, Prop_Send, "m_flFallVelocity", 0.0);
+}
+
+bool IsReturnPositionClear(int client, const float position[3])
+{
+	float mins[3], maxs[3];
+	GetClientMins(client, mins);
+	GetClientMaxs(client, maxs);
+	Handle trace = TR_TraceHullFilterEx(position, position, mins, maxs, MASK_PLAYERSOLID, ReturnPositionFilter);
+	bool clear = !TR_StartSolid(trace) && !TR_AllSolid(trace) && !TR_DidHit(trace);
+	delete trace;
+	return clear;
+}
+
+public bool ReturnPositionFilter(int entity, int contentsMask)
+{
+	return entity < 1 || entity > MaxClients;
 }
 
 public Action OnTakeDamageGodMode(int victim, int &attacker, int &inflictor, float &damage, int &damagetype)
