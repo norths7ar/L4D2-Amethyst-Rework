@@ -122,14 +122,14 @@ function ApplyDirectorOptions()
 function InitHUD() {
 	// Script reloads can run before scriptedmode.nuc has published the HUD slots.
 	// Director settings are still valid; defer only the HUD refresh until the mode is ready.
-	if (!("HUD_TICKER" in this)) return;
+	if (!("HUD_TICKER" in DirectorScript)) return;
 
 	// HUD setup
 	ModeHUD <- {
 		Fields = {
 			SIInfo = {
-				slot = HUD_TICKER,
-				flags = HUD_FLAG_NOBG | HUD_FLAG_ALIGN_CENTER,
+				slot = DirectorScript.HUD_TICKER,
+				flags = DirectorScript.HUD_FLAG_NOBG | DirectorScript.HUD_FLAG_ALIGN_CENTER,
 				dataval = HUDInfo.si_text,
 				name = "siInfo"
 			}
