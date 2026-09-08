@@ -1,0 +1,46 @@
+"Phrases"
+{
+    "MenuTitle"
+    {
+        "#format" "{1:d}"
+        "chi" "战役商店｜余额：{1}"
+        "en" "Campaign Shop | Balance: {1}"
+    }
+    "Disabled"
+    {
+        "chi" "[商店] 商店当前未启用。"
+        "en" "[Shop] The shop is disabled."
+    }
+    "UnavailableState"
+    {
+        "chi" "[商店] 当前状态不能购买。"
+        "en" "[Shop] You cannot buy in your current state."
+    }
+    "NotEnough"
+    {
+        "#format" "{1:d},{2:d}"
+        "chi" "[商店] 需要 {1} 分，你有 {2} 分。"
+        "en" "[Shop] This costs {1}; you have {2}."
+    }
+    "GiveFailed"
+    {
+        "chi" "[商店] 物品发放失败，未扣除积分。"
+        "en" "[Shop] Delivery failed; no points were charged."
+    }
+    "Purchased"
+    {
+        "#format" "{1:s},{2:d},{3:d}"
+        "chi" "[商店] 已购买 {1}（{2} 分），剩余 {3} 分。"
+        "en" "[Shop] Bought {1} for {2}; {3} remaining."
+    }
+    "ReloadSuccess"
+    {
+        "chi" "[商店] 配置已重载，积分与购买次数未变。"
+        "en" "[Shop] Configuration reloaded; ledgers were preserved."
+    }
+    "ReloadFailed"
+    {
+        "chi" "[商店] 配置无效，已保留旧配置。"
+        "en" "[Shop] Invalid configuration; the previous configuration was kept."
+    }
+}

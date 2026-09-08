@@ -1,0 +1,155 @@
+"CoopShop"
+{
+    // 临时试玩数值；管理员可用 sm_coopshop_reload 原子重载。奖励必须为非负整数。
+    "awards"
+    {
+        // 成功爆头/近战/狙击 skeet 使用 skeet 总奖励，不再叠加 special；skeet=0 时仍给普通特感分。
+        // tongue_cut、rock_skeet、special_clear 是独立技能事件；0 表示不奖励该事件。
+        "common" "1"
+        "special" "10"
+        "tank_team" "30"
+        "witch" "0"
+        "skeet" "10"
+        "tongue_cut" "5"
+        "rock_skeet" "10"
+        "crown" "0"
+        "special_clear" "0"
+    }
+    // base=首次价格，step=同一战役内该玩家每次购买后的涨价；禁用也保留非零数值，避免误成免费商品。
+    "products"
+    {
+        "ammo"
+        {
+            "enabled" "1"
+            "base" "75"
+            "step" "25"
+        }
+        "pills"
+        {
+            "enabled" "1"
+            "base" "150"
+            "step" "50"
+        }
+        "pump"
+        {
+            "enabled" "1"
+            "base" "150"
+            "step" "25"
+        }
+        "chrome"
+        {
+            "enabled" "1"
+            "base" "150"
+            "step" "25"
+        }
+        "smg_silenced"
+        {
+            "enabled" "1"
+            "base" "100"
+            "step" "25"
+        }
+        "smg"
+        {
+            "enabled" "1"
+            "base" "100"
+            "step" "25"
+        }
+        "scout"
+        {
+            "enabled" "1"
+            "base" "200"
+            "step" "50"
+        }
+        "pistol"
+        {
+            "enabled" "1"
+            "base" "50"
+            "step" "10"
+        }
+        "magnum"
+        {
+            "enabled" "1"
+            "base" "150"
+            "step" "25"
+        }
+        "fireaxe"
+        {
+            "enabled" "1"
+            "base" "150"
+            "step" "25"
+        }
+        "frying_pan"
+        {
+            "enabled" "1"
+            "base" "150"
+            "step" "25"
+        }
+        "machete"
+        {
+            "enabled" "1"
+            "base" "150"
+            "step" "25"
+        }
+        "baseball_bat"
+        {
+            "enabled" "1"
+            "base" "150"
+            "step" "25"
+        }
+        "crowbar"
+        {
+            "enabled" "1"
+            "base" "150"
+            "step" "25"
+        }
+        "cricket_bat"
+        {
+            "enabled" "1"
+            "base" "150"
+            "step" "25"
+        }
+        "tonfa"
+        {
+            "enabled" "1"
+            "base" "150"
+            "step" "25"
+        }
+        "electric_guitar"
+        {
+            "enabled" "1"
+            "base" "150"
+            "step" "25"
+        }
+        "knife"
+        {
+            "enabled" "1"
+            "base" "150"
+            "step" "25"
+        }
+        "pitchfork"
+        {
+            "enabled" "1"
+            "base" "150"
+            "step" "25"
+        }
+        "shovel"
+        {
+            "enabled" "1"
+            "base" "150"
+            "step" "25"
+        }
+        "katana"
+        {
+            "enabled" "1"
+            "base" "150"
+            "step" "25"
+        }
+        // 电击器待实际服务器验证后再启用。
+        "defib"
+        {
+            "enabled" "0"
+            "base" "200"
+            "step" "50"
+        }
+    }
+}
