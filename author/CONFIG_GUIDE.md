@@ -80,6 +80,7 @@ AstRedux 每轮全员准备后倒计时开局，`!fs` 也走倒计时；暂停�
 | --- | --- | --- |
 | 追加延迟 | `cfg/sourcemod/player_fakelag.cfg` 设置上限 | `!fakelag` 查询，`!fakelag <毫秒>` 设置自己，0 关闭；配置管理员可用 `!fakelag <玩家> <毫秒>` 与 `!printlag`。默认不追加延迟。 |
 | 旁观 HUD | `coop_spechud.sp` 的 PVE 显示层 | 旁观者 `!spechud` / `!tankhud` 切换；准备和暂停期间避让准备面板。AstRedux 不再同时加载旧 `tank_hud.smx`。 |
+| 帽子 | `addons/sourcemod/data/l4d_hats.cfg` 保存原生模型与位置、角度、大小 | `!hat` / `!hats`；免费开放，保留上游的帽子偏好 cookie，不建立积分解锁数据库。 |
 
 ## 维护原则
 
