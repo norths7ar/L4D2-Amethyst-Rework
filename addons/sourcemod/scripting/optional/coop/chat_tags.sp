@@ -4,7 +4,7 @@
 #include <sourcemod>
 #include <clientprefs>
 #include <chat-processor>
-#define TAG_CONFIG "configs/coop_tags.cfg"
+#define TAG_CONFIG "configs/chat_tags.cfg"
 
 Handle g_cookie;
 ArrayList g_ids, g_names, g_values, g_selectable;
@@ -13,7 +13,7 @@ bool g_visible[MAXPLAYERS + 1];
 
 public Plugin myinfo =
 {
-    name = "Coop Basic Tags",
+    name = "Chat Tags",
     author = "HexTags, AstRedux maintainers",
     description = "Basic configurable chat tags using Chat Processor.",
     version = "1.0.0"
@@ -21,8 +21,8 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-    LoadTranslations("coop_tags.phrases");
-    g_cookie = RegClientCookie("coop_tag", "Selected coop tag id; empty uses the configured default.", CookieAccess_Protected);
+    LoadTranslations("chat_tags.phrases");
+    g_cookie = RegClientCookie("chat_tag", "Selected chat tag id; empty uses the configured default.", CookieAccess_Protected);
     g_ids = new ArrayList(ByteCountToCells(64));
     g_names = new ArrayList(ByteCountToCells(128));
     g_values = new ArrayList(ByteCountToCells(128));
@@ -120,7 +120,7 @@ void GetEffectiveTag(int client, char[] tag, int maxlength)
     tag[0] = '\0';
     if (!g_visible[client]) return;
     int index = g_ids.FindString(g_selected[client]);
-    if (index == -1 || !g_selectable.Get(index)) index = g_ids.FindString(CheckCommandAccess(client, "coop_tag_admin", ADMFLAG_GENERIC) ? "admin" : "default");
+    if (index == -1 || !g_selectable.Get(index)) index = g_ids.FindString(CheckCommandAccess(client, "chat_tag_admin", ADMFLAG_GENERIC) ? "admin" : "default");
     if (index != -1) g_values.GetString(index, tag, maxlength);
 }
 void ValidateSelectedTag(int client)
@@ -133,7 +133,7 @@ void ValidateSelectedTag(int client)
 void LoadTags()
 {
     g_ids.Clear(); g_names.Clear(); g_values.Clear(); g_selectable.Clear();
-    KeyValues config = new KeyValues("CoopTags");
+    KeyValues config = new KeyValues("ChatTags");
     char path[PLATFORM_MAX_PATH]; BuildPath(Path_SM, path, sizeof(path), TAG_CONFIG);
     if (!config.ImportFromFile(path)) SetFailState("Missing tag config: %s", path);
     if (config.GotoFirstSubKey())

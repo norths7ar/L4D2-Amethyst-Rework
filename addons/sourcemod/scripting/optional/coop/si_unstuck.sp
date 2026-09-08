@@ -24,7 +24,7 @@ float g_nextAttempt[MAXPLAYERS + 1];
 
 public Plugin myinfo =
 {
-	name = "Coop SI Unstuck",
+	name = "SI Unstuck",
 	author = "OpenAI",
 	description = "Moves a stuck live AI special infected to a safe hidden nav position",
 	version = "1.0.0",
@@ -33,11 +33,11 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-	g_cvEnable = CreateConVar("coop_si_unstuck_enable", "1", "Enable stuck AI SI relocation", FCVAR_NONE, true, 0.0, true, 1.0);
-	g_cvStuckTime = CreateConVar("coop_si_unstuck_time", "4.0", "Stationary time before relocation", FCVAR_NONE, true, 1.0);
-	g_cvMoveTolerance = CreateConVar("coop_si_unstuck_move_tolerance", "24.0", "Distance which counts as movement", FCVAR_NONE, true, 1.0);
-	g_cvAttempts = CreateConVar("coop_si_unstuck_attempts", "12", "Hidden spawn positions tested per relocation", FCVAR_NONE, true, 1.0);
-	g_cvRetryDelay = CreateConVar("coop_si_unstuck_retry_delay", "2.0", "Delay after no safe destination was found", FCVAR_NONE, true, 0.1);
+	g_cvEnable = CreateConVar("si_unstuck_enable", "1", "Enable stuck AI SI relocation", FCVAR_NONE, true, 0.0, true, 1.0);
+	g_cvStuckTime = CreateConVar("si_unstuck_time", "4.0", "Stationary time before relocation", FCVAR_NONE, true, 1.0);
+	g_cvMoveTolerance = CreateConVar("si_unstuck_move_tolerance", "24.0", "Distance which counts as movement", FCVAR_NONE, true, 1.0);
+	g_cvAttempts = CreateConVar("si_unstuck_attempts", "12", "Hidden spawn positions tested per relocation", FCVAR_NONE, true, 1.0);
+	g_cvRetryDelay = CreateConVar("si_unstuck_retry_delay", "2.0", "Delay after no safe destination was found", FCVAR_NONE, true, 0.1);
 
 	HookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
 	CreateTimer(0.5, Timer_Monitor, _, TIMER_REPEAT);

@@ -12,7 +12,7 @@
 native bool IsInPause();
 
 #define VERSION "0.1.0"
-#define CONFIG_PATH "configs/coop_shop.txt"
+#define CONFIG_PATH "configs/campaign_shop.txt"
 #define MAX_PRODUCTS 22
 #define MAX_LEDGER 2147483000
 
@@ -36,7 +36,7 @@ static const char g_classNames[MAX_PRODUCTS][] = {
     "pitchfork", "shovel", "weapon_defibrillator"
 };
 
-public Plugin myinfo = { name = "Coop Campaign Shop", author = "Amethyst Rework", description = "Campaign-scoped points shop", version = VERSION, url = "https://github.com/Sglight/L4D2-Amethyst-Rework" };
+public Plugin myinfo = { name = "Campaign Shop", author = "Amethyst Rework", description = "Campaign-scoped points shop", version = VERSION, url = "https://github.com/Sglight/L4D2-Amethyst-Rework" };
 
 ConVar g_enabled;
 ConVar g_allowIncap;
@@ -62,17 +62,17 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
 
 public void OnPluginStart()
 {
-    LoadTranslations("coop_shop.phrases");
+    LoadTranslations("campaign_shop.phrases");
     g_points = new StringMap();
     g_purchases = new StringMap();
     g_skillKills = new StringMap();
-    g_enabled = CreateConVar("coop_shop_enable", "1", "Enable the campaign shop.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
-    g_allowIncap = CreateConVar("coop_shop_allow_incapacitated", "0", "Allow purchases while incapacitated or hanging.", _, true, 0.0, true, 1.0);
-    g_allowPinned = CreateConVar("coop_shop_allow_pinned", "0", "Allow purchases while pinned.", _, true, 0.0, true, 1.0);
-    AutoExecConfig(true, "coop_shop");
+    g_enabled = CreateConVar("campaign_shop_enable", "1", "Enable the campaign shop.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_allowIncap = CreateConVar("campaign_shop_allow_incapacitated", "0", "Allow purchases while incapacitated or hanging.", _, true, 0.0, true, 1.0);
+    g_allowPinned = CreateConVar("campaign_shop_allow_pinned", "0", "Allow purchases while pinned.", _, true, 0.0, true, 1.0);
+    AutoExecConfig(true, "campaign_shop");
     RegConsoleCmd("sm_buy", CommandBuy);
     RegConsoleCmd("sm_ammo", CommandAmmo);
-    RegAdminCmd("sm_coopshop_reload", CommandReload, ADMFLAG_CONFIG);
+    RegAdminCmd("sm_campaign_shop_reload", CommandReload, ADMFLAG_CONFIG);
     HookEvent("infected_death", EventCommonDeath);
     HookEvent("player_death", EventPlayerDeath);
     HookEvent("witch_killed", EventWitchKilled);
@@ -115,7 +115,7 @@ public Action CommandReload(int client, int args)
 bool LoadShopConfig(bool logFailure)
 {
     char path[PLATFORM_MAX_PATH]; BuildPath(Path_SM, path, sizeof(path), CONFIG_PATH);
-    KeyValues kv = new KeyValues("CoopShop");
+    KeyValues kv = new KeyValues("CampaignShop");
     if (!kv.ImportFromFile(path)) { delete kv; if (logFailure) LogError("Cannot parse %s; keeping prior shop configuration", path); return false; }
     int awards[AwardCount], base[MAX_PRODUCTS], step[MAX_PRODUCTS]; bool enabled[MAX_PRODUCTS]; bool valid = true;
     if (!kv.JumpToKey("awards")) valid = false;

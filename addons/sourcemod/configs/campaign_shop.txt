@@ -1,6 +1,6 @@
-"CoopShop"
+"CampaignShop"
 {
-    // 临时试玩数值；管理员可用 sm_coopshop_reload 原子重载。奖励必须为非负整数。
+    // 临时试玩数值；管理员可用 sm_campaign_shop_reload 原子重载。奖励必须为非负整数。
     "awards"
     {
         // 成功爆头/近战/狙击 skeet 使用 skeet 总奖励，不再叠加 special；skeet=0 时仍给普通特感分。

@@ -21,7 +21,7 @@ bool g_specHud[MAXPLAYERS + 1], g_tankHud[MAXPLAYERS + 1];
 
 public Plugin myinfo =
 {
-    name = "Coop Spectator HUD",
+    name = "Spectator HUD",
     author = "Visor, Forgetest, AstRedux maintainers",
     description = "PVE subtraction of Hyper-V 3.9.1 spectator HUD.",
     version = "1.0.1"
@@ -29,7 +29,7 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-    LoadTranslations("coop_spechud.phrases");
+    LoadTranslations("spechud_pve.phrases");
     g_hostname = FindConVar("hostname");
     g_maxPlayers = FindConVar("sv_maxplayers");
     g_tankBurnDuration = FindConVar("tank_burn_duration");
