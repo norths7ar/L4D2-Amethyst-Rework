@@ -1,0 +1,43 @@
+"Phrases"
+{
+    "SpecHudSpectatorOnly"
+    {
+        "chi" "[HUD] 仅观察者可使用 !spechud。"
+        "en" "[HUD] Only spectators can use !spechud."
+    }
+    "TankHudSpectatorOnly"
+    {
+        "chi" "[HUD] 仅观察者可使用 !tankhud。"
+        "en" "[HUD] Only spectators can use !tankhud."
+    }
+    "SpecHudEnabled"
+    {
+        "chi" "[HUD] 观察 HUD 已开启。"
+        "en" "[HUD] Spectator HUD enabled."
+    }
+    "SpecHudDisabled"
+    {
+        "chi" "[HUD] 观察 HUD 已关闭。"
+        "en" "[HUD] Spectator HUD disabled."
+    }
+    "TankHudEnabled"
+    {
+        "chi" "[HUD] Tank HUD 已开启。"
+        "en" "[HUD] Tank HUD enabled."
+    }
+    "TankHudDisabled"
+    {
+        "chi" "[HUD] Tank HUD 已关闭。"
+        "en" "[HUD] Tank HUD disabled."
+    }
+    "SpecHudUsage"
+    {
+        "chi" "[HUD] 输入 !spechud 可关闭观察 HUD。"
+        "en" "[HUD] Type !spechud to hide the spectator HUD."
+    }
+    "TankHudUsage"
+    {
+        "chi" "[HUD] 输入 !tankhud 可关闭 Tank HUD。"
+        "en" "[HUD] Type !tankhud to hide the Tank HUD."
+    }
+}
