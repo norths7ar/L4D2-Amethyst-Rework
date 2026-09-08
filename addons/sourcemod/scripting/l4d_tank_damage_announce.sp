@@ -111,6 +111,8 @@ void Cvar_TankHealth(Handle:convar, const String:oldValue[], const String:newVal
 
 CalculateTankHealth()
 {
+	// Live Tank health is authoritative; cvar changes apply to later spawns.
+	if (g_bIsTankInPlay) return;
 	new String:sGameMode[32];
 	GetConVarString(FindConVar("mp_gamemode"), sGameMode, sizeof(sGameMode));
 
@@ -189,6 +191,24 @@ void Event_TankSpawn(Handle:event, const String:name[], bool:dontBroadcast)
 	g_bIsTankInPlay = true;
 	// Set health for damage print in case it doesn't get set by player_hurt (aka no one shoots the tank)
 	g_iLastTankHealth = GetClientHealth(client);
+	g_fMaxTankHealth = float(g_iLastTankHealth);
+	RequestFrame(Frame_QueueTankHealthSnapshot, GetClientUserId(client));
+}
+
+// Spawn controllers may set final health in their own next-frame callback.
+public Frame_QueueTankHealthSnapshot(any:userid)
+{
+	RequestFrame(Frame_CaptureTankHealth, userid);
+}
+
+public Frame_CaptureTankHealth(any:userid)
+{
+	new client = GetClientOfUserId(userid);
+	if (!g_bIsTankInPlay || client == 0 || client != g_iTankClient || !IsClientInGame(client) || !IsPlayerAlive(client) || IsTankDying()) return;
+	new health = GetClientHealth(client);
+	new maxHealth = GetEntProp(client, Prop_Data, "m_iMaxHealth");
+	g_fMaxTankHealth = float(maxHealth > health ? maxHealth : health);
+	g_iLastTankHealth = health;
 }
 
 void Event_RoundStart(Handle:event, const String:name[], bool:dontBroadcast)
