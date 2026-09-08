@@ -72,6 +72,14 @@ AstRedux 每轮全员准备后倒计时开局，`!fs` 也走倒计时；暂停�
 
 连接公告由 `optional/coop/cannounce.sp`（Arg! 1.9 的本地适配版）构建，复用随源码保存的 multicolors。`sm_ca_showconnecting` 控制加载前提示，`sm_ca_connectdisplaytype` 保留原版的公告时点设置；默认在管理员检查后输出完整身份和地域公告。既有 `data/cannounce_settings.txt`、`cannounce_messages.txt` 与自动生成的 `cfg/sourcemod/cannounce.cfg` 格式保留。
 
+## AstRedux 玩家功能
+
+这些组件由 `cfg/cfgogl/astredux/plugins_3.cfg` 加载，不影响未加载它们的模式。
+
+| 功能 | 编辑入口 | 使用方式 |
+| --- | --- | --- |
+| 追加延迟 | `cfg/sourcemod/player_fakelag.cfg` 设置上限 | `!fakelag` 查询，`!fakelag <毫秒>` 设置自己，0 关闭；配置管理员可用 `!fakelag <玩家> <毫秒>` 与 `!printlag`。默认不追加延迟。 |
+
 ## 维护原则
 
 - 一项规则有明确的权威位置，其他文档链接过去。

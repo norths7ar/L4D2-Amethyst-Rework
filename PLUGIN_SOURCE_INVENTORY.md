@@ -41,3 +41,7 @@
 | `tank_hud.smx` | 仅插件无源码 | ProMod 的旁观 Tank HUD。 |
 | `tls_restore_vocalize.smx` | 仅插件无源码 | 允许手动发出笑声。 |
 | `witch_glow.smx` | 仅插件无源码 | Witch Party 插件。 |
+
+## 第三方原生扩展
+
+`custom_fakelag.ext.2.l4d2.so` / `.dll` 与 `gamedata/custom_fakelag.games.txt` 来自 [ProdigySim 的 1.0.0.0 正式发布包](https://github.com/ProdigySim/custom_fakelag/releases/tag/1.0.0.0)，未修改二进制；对应源代码和构建流程由上游维护。发布 ZIP 的 SHA256 为 `BFDEC07FC54B1FC5D23C91020AD9EAB88D7D0DDD691BEEB95512039353010A30`，许可随 `extensions/custom_fakelag.LICENSE.txt` 保存。Linux 扩展已在本地 L4D2 2.2.4.3 / SourceMod 1.12.0.7230 实例加载；Windows 二进制未运行验证。命令包装层由本仓库 `scripting/optional/coop/player_fakelag.sp` 编译，不使用发布包的旧 SMX。
