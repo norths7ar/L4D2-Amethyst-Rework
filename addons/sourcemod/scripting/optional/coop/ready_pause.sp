@@ -33,6 +33,7 @@ bool g_isPaused;
 bool g_adminPause;
 bool g_pendingAdminPause;
 bool g_internalPauseCommand;
+bool g_voteListener;
 bool g_playerReady[MAXPLAYERS + 1];
 int g_pauseDelayRemaining;
 
@@ -69,7 +70,7 @@ public Plugin myinfo =
 	name = "Coop ready and pause",
 	author = "CanadaRox, 海洋空氣, norths7ar",
 	description = "Per-player readiness, loading gate and start/resume countdowns",
-	version = "1.0.0"
+	version = "1.1.0"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -172,6 +173,7 @@ public void OnMapStart()
 
 public void OnMapEnd()
 {
+	ToggleVoteCommandListener(false);
 	ReleaseDirector();
 	SetSurvivorsFrozen(false);
 	CancelTimer(g_loadingTimer);
@@ -184,6 +186,7 @@ public void OnMapEnd()
 
 public void OnPluginEnd()
 {
+	ToggleVoteCommandListener(false);
 	ReleaseDirector();
 	SetSurvivorsFrozen(false);
 	ResetPauseState(true);
@@ -253,6 +256,7 @@ void StartRound()
 	if (!g_readyPhase) return;
 	InvokeForward(g_forwardLivePre);
 	g_readyPhase = false;
+	ToggleVoteCommandListener(false);
 	g_godMode = false;
 	CancelTimer(g_loadingTimer);
 	CancelTimer(g_panelTimer);
@@ -271,6 +275,7 @@ public Action EventRoundBoundary(Event event, const char[] name, bool dontBroadc
 		return Plugin_Continue;
 	}
 	ResetPauseState(true);
+	ToggleVoteCommandListener(false);
 	ReleaseDirector();
 	SetSurvivorsFrozen(false);
 	CancelTimer(g_loadingTimer);
@@ -302,7 +307,8 @@ void BeginReadyPhase()
 		g_panelHidden[client] = false;
 		g_playerReady[client] = false;
 	}
-	if (!g_readyEnabled.BoolValue) { ReleaseDirector(); return; }
+	if (!g_readyEnabled.BoolValue) { ToggleVoteCommandListener(false); ReleaseDirector(); return; }
+	ToggleVoteCommandListener(true);
 	// Same engine countdown suppression as competitive readyup/game.inc.
 	CreateTimer(0.3, TimerHoldDirector, _, TIMER_FLAG_NO_MAPCHANGE);
 	InvokeForward(g_forwardInitiatePre);
@@ -650,6 +656,7 @@ void BeginPause(bool adminPause)
 		return;
 	}
 	PrintToChatAll("%t", adminPause ? "PauseAdmin" : "PauseStarted");
+	ToggleVoteCommandListener(true);
 	InvokeForward(g_forwardPause);
 }
 
@@ -701,6 +708,32 @@ public Action CommandToggleReady(int client, int args)
 	return g_playerReady[client] ? CommandUnready(client, args) : CommandReady(client, args);
 }
 
+void ToggleVoteCommandListener(bool hook)
+{
+	if (g_voteListener == hook) return;
+	if (hook) AddCommandListener(ReadyVoteCallback, "Vote");
+	else RemoveCommandListener(ReadyVoteCallback, "Vote");
+	g_voteListener = hook;
+}
+
+Action ReadyVoteCallback(int client, const char[] command, int argc)
+{
+	if (client <= 0 || (!g_isPaused && !(g_readyPhase && g_readyEnabled.BoolValue))) return Plugin_Continue;
+	if (BuiltinVote_IsVoteInProgress() && IsClientInBuiltinVotePool(client)) return Plugin_Continue;
+
+	if (Game_IsVoteInProgress())
+	{
+		int voteTeam = Game_GetVoteTeam();
+		if (voteTeam == -1 || voteTeam == GetClientTeam(client)) return Plugin_Continue;
+	}
+
+	char vote[8];
+	GetCmdArg(1, vote, sizeof(vote));
+	if (StrEqual(vote, "Yes", false)) CommandReady(client, 0);
+	else if (StrEqual(vote, "No", false)) CommandUnready(client, 0);
+	return Plugin_Continue;
+}
+
 void EvaluatePauseReady()
 {
 	if (!g_isPaused) return;
@@ -733,6 +766,7 @@ void EndPause()
 	CancelTimer(g_readyPanelCommandTimer);
 	bool changed = SetEnginePaused(false);
 	g_isPaused = false;
+	ToggleVoteCommandListener(false);
 	g_adminPause = false;
 	g_pendingAdminPause = false;
 	g_forceStarted = false;
@@ -916,6 +950,7 @@ bool AllClientsLoaded()
 
 void ResetPauseState(bool unpause)
 {
+	ToggleVoteCommandListener(false);
 	if (unpause && g_isPaused) SetEnginePaused(false);
 	CancelTimer(g_pauseDelayTimer);
 	CancelTimer(g_deferredPauseTimer);

@@ -22,7 +22,7 @@
 	}
 	"PanelReadyHelp"
 	{
-		"en" "!r ready / !nr unready"
+		"en" "F1 ready / F2 unready (!r / !nr)"
 	}
 	"PanelShowHelp"
 	{
@@ -52,7 +52,7 @@
 	"PauseRequested"
 	{
 	    "#format" "{1:N}"
-	    "en" "{1} requested a pause. Each survivor must ready with !r to continue."
+	    "en" "{1} requested a pause. Each survivor must press F1 to ready or F2 to cancel."
 	}
 	"PauseDelay"
 	{
@@ -65,7 +65,7 @@
 	}
 	"PauseStarted"
 	{
-	    "en" "The game is paused. Each survivor must ready with !r to continue."
+	    "en" "The game is paused. Each survivor must press F1 to ready or F2 to cancel."
 	}
 	"PlayerReady"
 	{
@@ -142,7 +142,7 @@
 	}
 	"ReadyWaiting"
 	{
-	    "en" "Every survivor: !r to ready, !nr to cancel."
+	    "en" "Every survivor: press F1 to ready, F2 to cancel."
 	}
 	"ReadyCountdown"
 	{

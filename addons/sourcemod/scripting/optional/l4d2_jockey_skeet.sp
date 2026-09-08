@@ -10,6 +10,7 @@
 #define TEAM_INFECTED 3
 
 ConVar 
+	jockey_skeet_enable,
 	z_leap_damage_interrupt,
 	z_jockey_health,
 	jockey_skeet_report;
@@ -17,6 +18,7 @@ ConVar
 float 
 	jockeySkeetDmg,
 	jockeyHealth,
+	damageWindowEnd[MAXPLAYERS + 1],
 	inflictedDamage[MAXPLAYERS + 1][MAXPLAYERS + 1];
 
 bool 
@@ -33,16 +35,23 @@ public Plugin myinfo =
 {
 	name = "L4D2 Jockey Skeet",
 	author = "Visor, A1m`",
-	description = "A dream come true",
-	version = "1.4",
+	description = "Shotgun jockey skeets with dynamic enable and damage settings.",
+	version = "1.5",
 	url = "https://github.com/SirPlease/L4D2-Competitive-Rework"
 };
 
 public void OnPluginStart()
 {
+	jockey_skeet_enable = CreateConVar("jockey_skeet_enable", "1", "Enable shotgun jockey skeets.", _, true, 0.0, true, 1.0);
 	z_leap_damage_interrupt = CreateConVar("z_leap_damage_interrupt", "195.0", "Taking this much damage interrupts a leap attempt", _, true, 10.0, true, 325.0);
 	jockey_skeet_report = CreateConVar("jockey_skeet_report", "1", "Report jockey skeets in chat?", _, true, 0.0, true, 1.0);
 	z_jockey_health = FindConVar("z_jockey_health");
+	jockey_skeet_enable.AddChangeHook(OnSettingsChanged);
+	z_leap_damage_interrupt.AddChangeHook(OnSettingsChanged);
+	z_jockey_health.AddChangeHook(OnSettingsChanged);
+	jockey_skeet_report.AddChangeHook(OnSettingsChanged);
+	HookEvent("player_spawn", OnPlayerSpawn);
+	OnConfigsExecuted();
 
 	if (lateLoad) {
 		for (int i = 1; i <= MaxClients; i++) {
@@ -58,58 +67,92 @@ public void OnConfigsExecuted()
 	jockeySkeetDmg = z_leap_damage_interrupt.FloatValue;
 	reportJockeySkeets = jockey_skeet_report.BoolValue;
 	jockeyHealth = z_jockey_health.FloatValue;
+	for (int i = 1; i <= MaxClients; i++) {
+		ResetDamageCounter(i);
+	}
+}
+
+public void OnSettingsChanged(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+	OnConfigsExecuted();
+}
+
+public void OnPlayerSpawn(Event event, const char[] name, bool dontBroadcast)
+{
+	ResetClientDamage(GetClientOfUserId(event.GetInt("userid")));
 }
 
 public void OnClientPutInServer(int client)
 {
+	ResetClientDamage(client);
 	SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
 }
 
 public void OnClientDisconnect(int client)
 {
+	ResetClientDamage(client);
 	SDKUnhook(client, SDKHook_OnTakeDamage, OnTakeDamage);
 }
 
 Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon,
 							float damageForce[3], float damagePosition[3], int damagecustom)
 {
-	if (!IsJockey(victim) || !IsSurvivor(attacker) || IsFakeClient(attacker) || !IsValidEdict(weapon)) {
+	if (!jockey_skeet_enable.BoolValue || !IsJockey(victim) || !IsSurvivor(attacker) || IsFakeClient(attacker) || !IsValidEdict(weapon)) {
 		return Plugin_Continue;
 	}
 	
 	if (!HasJockeyTarget(victim) && IsAttachable(victim) && IsShotgun(weapon)) {
+		// Preserve the short pellet window without timers surviving a profile/slot change.
+		float now = GetGameTime();
+		if (now >= damageWindowEnd[victim]) {
+			ResetDamageCounter(victim);
+			damageWindowEnd[victim] = now + 0.1;
+		}
 		inflictedDamage[victim][attacker] += damage;
 		if (inflictedDamage[victim][attacker] >= jockeySkeetDmg) {
 			if (reportJockeySkeets) {
-				CPrintToChat(victim, "{green}★★{default} You were {blue}skeeted{default} by {olive}%N{default}.", attacker);
-				CPrintToChat(attacker, "{green}★★{default} You {blue}skeeted {olive}%N{default}'s Jockey.", victim);
-				
+				if (!IsFakeClient(victim)) {
+					CPrintToChat(victim, "{green}★★{default} You were {blue}skeeted{default} by {olive}%N{default}.", attacker);
+					CPrintToChat(attacker, "{green}★★{default} You {blue}skeeted {olive}%N{default}'s Jockey.", victim);
+				}
 				for (int i = 1; i <= MaxClients; i++)  {
-					if (i == victim || i == attacker)
-						continue;
-
 					if (IsClientInGame(i) && !IsFakeClient(i)) {
-						CPrintToChat(i, "{green}★★{default} {olive}%N{default}'s Jockey was {blue}skeeted{default} by {olive}%N{default}.", victim, attacker);
+						if (IsFakeClient(victim)) {
+							CPrintToChat(i, "{green}★★{default} {olive}%N{default} 空爆了 Jockey。", attacker);
+						} else if (i != victim && i != attacker) {
+							CPrintToChat(i, "{green}★★{default} {olive}%N{default}'s Jockey was {blue}skeeted{default} by {olive}%N{default}.", victim, attacker);
+						}
 					}
 				}
 			}
 			
 			damage = jockeyHealth;
+			// Existing jockeys retain their spawn health when the population changes.
+			if (damage < float(GetClientHealth(victim))) {
+				damage = float(GetClientHealth(victim));
+			}
 			return Plugin_Changed;
 		}
-		CreateTimer(0.1, ResetDamageCounter, victim);
 	}
 
 	return Plugin_Continue;
 }
 
-Action ResetDamageCounter(Handle hTimer, any jockey)
+void ResetDamageCounter(int jockey)
 {
+	damageWindowEnd[jockey] = 0.0;
 	for (int i = 1; i <= MaxClients; i++) {
 		inflictedDamage[jockey][i] = 0.0;
 	}
+}
 
-	return Plugin_Stop;
+void ResetClientDamage(int client)
+{
+	if (client < 1 || client > MaxClients) return;
+	ResetDamageCounter(client);
+	for (int i = 1; i <= MaxClients; i++) {
+		inflictedDamage[i][client] = 0.0;
+	}
 }
 
 bool IsSurvivor(int client)

@@ -37,12 +37,16 @@ ConVar g_cvFastGetupEnable;
 bool g_bIsUsingAbility[MAXPLAYERS + 1];
 float g_fDamagePrint;
 
+const float SMOKER_TONGUE_WINDOW_DURATION = 2.0;
+float g_fSmokerTongueWindowExpires[MAXPLAYERS + 1];
+int g_iSmokerTongueWindowUserId[MAXPLAYERS + 1];
+
 public Plugin myinfo =
 {
 	name = "Coop SI Damage Control",
 	author = "海洋空氣, norths7ar",
 	description = "Controls Coop special-infected damage, tongue clears, and fast getup.",
-	version = "1.0.0"
+	version = "1.1.0"
 };
 
 public void OnPluginStart()
@@ -52,34 +56,45 @@ public void OnPluginStart()
 	g_cvBaseDamage = CreateConVar("si_damage_base", "12.0", "Base special-infected damage.", FCVAR_NOTIFY, true, 1.0, true, 100.0);
 	g_cvRatioEnable = CreateConVar("si_damage_ratio_enable", "0", "Use proportional special-infected damage.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 	g_cvFastGetupEnable = CreateConVar("si_damage_fast_getup_enable", "1", "Enable fast getup after special-infected attacks.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+	HookConVarChange(g_cvEnable, OnDamageControlEnabledChanged);
 
 	HookEvent("player_death", Event_PlayerDeath, EventHookMode_Post);
 	HookEvent("player_hurt", Event_PlayerHurt, EventHookMode_Post);
-	HookEvent("tongue_grab", Event_TongueGrab);
+	HookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
+	HookEvent("ability_use", Event_AbilityUse);
 	HookEvent("tongue_release", Event_TongueRelease);
 	HookEvent("tongue_broke_bent", Event_TongueRelease);
 	HookEvent("tongue_pull_stopped", Event_TonguePullStopped);
 	HookEvent("charger_carry_start", Event_ChargerCarryStart, EventHookMode_Post);
 	HookEvent("charger_pummel_start", Event_ChargerPummelStart, EventHookMode_Post);
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (IsClientInGame(client)) SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
+	}
 }
 
-public Action Event_TongueGrab(Event event, const char[] name, bool dontBroadcast)
+public Action Event_AbilityUse(Event event, const char[] name, bool dontBroadcast)
 {
-	int smoker = GetClientOfUserId(event.GetInt("userid"));
-	if (IsInfected(smoker) && GetZombieClass(smoker) == ZC_SMOKER)
+	if (!g_cvEnable.BoolValue)
 	{
-		g_bIsUsingAbility[smoker] = true;
+		return Plugin_Continue;
+	}
+
+	int smoker = GetClientOfUserId(event.GetInt("userid"));
+	char ability[32];
+	event.GetString("ability", ability, sizeof(ability));
+	if (StrEqual(ability, "ability_tongue") && IsInfected(smoker) && GetZombieClass(smoker) == ZC_SMOKER)
+	{
+		// Start on the skill, not tongue_grab; grabbing never extends this window.
+		g_iSmokerTongueWindowUserId[smoker] = GetClientUserId(smoker);
+		g_fSmokerTongueWindowExpires[smoker] = GetGameTime() + SMOKER_TONGUE_WINDOW_DURATION;
 	}
 	return Plugin_Continue;
 }
 
 public Action Event_TongueRelease(Event event, const char[] name, bool dontBroadcast)
 {
-	int smoker = GetClientOfUserId(event.GetInt("userid"));
-	if (IsInfected(smoker) && GetZombieClass(smoker) == ZC_SMOKER)
-	{
-		g_bIsUsingAbility[smoker] = false;
-	}
+	ClearSmokerTongueWindow(GetClientOfUserId(event.GetInt("userid")));
 	return Plugin_Continue;
 }
 
@@ -91,6 +106,7 @@ public Action Event_TonguePullStopped(Event event, const char[] name, bool dontB
 	int smoker = GetClientOfUserId(event.GetInt("smoker"));
 	int reason = event.GetInt("release_type");
 	// 1: smoker got shoved; 2: survivor got shoved; 3: smoker got killed; 4: tongue cut.
+	ClearSmokerTongueWindow(smoker);
 
 	if (!IsClientSurvivor(attacker) || !IsInfected(smoker) || attacker != victim)
 	{
@@ -129,6 +145,8 @@ void SendDeathMessage(int attacker, int victim, const char[] weapon, bool headsh
 public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast)
 {
 	int victim = GetClientOfUserId(event.GetInt("userid"));
+	ClearSmokerTongueWindow(victim);
+
 	int attacker = GetClientOfUserId(event.GetInt("attacker"));
 	if (attacker == 0 || victim == 0)
 	{
@@ -141,6 +159,17 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
 
 	g_bIsUsingAbility[victim] = false;
 	SDKUnhook(victim, SDKHook_OnTakeDamage, OnTakeDamage);
+	return Plugin_Continue;
+}
+
+public Action Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast)
+{
+	int client = GetClientOfUserId(event.GetInt("userid"));
+	ClearSmokerTongueWindow(client);
+	if (IsClientAndInGame(client))
+	{
+		SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
+	}
 	return Plugin_Continue;
 }
 
@@ -167,28 +196,30 @@ public Action Event_ChargerPummelStart(Event event, const char[] name, bool dont
 // 插件重读的时候也重新 Hook。
 public void OnMapStart()
 {
-	for (int client = 1; client < MaxClients; client++)
+	for (int client = 1; client <= MaxClients; client++)
 	{
-		if (!IsValidEntity(client))
+		ClearSmokerTongueWindow(client);
+		if (IsClientInGame(client))
 		{
-			return;
+			SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
 		}
-		SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
 	}
 }
 
 public void OnClientPutInServer(int client)
 {
-	if (client > 0 && client < MaxClients)
+	if (client > 0 && client <= MaxClients)
 	{
+		ClearSmokerTongueWindow(client);
 		SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
 	}
 }
 
 public void OnClientDisconnect(int client)
 {
-	if (client > 0 && client < MaxClients)
+	if (client > 0 && client <= MaxClients)
 	{
+		ClearSmokerTongueWindow(client);
 		SDKUnhook(client, SDKHook_OnTakeDamage, OnTakeDamage);
 	}
 }
@@ -205,7 +236,7 @@ public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &dam
 		return Plugin_Continue;
 	}
 
-	if (IsInfected(victim) && GetZombieClass(victim) == ZC_SMOKER && g_bIsUsingAbility[victim])
+	if (IsInfected(victim) && GetZombieClass(victim) == ZC_SMOKER && IsSmokerTongueWindowActive(victim))
 	{
 		damage = FindConVar("z_gas_health").FloatValue;
 		return Plugin_Changed;
@@ -288,6 +319,45 @@ public Action Timer_CancelGetup(Handle timer, int client)
 {
 	SetEntPropFloat(client, Prop_Send, "m_flCycle", 1000.0);
 	return Plugin_Continue;
+}
+
+void OnDamageControlEnabledChanged(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+	if (!convar.BoolValue)
+	{
+		for (int client = 1; client <= MaxClients; client++)
+		{
+			ClearSmokerTongueWindow(client);
+		}
+	}
+}
+
+void ClearSmokerTongueWindow(int client)
+{
+	if (client < 1 || client > MaxClients)
+	{
+		return;
+	}
+
+	g_fSmokerTongueWindowExpires[client] = 0.0;
+	g_iSmokerTongueWindowUserId[client] = 0;
+}
+
+bool IsSmokerTongueWindowActive(int smoker)
+{
+	if (!g_cvEnable.BoolValue || g_iSmokerTongueWindowUserId[smoker] != GetClientUserId(smoker))
+	{
+		ClearSmokerTongueWindow(smoker);
+		return false;
+	}
+
+	if (GetGameTime() >= g_fSmokerTongueWindowExpires[smoker])
+	{
+		ClearSmokerTongueWindow(smoker);
+		return false;
+	}
+
+	return true;
 }
 
 int GetZombieClass(int client)

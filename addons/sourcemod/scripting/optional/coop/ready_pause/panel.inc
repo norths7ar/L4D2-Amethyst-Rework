@@ -5,7 +5,7 @@
 
 static const char readySymbol[2][] = {"☐", "☑"};
 static const char g_readyPanelCommands[][] = {
-	"->1. !ready|!r / !unready|!nr",
+	"->1. F1 准备 / F2 取消准备",
 	"->2. !forcestart / !fs",
 	"->3. !show / !hide",
 	"->4. !join / !spec",
@@ -215,7 +215,7 @@ void UpdateReadyPanel()
 	delete menuPanel;
 }
 // ZoneMod pause.sp::UpdatePanel. Team status rows become survivor player rows;
-// the remaining text, order, spacing and vote-only send gate are unchanged.
+// the remaining text, order and spacing are unchanged. Both vote types take priority.
 void UpdatePausePanel()
 {
 	Panel menuPanel = new Panel();
@@ -251,8 +251,13 @@ void UpdatePausePanel()
 	{
 		if (IsClientInGame(client) && !IsFakeClient(client) && !g_panelHidden[client])
 		{
-			if (!BuiltinVote_IsVoteInProgress() || !IsClientInBuiltinVotePool(client))
-				menuPanel.Send(client, ReadyPanelHandler, 1);
+			if (BuiltinVote_IsVoteInProgress() && IsClientInBuiltinVotePool(client)) continue;
+			if (Game_IsVoteInProgress())
+			{
+				int voteTeam = Game_GetVoteTeam();
+				if (voteTeam == -1 || voteTeam == GetClientTeam(client)) continue;
+			}
+			menuPanel.Send(client, ReadyPanelHandler, 1);
 		}
 	}
 	delete menuPanel;

@@ -22,7 +22,7 @@
 	}
 	"PanelReadyHelp"
 	{
-		"chi" "!r 准备 / !nr 取消准备"
+		"chi" "按 F1 准备 / F2 取消准备（!r / !nr）"
 	}
 	"PanelShowHelp"
 	{
@@ -52,7 +52,7 @@
 	"PauseRequested"
 	{
 	    "#format" "{1:N}"
-	    "chi" "{1} 请求暂停。每位生还者均需要输入 !r 准备。"
+	    "chi" "{1} 请求暂停。每位生还者按 F1 准备，按 F2 取消准备。"
 	}
 	"PauseDelay"
 	{
@@ -65,7 +65,7 @@
 	}
 	"PauseStarted"
 	{
-	    "chi" "游戏已暂停。每位生还者输入 !r 准备后继续。"
+	    "chi" "游戏已暂停。每位生还者按 F1 准备，按 F2 取消准备。"
 	}
 	"PlayerReady"
 	{
@@ -142,7 +142,7 @@
 	}
 	"ReadyWaiting"
 	{
-	    "chi" "每位生还者输入 !r 准备，!nr 取消。"
+	    "chi" "每位生还者按 F1 准备，按 F2 取消准备。"
 	}
 	"ReadyCountdown"
 	{
