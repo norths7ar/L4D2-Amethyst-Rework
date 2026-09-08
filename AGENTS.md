@@ -55,7 +55,7 @@ Keep each document in its own lane. AGENTS contains durable Agent maintenance ru
 ## Scope and Delivery
 
 * When the maintainer asks for research, inspection, comparison, or report-only work, do not edit files or implement fixes.
-* Do not commit or push unless explicitly requested.
+* Completed small fixes or completed implementation plans may be committed after appropriate technical validation; wait for the maintainer to confirm local playtesting and request a push, then deploy only when separately requested.
 * `origin` is the primary GitHub remote and `gitea` is the Gitea backup; when pushing, push the requested branches or tags to both and report any failure; commit-only requests do not authorize pushing.
 * Preserve unrelated and user-created work; untracked files are not disposable.
 
