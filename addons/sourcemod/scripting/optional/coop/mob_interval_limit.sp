@@ -10,7 +10,6 @@ ConVar hDebug;
 ConVar hMegaMobSize;
 ConVar hMobSpawnMinSize;
 ConVar hMobSpawnMaxSize;
-Handle g_hMobIntervalTimer;
 int iMegaMobSize;
 int iMobSpawnMinSize;
 int iMobSpawnMaxSize;
@@ -30,84 +29,60 @@ public void OnPluginStart()
 	hMobSpawnMinSize = FindConVar("z_mob_spawn_min_size");
 	hMobSpawnMaxSize = FindConVar("z_mob_spawn_max_size");
 
-	if (hMegaMobSize != null) HookConVarChange(hMegaMobSize, OnMobChanged);
-	if (hMobSpawnMinSize != null) HookConVarChange(hMobSpawnMinSize, OnMobChanged);
-	if (hMobSpawnMaxSize != null) HookConVarChange(hMobSpawnMaxSize, OnMobChanged);
-	HookConVarChange(hMobLimitEnabled, OnMobLimitEnabledChanged);
-}
-
-public void OnMapEnd()
-{
-	CancelMobIntervalTimer();
-	bAllowSpawnMobs = true;
-	bAllowMobsChange = true;
+	HookConVarChange(hMegaMobSize, OnMobChanged);
+	HookConVarChange(hMobSpawnMinSize, OnMobChanged);
+	HookConVarChange(hMobSpawnMaxSize, OnMobChanged);
 }
 
 public Action L4D_OnSpawnMob(int &amount)
 {
-	if (!hMobLimitEnabled.BoolValue) return Plugin_Continue;
+	if (!hMobLimitEnabled) return Plugin_Continue;
 
-	int mobSize = hMegaMobSize != null ? hMegaMobSize.IntValue : amount;
-	float mobInterval = hMobInterval.FloatValue;
-	bool iDebug = hDebug.BoolValue;
-	if (iDebug) PrintToChatAll("mob original amount: %d", amount);
-	if (bAllowSpawnMobs) {
-		if (amount > mobSize) amount = mobSize;
-		bAllowSpawnMobs = false;
-		if (iDebug) PrintToChatAll("mob altered amount: %d", amount);
-		CancelMobIntervalTimer();
-		g_hMobIntervalTimer = CreateTimer(mobInterval, MobsIntervalTimer);
-		return Plugin_Changed;
+	int mobSize = GetConVarInt(FindConVar("z_mega_mob_size"));
+	float mobInterval = GetConVarFloat(hMobInterval);
+	bool iDebug = GetConVarBool(hDebug);
+	if (iDebug) {
+		PrintToChatAll("mob original amount: %d", amount);
 	}
-	return Plugin_Handled;
+	if (bAllowSpawnMobs) {
+		if (amount > mobSize) {
+			amount = mobSize;
+		}
+		bAllowSpawnMobs = false;
+		if (iDebug) {
+			PrintToChatAll("mob altered amount: %d", amount);
+		}
+		CreateTimer(mobInterval, MobsIntervalTimer);
+		return Plugin_Changed;
+	} else {
+		return Plugin_Handled;
+	}
 }
 
-public Action MobsIntervalTimer(Handle timer)
+public Action MobsIntervalTimer(Handle timer, int client)
 {
-	if (g_hMobIntervalTimer == timer) g_hMobIntervalTimer = null;
-	if (hMobLimitEnabled.BoolValue) bAllowSpawnMobs = true;
-	return Plugin_Stop;
+	bAllowSpawnMobs = true;
 }
 
 public Action LockMobs(int args)
 {
-	if (!hMobLimitEnabled.BoolValue) return Plugin_Handled;
 	bAllowMobsChange = false;
-	if (hMegaMobSize != null) iMegaMobSize = hMegaMobSize.IntValue;
-	if (hMobSpawnMinSize != null) iMobSpawnMinSize = hMobSpawnMinSize.IntValue;
-	if (hMobSpawnMaxSize != null) iMobSpawnMaxSize = hMobSpawnMaxSize.IntValue;
-	return Plugin_Handled;
+
+	iMegaMobSize = GetConVarInt(hMegaMobSize);
+	iMobSpawnMinSize = GetConVarInt(hMobSpawnMinSize);
+	iMobSpawnMaxSize = GetConVarInt(hMobSpawnMaxSize);
 }
 
 public Action UnlockMobs(int args)
 {
 	bAllowMobsChange = true;
-	return Plugin_Handled;
-}
-
-public void OnMobLimitEnabledChanged(ConVar convar, const char[] oldValue, const char[] newValue)
-{
-	if (!convar.BoolValue) {
-		CancelMobIntervalTimer();
-		bAllowSpawnMobs = true;
-		bAllowMobsChange = true;
-	}
-}
-
-void CancelMobIntervalTimer()
-{
-	if (g_hMobIntervalTimer != null) {
-		delete g_hMobIntervalTimer;
-		g_hMobIntervalTimer = null;
-	}
 }
 
 public void OnMobChanged(ConVar convar, const char[] oldValue, const char[] newValue)
 {
-	if (!hMobLimitEnabled.BoolValue) return;
 	if (!bAllowMobsChange) {
-		if (hMegaMobSize != null) hMegaMobSize.IntValue = iMegaMobSize;
-		if (hMobSpawnMinSize != null) hMobSpawnMinSize.IntValue = iMobSpawnMinSize;
-		if (hMobSpawnMaxSize != null) hMobSpawnMaxSize.IntValue = iMobSpawnMaxSize;
+		SetConVarInt(hMegaMobSize, iMegaMobSize);
+		SetConVarInt(hMobSpawnMinSize, iMobSpawnMinSize);
+		SetConVarInt(hMobSpawnMaxSize, iMobSpawnMaxSize);
 	}
 }

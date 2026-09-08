@@ -19,6 +19,7 @@
 #define HORDE_SOUND "/npc/mega_mob/mega_mob_incoming.wav"
 
 ConVar
+	hCvarEnabled,
 	hCvarNoEventHordeDuringTanks,
 	hCvarHordeCheckpointAnnounce;
 
@@ -42,7 +43,7 @@ public Plugin myinfo =
 	name = "L4D2 Horde Equaliser",
 	author = "Visor (original idea by Sir), A1m`",
 	description = "Make certain event hordes finite",
-	version = "3.0.11",
+	version = "3.0.12",
 	url = "https://github.com/SirPlease/L4D2-Competitive-Rework"
 };
 
@@ -50,11 +51,15 @@ public void OnPluginStart()
 {
 	LoadTranslation("l4d2_horde_equaliser.phrases");
 	InitGameData();
+	hCvarEnabled = CreateConVar("l4d2_heq_enabled", "0", "Enable finite event hordes from mapinfo; disabled leaves mob spawning unchanged", FCVAR_NONE, true, 0.0, true, 1.0);
+	HookConVarChange(hCvarEnabled, OnEnabledChanged);
 	
 	hCvarNoEventHordeDuringTanks = CreateConVar("l4d2_heq_no_tank_horde", "0", "Put infinite hordes on a 'hold up' during Tank fights");
 	hCvarHordeCheckpointAnnounce = CreateConVar("l4d2_heq_checkpoint_sound", "1", "Play the incoming mob sound at checkpoints (each 1/4 of total commons killed off) to simulate L4D1 behaviour");
 
 	HookEvent("round_start", RoundStartEvent, EventHookMode_PostNoCopy);
+	HookEvent("versus_round_start", OnPlayerCountChanged, EventHookMode_PostNoCopy);
+	HookEvent("player_team", OnPlayerCountChanged, EventHookMode_PostNoCopy);
 }
 
 void InitGameData()
@@ -86,13 +91,48 @@ void InitGameData()
 
 public void OnMapStart()
 {
-	commonLimit = L4D2_GetMapValueInt("horde_limit", -1);
-	commonTank = L4D2_GetMapValueInt("horde_tank", -1);
-
+	ResetHordeState();
+	RequestFrame(RefreshMapLimit);
 	PrecacheSound(HORDE_SOUND);
 }
 
 void RoundStartEvent(Event hEvent, const char[] name, bool dontBroadcast)
+{
+	ResetHordeState();
+	RequestFrame(RefreshMapLimit);
+}
+
+void OnPlayerCountChanged(Event event, const char[] name, bool dontBroadcast)
+{
+	RequestFrame(RefreshMapLimit);
+}
+
+public void RefreshMapLimit(any data)
+{
+	// Preserve the Coop binary's 1-4 human survivor overrides. Missing
+	// per-player keys remain unlimited; mapinfo policy is configured separately.
+	int humans;
+	for (int client = 1; client <= MaxClients; client++) {
+		if (IsClientInGame(client) && GetClientTeam(client) == 2 && !IsFakeClient(client)) humans++;
+	}
+	commonLimit = L4D2_GetMapValueInt("horde_limit", -1);
+	if (humans >= 1 && humans <= 4) {
+		char key[24];
+		FormatEx(key, sizeof(key), "horde_limit_%d", humans);
+		commonLimit = L4D2_GetMapValueInt(key, -1);
+	}
+	commonTank = L4D2_GetMapValueInt("horde_tank", -1);
+}
+
+public void OnEnabledChanged(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+	// Enabling mid-event starts a new budget; disabling never clears the
+	// director's pending mobs or continues an old quota on the next enable.
+	ResetHordeState();
+	RequestFrame(RefreshMapLimit);
+}
+
+void ResetHordeState()
 {
 	commonTotal = 0;
 	lastCheckpoint = 0;
@@ -105,6 +145,7 @@ void RoundStartEvent(Event hEvent, const char[] name, bool dontBroadcast)
 
 public void OnEntityCreated(int entity, const char[] classname)
 {
+	if (!hCvarEnabled.BoolValue || commonLimit < 0) return;
 	// TO-DO: Find a value that tells wanderers from active event commons?
 	if (strcmp(classname, "infected") == 0 && IsInfiniteHordeActive()) {
 		// Don't count in boomer hordes, alarm cars and wanderers during a Tank fight
@@ -123,7 +164,8 @@ public void OnEntityCreated(int entity, const char[] classname)
 		
 		commonTotal++;
 		if (hCvarHordeCheckpointAnnounce.BoolValue && 
-			(commonTotal >= ((lastCheckpoint + 1) * RoundFloat(float(commonLimit / MAX_CHECKPOINTS))))
+			lastCheckpoint < MAX_CHECKPOINTS &&
+			(commonTotal >= ((lastCheckpoint + 1) * RoundFloat(float(commonLimit) / MAX_CHECKPOINTS)))
 		) {
 			if (commonLimit >= HORDE_MIN_SIZE_AUDIAL_FEEDBACK) {
 				EmitSoundToAll(HORDE_SOUND);
@@ -142,6 +184,7 @@ public void OnEntityCreated(int entity, const char[] classname)
 
 public Action L4D_OnSpawnMob(int &amount)
 {
+	if (!hCvarEnabled.BoolValue) return Plugin_Continue;
 	/////////////////////////////////////
 	// - Called on Event Hordes.
 	// - Called on Panic Event Hordes.

@@ -3,17 +3,23 @@
 	"Tag"
 	{
 		"en"		"<{olive}Horde{default}>"
+		"chi"		"<{olive}尸潮{default}>"
 	}
 	"NoCommonRemaining"
 	{
 		"en"		"{red}No {default}common remaining!"
+		"chi"		"事件尸潮生成额度已耗尽。"
 	}
 	"CommonRemaining"
 	{
-		"en"		"{red}%i {default}common remaining.."
+		"#format"	"{1:d}"
+		"en"		"{red}{1} {default}common remaining.."
+		"chi"		"事件尸潮还可生成 {red}{1} {default}只小僵尸。"
 	}
 	"FiniteEventStarted"
 	{
-		"en"		"A {blue}finite event{default} of {olive}%i{default} commons has started! Rush or wait it out, the choice is yours!"
+		"#format"	"{1:d}"
+		"en"		"A {blue}finite event{default} of {olive}{1}{default} commons has started! Rush or wait it out, the choice is yours!"
+		"chi"		"有限事件尸潮开始，生成额度为 {olive}{1}{default} 只小僵尸。"
 	}
 }

@@ -116,7 +116,7 @@ public Action drawPanel(int client, int first_item)
 	FormatEx(buffer, sizeof(buffer), "%T", "RatioDamageMenu", client); AddNamedToggleMenuItem(menu, "ratio_damage", buffer, GetConVarBool(hRatioDamage));
 	FormatEx(buffer, sizeof(buffer), "%T", "RehealthMenu", client); AddNamedToggleMenuItem(menu, "rehealth", buffer, GetConVarBool(hRehealth));
 	FormatEx(buffer, sizeof(buffer), "%T", "ReammoMenu", client); AddNamedToggleMenuItem(menu, "reammo", buffer, GetConVarBool(hReammo));
-	ConVar mobLimit = FindConVar("mob_spawn_limit_enabled");
+	ConVar mobLimit = FindConVar("l4d2_heq_enabled");
 	if (mobLimit != null) { FormatEx(buffer, sizeof(buffer), "%T", "FiniteHordesMenu", client); AddNamedToggleMenuItem(menu, "mob_limit", buffer, mobLimit.BoolValue); }
 	else { FormatEx(buffer, sizeof(buffer), "%T", "FiniteHordesUnavailable", client); AddMenuItem(menu, "mob_limit", buffer, ITEMDRAW_DISABLED); }
 	FormatEx(buffer, sizeof(buffer), "%T", "ExtraPillsMenu", client); AddMenuItem(menu, "pills", buffer);
@@ -170,7 +170,7 @@ public int MenuHandler(Handle menu, MenuAction action, int client, int param)
 			TZ_CallVote(client, 13, !GetConVarBool(hReammo));
 			drawPanel(client, 0);
 		} else if (StrEqual(item, "mob_limit")) {
-			ConVar mobLimit = FindConVar("mob_spawn_limit_enabled");
+			ConVar mobLimit = FindConVar("l4d2_heq_enabled");
 			if (mobLimit == null) PrintToChat(client, "\x04[Ast] \x01%t", "FiniteHordesPluginUnavailable");
 			else TZ_CallVote(client, 16, !mobLimit.BoolValue);
 			drawPanel(client, 0);
@@ -341,7 +341,7 @@ void ApplyGameplaySetting(int target, int value, bool announce, int slot)
 		}
 		case 15: { tempSIDamage = value; hDmgThreshold.FloatValue = float(value); }
 		case 16: {
-			ConVar mobLimit = FindConVar("mob_spawn_limit_enabled");
+			ConVar mobLimit = FindConVar("l4d2_heq_enabled");
 			if (mobLimit == null) return;
 			mobLimit.IntValue = value;
 		}
@@ -862,7 +862,7 @@ ConVar GetChallengeSetting(int target)
 		case 12: return hRehealth;
 		case 13: return hReammo;
 		case 15: return hDmgThreshold;
-		case 16: return FindConVar("mob_spawn_limit_enabled");
+		case 16: return FindConVar("l4d2_heq_enabled");
 	}
 	return null;
 }
