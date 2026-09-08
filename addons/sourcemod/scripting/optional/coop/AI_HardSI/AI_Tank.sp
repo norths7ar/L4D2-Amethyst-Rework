@@ -4,182 +4,124 @@
 
 ConVar hCvarTankBhop;
 ConVar hCvarTankRock;
-
-// Bibliography: 
-// TGMaster, Chanz - Infinite Jumping
+ConVar hCvarTankBhopStopDistance;
+ConVar hCvarTankThrowMinDistance;
+ConVar hCvarTankThrowMaxDistance;
 
 public void Tank_OnModuleStart() {
-	hCvarTankBhop = CreateConVar("ai_tank_bhop", "1", "Flag to enable bhop facsimile on AI tanks");
-	hCvarTankRock = CreateConVar("ai_tank_rock", "1", "Flag to enable rock throw on AI tanks");
+    hCvarTankBhop = CreateConVar("ai_tank_bhop", "1", "Enable AI Tank bhopping");
+    hCvarTankRock = CreateConVar("ai_tank_rock", "1", "Allow AI Tank rock throws");
+    hCvarTankBhopStopDistance = CreateConVar("ai_tank_bhop_stop_distance", "190", "Stop adding hops inside this distance", FCVAR_NONE, true, 0.0);
+    hCvarTankThrowMinDistance = CreateConVar("ai_tank_throw_min_distance", "0", "Minimum range for starting an AI rock throw", FCVAR_NONE, true, 0.0);
+    hCvarTankThrowMaxDistance = CreateConVar("ai_tank_throw_max_distance", "800", "Maximum throw-start range; 0 means unlimited", FCVAR_NONE, true, 0.0);
 }
 
-public void Tank_OnModuleEnd() {
+public void Tank_OnModuleEnd() {}
+
+// TGMaster/Chanz infinite-jump approach retained with Ast's 60-unit impulse.
+// Anne ai_tank3 supplies the close-stop/range policy; no dynamic speed tiers.
+public Action Tank_OnPlayerRunCmd(int tank, int& buttons, int& impulse, float vel[3], float angles[3], int& weapon) {
+    int sequence = GetEntProp(tank, Prop_Send, "m_nSequence");
+    bool throwing = sequence >= 48 && sequence <= 51;
+    if (!hCvarTankRock.BoolValue) buttons &= ~IN_ATTACK2;
+    if (!throwing && (buttons & IN_ATTACK2)) {
+        int target = Tank_GetRockTarget(tank);
+        if (target < 1 || !Tank_IsRockTargetInRange(tank, target)) buttons &= ~IN_ATTACK2;
+    }
+
+    // Do not inject a punch that the existing tank_attack_control would use
+    // to cancel this throw, or turn a normal throw into an artificial jump rock.
+    if (throwing || (buttons & IN_ATTACK2)) {
+        buttons &= ~(IN_ATTACK | IN_JUMP | IN_DUCK);
+        return Plugin_Changed;
+    }
+    if (!hCvarTankBhop.BoolValue || GetEntityMoveType(tank) == MOVETYPE_LADDER) return Plugin_Changed;
+
+    float position[3], velocity[3];
+    GetClientAbsOrigin(tank, position);
+    int distance = GetSurvivorProximity(position);
+    if (distance < hCvarTankBhopStopDistance.FloatValue) {
+        buttons &= ~(IN_JUMP | IN_DUCK);
+        return Plugin_Changed; // Valve keeps ownership of the actual melee swing.
+    }
+    GetEntPropVector(tank, Prop_Data, "m_vecVelocity", velocity);
+    float speed = SquareRoot(velocity[0] * velocity[0] + velocity[1] * velocity[1]);
+    if (!GetEntProp(tank, Prop_Send, "m_hasVisibleThreats") || speed <= 210.0) return Plugin_Changed;
+    if (GetEntityFlags(tank) & FL_ONGROUND) {
+        float heading[3];
+        GetClientEyeAngles(tank, heading);
+        if (buttons & IN_BACK) heading[1] += 180.0;
+        if (buttons & IN_MOVELEFT) heading[1] += 90.0;
+        if (buttons & IN_MOVERIGHT) heading[1] -= 90.0;
+        buttons |= IN_DUCK | IN_JUMP;
+        Client_Push(tank, heading, BoostForward);
+    }
+    return Plugin_Changed;
 }
 
-// Tank bhop and blocking rock throw
-public Action Tank_OnPlayerRunCmd( int tank, int& buttons, int& impulse, float vel[3], float angles[3], int& weapon ) {
-	if (!GetConVarBool(hCvarTankRock)) {
-		buttons &= ~IN_ATTACK2;
-	}
-	
-	if (buttons & IN_ATTACK2) {
-		delayStart(tank, 3);
-		delayStart(tank, 4);
-	}
-	
-	if (delayExpired(tank, 4, 0.25) && !delayExpired(tank, 3, 4.0)) {
-		int target = GetClientAimTarget(tank, true);
-		if (target > 0 && isVisibleTo(tank, target)) {
-			// BOTが狙っているターゲットが見えている場合
-		} else {
-			// 見えて無い場合はタンクから見える範囲で一番近い生存者を検索
-			int new_target = -1;
-			float min_dist = 100000.0;
-			float self_pos[3], target_pos[3];
-			
-			GetClientAbsOrigin(tank, self_pos);
-			for (int i = 1; i <= MaxClients; ++i) {
-				if (IsSurvivor(i) && IsPlayerAlive(i) && !IsIncapacitated(i) && isVisibleTo(tank, i)) {
-					float dist;
-				
-					GetClientAbsOrigin(i, target_pos);
-					dist = GetVectorDistance(self_pos, target_pos);
-					if (dist < min_dist) {
-						min_dist = dist;
-						new_target = i;
-					}
-				}
-			}
-			if (new_target > 0) {
-				// 新たなターゲットに照準を合わせる
-				if (angles[2] == 0.0) {
-					float aim_angles[3];
-					computeAimAngles(tank, new_target, aim_angles, AimTarget_Chest);
-					aim_angles[2] = 0.0;
-					TeleportEntity(tank, NULL_VECTOR, aim_angles, NULL_VECTOR);
-					return Plugin_Changed;
-				}
-			}
-		}
-	}
-	
-	if (GetConVarBool(hCvarTankBhop)) {
-		int flags = GetEntityFlags(tank);
-		
-		// Get the player velocity:
-		float fVelocity[3];
-		GetEntPropVector(tank, Prop_Data, "m_vecVelocity", fVelocity);
-		float currentspeed = SquareRoot(Pow(fVelocity[0],2.0)+Pow(fVelocity[1],2.0));
-		// PrintCenterTextAll("Tank Speed: %.1f", currentspeed);
-		
-		// Get Angle of Tank
-		float clientEyeAngles[3];
-		GetClientEyeAngles(tank,clientEyeAngles);
-		
-		// LOS and survivor proximity
-		float tankPos[3];
-		GetClientAbsOrigin(tank, tankPos);
-		int iSurvivorsProximity = GetSurvivorProximity(tankPos);
-		bool bHasSight = view_as<bool>( GetEntProp(tank, Prop_Send, "m_hasVisibleThreats") ); //Line of sight to survivors
-		
-		// Near survivors
-		if( bHasSight && iSurvivorsProximity < 130 && currentspeed > 210.0 ) {
-			buttons |= IN_FORWARD;
-			buttons |= IN_JUMP;
-			buttons |= IN_ATTACK;
-		}
-		
-		if( bHasSight && (500 > iSurvivorsProximity > 170) && currentspeed > 210.0 ) { // Random number to make bhop?
-			if (flags & FL_ONGROUND) {
-				buttons |= IN_DUCK;
-				buttons |= IN_JUMP;
-				
-				if(buttons & IN_FORWARD) {
-					clientEyeAngles[1] += 0.0;
-				}	
-				
-				if(buttons & IN_BACK) {
-					clientEyeAngles[1] += 180.0;
-				}
-				
-				if(buttons & IN_MOVELEFT) {
-					clientEyeAngles[1] += 90.0;
-				}
-				
-				if(buttons & IN_MOVERIGHT) {
-					clientEyeAngles[1] += -90.0;
-				}
-				Client_Push( tank, clientEyeAngles, BoostForward );
-			}
-			//Block Jumping and Crouching when on ladder
-			if (GetEntityMoveType(tank) & MOVETYPE_LADDER) {
-				buttons &= ~IN_JUMP;
-				buttons &= ~IN_DUCK;
-			}
-		}
-		
-		// Far away
-		/*if( bHasSight && iSurvivorsProximity > 400 && currentspeed > 190.0) { // Random number to make bhop?
-			buttons &= ~IN_ATTACK2;	// Block throwing rock
-			if (flags & FL_ONGROUND) {
-				buttons |= IN_DUCK;
-				buttons |= IN_JUMP;
-				
-				if(buttons & IN_FORWARD) {
-					Client_Push( tank, clientEyeAngles, BoostForward, view_as<VelocityOverride>({VelocityOvr_None,VelocityOvr_None,VelocityOvr_None} ) );
-				}	
-				
-				if(buttons & IN_BACK) {
-					clientEyeAngles[1] += 180.0;
-					Client_Push( tank, clientEyeAngles, BoostForwardSlow, view_as<VelocityOverride>({VelocityOvr_None,VelocityOvr_None,VelocityOvr_None} ) );
-				}
-						
-				if(buttons & IN_MOVELEFT) {
-					clientEyeAngles[1] += 90.0;
-					Client_Push( tank, clientEyeAngles, BoostForward, view_as<VelocityOverride>({VelocityOvr_None,VelocityOvr_None,VelocityOvr_None} ) );
-				}
-						
-				if(buttons & IN_MOVERIGHT) {
-					clientEyeAngles[1] += -90.0;
-					Client_Push( tank, clientEyeAngles, BoostForward, view_as<VelocityOverride>({VelocityOvr_None,VelocityOvr_None,VelocityOvr_None} ) );
-				}
-			}
-			//Block Jumping and Crouching when on ladder
-			if (GetEntityMoveType(tank) & MOVETYPE_LADDER) {
-				buttons &= ~IN_JUMP;
-				buttons &= ~IN_DUCK;
-			}
-		}*/
-	}
-	return Plugin_Changed;	
+int Tank_GetRockTarget(int tank) {
+    float position[3], other[3];
+    GetClientAbsOrigin(tank, position);
+    int closest = -1;
+    float limit = 999999.0;
+    for (int target = 1; target <= MaxClients; target++) {
+        if (!IsSurvivor(target) || !IsPlayerAlive(target) || IsIncapacitated(target)
+            || IsPinned(target) || !isVisibleTo(tank, target)) continue;
+        GetClientAbsOrigin(target, other);
+        float distance = GetVectorDistance(position, other);
+        if (distance < limit) { closest = target; limit = distance; }
+    }
+    return closest;
+}
+
+bool Tank_IsRockTargetInRange(int tank, int target) {
+    float position[3], other[3];
+    GetClientAbsOrigin(tank, position);
+    GetClientAbsOrigin(target, other);
+    float distance = GetVectorDistance(position, other);
+    float maximum = hCvarTankThrowMaxDistance.FloatValue;
+    return distance >= hCvarTankThrowMinDistance.FloatValue && (maximum == 0.0 || distance <= maximum);
+}
+
+// Reduced from Anne ai_tank3's L4D_TankRock_OnRelease/calculateThrowAngle:
+// low ballistic arc plus target-velocity lead, using the actual release origin.
+// Preserve the engine's outgoing speed and rock gravity, with no homing after release.
+public Action L4D_TankRock_OnRelease(int tank, int rock, float position[3], float angles[3], float velocity[3], float rotation[3]) {
+    if (!g_bHardSIActive || !IsBotInfected(tank) || !hCvarTankRock.BoolValue) return Plugin_Continue;
+    int target = Tank_GetRockTarget(tank);
+    if (target < 1 || !HasEntProp(rock, Prop_Data, "m_flGravity")) return Plugin_Continue;
+    float speed = GetVectorLength(velocity);
+    float gravityScale = GetEntPropFloat(rock, Prop_Data, "m_flGravity");
+    if (gravityScale == 0.0) gravityScale = 1.0;
+    float gravity = FindConVar("sv_gravity").FloatValue * gravityScale;
+    if (speed < 1.0 || gravity <= 0.0) return Plugin_Continue;
+
+    float point[3], motion[3], delta[3];
+    GetClientAbsOrigin(target, point);
+    point[2] += 45.0;
+    GetEntPropVector(target, Prop_Data, "m_vecAbsVelocity", motion);
+    MakeVectorFromPoints(position, point, delta);
+    float horizontal = SquareRoot(delta[0] * delta[0] + delta[1] * delta[1]);
+    if (horizontal < 1.0) return Plugin_Continue;
+    float speed2 = speed * speed;
+    float discriminant = speed2 * speed2 - gravity * (gravity * horizontal * horizontal + 2.0 * delta[2] * speed2);
+    if (discriminant < 0.0) return Plugin_Continue;
+    float pitch = ArcTangent((speed2 - SquareRoot(discriminant)) / (gravity * horizontal));
+    float flightTime = horizontal / (speed * Cosine(pitch));
+    point[0] += motion[0] * flightTime;
+    point[1] += motion[1] * flightTime;
+    float yaw = ArcTangent2(point[1] - position[1], point[0] - position[0]);
+    velocity[0] = speed * Cosine(pitch) * Cosine(yaw);
+    velocity[1] = speed * Cosine(pitch) * Sine(yaw);
+    velocity[2] = speed * Sine(pitch);
+    return Plugin_Changed;
 }
 
 public Action L4D2_OnSelectTankAttack(int client, int& sequence) {
-	if (!g_bHardSIActive) return Plugin_Continue;
-	if (IsFakeClient(client) && sequence == 50) {
-		sequence = GetRandomInt(0, 1) ? 49 : 51;
-		return Plugin_Handled;
-	}
-	return Plugin_Changed;
+    if (!g_bHardSIActive || !IsBotInfected(client)) return Plugin_Continue;
+    if (sequence == 50) {
+        sequence = GetRandomInt(0, 1) ? 49 : 51;
+        return Plugin_Handled;
+    }
+    return Plugin_Continue;
 }
-/*
-stock CTerrorPlayer_WarpToValidPositionIfStuck(client)
-{
-	static Handle:WarpToValidPositionSDKCall = INVALID_HANDLE;
-	if (WarpToValidPositionSDKCall == INVALID_HANDLE)
-	{
-		StartPrepSDKCall(SDKCall_Player);
-		if (!PrepSDKCall_SetSignature(SDKLibrary_Server, WARPTOVALIDPOSITION_SIG, 0))
-		{
-			return;
-		}
-
-		WarpToValidPositionSDKCall = EndPrepSDKCall();
-		if (WarpToValidPositionSDKCall == INVALID_HANDLE)
-		{
-			return;
-		}
-	}
-
-	SDKCall(WarpToValidPositionSDKCall, client, 0);
-}*/

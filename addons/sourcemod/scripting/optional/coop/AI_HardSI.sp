@@ -212,6 +212,39 @@ public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3
 	return Plugin_Continue;
 }
 
+public Action L4D2_OnChooseVictim(int specialInfected, int &curTarget)
+{
+	if (!g_bHardSIActive || !IsBotInfected(specialInfected) || !IsPlayerAlive(specialInfected))
+	{
+		return Plugin_Continue;
+	}
+
+	int zombieClass = GetInfectedClass(specialInfected);
+	if (zombieClass == L4D2Infected_Spitter)
+	{
+		int pinnedTarget = Spitter_GetPinnedTarget(specialInfected);
+		if (pinnedTarget > 0 && pinnedTarget != curTarget)
+		{
+			curTarget = pinnedTarget;
+			return Plugin_Changed;
+		}
+	}
+	else if (zombieClass == L4D2Infected_Charger && IsSurvivor(curTarget) && IsPinned(curTarget))
+	{
+		int alternative = Charger_GetNearbyUnpinnedTarget(specialInfected, curTarget);
+		// When charge is unavailable ("no cooldown") or nobody else is close,
+		// retain Valve's claw target. A ready Charger instead evaluates its
+		// nearby unpinned alternative, including when low health urges a charge.
+		if (alternative > 0 && Charger_IsAbilityReady(specialInfected))
+		{
+			curTarget = alternative;
+			return Plugin_Changed;
+		}
+	}
+
+	return Plugin_Continue;
+}
+
 /***********************************************************************************************************************************************************************************
 
 																		EVENT HOOKS

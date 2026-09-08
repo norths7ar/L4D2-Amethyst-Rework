@@ -66,25 +66,79 @@ void BlockCharge(int charger) {
 }
 
 void Charger_OnCharge(int charger) {
-	// Assign charger a new survivor target if they are not specifically targetting anybody with their charge or their target is watching
+	// Share the same eligible-target policy with OnChooseVictim. Do not undo
+	// its choice by turning the charge back into a pinned survivor.
 	int aimTarget = GetClientAimTarget(charger);
-	if( !IsSurvivor(aimTarget) || IsTargetWatchingAttacker(charger, GetConVarInt(hCvarAimOffsetSensitivityCharger)) ) {	
-		float chargerPos[3];
-		GetClientAbsOrigin(charger, chargerPos);
-		int newTarget = GetClosestSurvivor(chargerPos, aimTarget);	// try and find another closeby survivor
-		if( newTarget != -1 && GetSurvivorProximity(chargerPos, newTarget) <= GetConVarInt(hCvarChargeProximity) ) {
-			aimTarget = newTarget; // might be the same survivor if there were no other survivors within configured charge proximity
-			
-			#if DEBUG_CHARGER_TARGET
-				new String:targetName[32];
-				GetClientName(newTarget, targetName, sizeof(targetName));
-				PrintToChatAll("Charger forced to charge survivor %s", targetName);
-			#endif
-		
-		}
-		
-		ChargePrediction(charger, aimTarget);
+	if (!Charger_IsFreeTarget(aimTarget)
+		|| IsTargetWatchingAttacker(charger, GetConVarInt(hCvarAimOffsetSensitivityCharger))) {
+		int alternative = Charger_GetNearbyUnpinnedTarget(charger, aimTarget);
+		if (alternative > 0) aimTarget = alternative;
 	}
+	if (Charger_IsFreeTarget(aimTarget) && Charger_HasChargeLine(charger, aimTarget))
+		ChargePrediction(charger, aimTarget);
+}
+
+bool Charger_IsFreeTarget(int survivor) {
+	return IsSurvivor(survivor) && IsPlayerAlive(survivor)
+		&& !IsIncapacitated(survivor) && !IsPinned(survivor)
+		&& !GetEntProp(survivor, Prop_Send, "m_isHangingFromLedge");
+}
+
+bool Charger_IsAbilityReady(int charger)
+{
+	int ability = GetEntPropEnt(charger, Prop_Send, "m_customAbility");
+	return ability > MaxClients && IsValidEntity(ability)
+		&& GetEntPropFloat(ability, Prop_Send, "m_timestamp") <= GetGameTime();
+}
+
+int Charger_GetNearbyUnpinnedTarget(int charger, int excluded)
+{
+	float chargerPos[3], survivorPos[3];
+	GetClientAbsOrigin(charger, chargerPos);
+	int best = -1;
+	float bestDistance = float(GetConVarInt(hCvarChargeProximity));
+	ConVar cvChargeSpeed = FindConVar("z_charge_max_speed");
+	ConVar cvChargeDuration = FindConVar("z_charge_duration");
+	if (cvChargeSpeed != null && cvChargeDuration != null)
+	{
+		bestDistance = cvChargeSpeed.FloatValue * cvChargeDuration.FloatValue;
+	}
+
+	for (int survivor = 1; survivor <= MaxClients; survivor++)
+	{
+		if (survivor == excluded || !Charger_IsFreeTarget(survivor))
+		{
+			continue;
+		}
+		GetClientAbsOrigin(survivor, survivorPos);
+		float distance = GetVectorDistance(chargerPos, survivorPos);
+		if (distance <= bestDistance && Charger_HasChargeLine(charger, survivor))
+		{
+			best = survivor;
+			bestDistance = distance;
+		}
+	}
+	return best;
+}
+
+bool Charger_HasChargeLine(int charger, int survivor)
+{
+	float start[3], end[3];
+	float mins[3] = {-16.0, -16.0, 0.0};
+	float maxs[3] = {16.0, 16.0, 71.0};
+	GetClientAbsOrigin(charger, start);
+	GetClientAbsOrigin(survivor, end);
+	start[2] += 1.0;
+	end[2] += 1.0;
+	Handle trace = TR_TraceHullFilterEx(start, end, mins, maxs, MASK_PLAYERSOLID, Charger_TraceFilter, charger);
+	bool clear = !TR_DidHit(trace) || TR_GetEntityIndex(trace) == survivor;
+	delete trace;
+	return clear;
+}
+
+public bool Charger_TraceFilter(int entity, int contentsMask, int charger)
+{
+	return entity != charger;
 }
 
 void ChargePrediction(int charger, int survivor) {
