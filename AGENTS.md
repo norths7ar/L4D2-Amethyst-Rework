@@ -59,6 +59,12 @@ Keep each document in its own lane. AGENTS contains durable Agent maintenance ru
 * `origin` is the primary GitHub remote and `gitea` is the Gitea backup; when pushing, push the requested branches or tags to both and report any failure; commit-only requests do not authorize pushing.
 * Preserve unrelated and user-created work; untracked files are not disposable.
 
+## 版本发布
+
+* 使用 `vX.Y.Z` 附注标签标记整套配置版本，各插件保留独立版本号；发布前核对相关源码与编译产物，并完成必要检查和维护者试玩确认。
+* 打标签及创建 Release 须经维护者授权；分支与标签按既有远端规则同步，Release 发布到 GitHub `origin`，正文作为发布更新记录。
+* 凭据、运行时数据、缓存、日志及备份保留在 Git 之外。
+
 ## Final Principle
 
 Do not optimize for making every historical path keep working somehow.
