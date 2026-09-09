@@ -1,5 +1,23 @@
 # 服务器操作
 
+## 性能观测
+
+主机 `l4d2-observe.service` 每 5 秒采集一次，使用服务器现有 Python 3.10+ 标准库，不需要安装包。要求 cgroup v2 的 `system.slice/$SERVICE_NAME` 布局；安装入口启用 `kernel.sched_schedstats=1` 并只重启观测服务，不启动或重启游戏。完整基线为 `/var/lib/l4d2-observe/host-YYYY-MM-DD.jsonl`，按日保留约 7–8 天（到期按文件修改时间清理），不再限制为最近若干行。`OBSERVE_INTERVAL_SECONDS` 和 `OBSERVE_RETENTION_DAYS` 在 `/etc/l4d2-restart.conf` 配置。
+
+记录逐逻辑 CPU 的 steal/user/system/idle、进程及各线程的区间 CPU、运行毫秒和调度等待毫秒、上下文切换、真实 swap、三类 PSI、换页、磁盘 I/O、网卡 errors/drops 和游戏 cgroup 的限流计数。线程 CPU 以一个逻辑 CPU 为 100%，主机汇总以所有 CPU 为 100%；等待是 Linux 调度器记录的 runnable 等待，不代表全部宿主机干扰。不可用字段为 null/缺失，不等于零。网卡本地丢包不是玩家网络链路丢包率。云平台未暴露的硬件频率、IPC 和物理核争用不能由这些指标直接证实或排除。
+
+进程更替、逐核 steal 连续 3 个样本达到 10%、主线程调度等待占区间至少 10%、或 cgroup throttle 会在 `incidents/` 封存最近约 2 分钟主机样本与控制台尾部；非进程事件冷却 5 分钟。事后的记录仍在完整日文件中，判断卡顿不依赖是否触发归档。
+
+全局加载的 `server_observe.smx` 在 `addons/sourcemod/logs/server_observe_YYYYMMDD.log` 每约 5 秒记录真实帧间隔的平均/最大值、超过 20/50/100ms 的次数、真人/特感/普通感染者/Witch/实体数、地图及暂停/准备/休眠状态；只清理自身超过 7 天的日文件。帧间隔不是 CPU 执行耗时；插件在引擎阻塞时也无法执行，恢复后才记录长间隔，完全无响应依靠主机日志判断。时间来自 SourcePawn 浮点引擎时钟，长时间运行后的精度会降低，不应解释成亚毫秒精密 profiler。实体数量是每次输出时的快照，不是该窗口所有工作量或峰值。
+
+管理员可在聊天输入 `!lag`（卡）或 `!fine`（顺）；需带备注时仍可用 `!observe_mark <备注>`。命令只标记玩家体感，不参与自动测量；标记不广播、不记录玩家身份，只向调用者确认。没打标记也会持续采样。报告读取两套日志，排除空服/明确暂停/休眠样本，列出地图汇总、标记附近的窗口与缺失状态：
+
+```bash
+sudo python3 /usr/local/libexec/l4d2/observe_report.py --date 2026-09-10
+```
+
+报告是事后命令，不会自动给玩家发送消息。第一次部署后应检查 observer 的 active 状态、两端新日志及一次标记落盘；实时游玩表现仍需实际验证。
+
 服务器是单所有者环境。`ecs-user` 用于 SSH/WinSCP，`l4d2` 只运行游戏；两个账户共享 `l4d2` 组。游戏目录 `/home/l4d2/server` 是唯一运行状态，Git checkout `/home/l4d2/integration` 是仓库内容的部署来源；不使用 overlay、release staging 或单独的 VPK 投递目录。
 
 ## 直接修改

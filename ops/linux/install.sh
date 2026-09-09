@@ -48,6 +48,10 @@ install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/l4d2-run" \
     "$LIBEXEC_DIR/l4d2-run"
 install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/l4d2-observe" \
     "$LIBEXEC_DIR/l4d2-observe"
+install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/observe.py" \
+    "$LIBEXEC_DIR/observe.py"
+install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/observe_report.py" \
+    "$LIBEXEC_DIR/observe_report.py"
 install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/vpk_campaigns.py" \
     "$LIBEXEC_DIR/vpk_campaigns.py"
 if [[ ! -e "$CONFIG_PATH" ]]; then
@@ -79,6 +83,10 @@ install -o root -g root -m 0644 "$SCRIPT_DIR/systemd/l4d2-observe.service" \
 systemctl daemon-reload
 systemctl enable l4d2.service
 systemctl enable l4d2-observe.service
+install -o root -g root -m 0644 "$SCRIPT_DIR/l4d2-observe-sysctl.conf" \
+    /etc/sysctl.d/60-l4d2-observe.conf
+sysctl -p /etc/sysctl.d/60-l4d2-observe.conf
+systemctl restart l4d2-observe.service
 
 printf 'Installed direct-owner L4D2 operations with explicit content apply.\n'
 printf 'The update helper requires git, rsync, flock, and sudo on the host.\n'

@@ -26,5 +26,5 @@ SRCDS_DEBUG_LOG=$SERVER_ROOT/debug.log
 # Low-overhead host/process baseline collected by l4d2-observe.service.
 OBSERVE_INTERVAL_SECONDS=5
 OBSERVE_RETENTION_DAYS=7
-OBSERVE_INCIDENT_LINES=7200
-OBSERVE_BASELINE_MAX_BYTES=12582912
+# Full daily host-YYYY-MM-DD.jsonl files; no size-based truncation.
+# Requires cgroup v2 system.slice/SERVICE_NAME and Python 3.10+ (stdlib only).
