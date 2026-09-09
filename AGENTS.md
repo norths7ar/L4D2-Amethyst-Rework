@@ -9,10 +9,11 @@
 
 ## Sources of Truth
 
-* `README.md`: project intent, mode positioning, and high-level design.
-* `author/CONFIG_GUIDE.md`: configuration layers, runtime ownership, and where to make gameplay/config changes.
-* `author/SERVER_OPERATIONS.md`: deployment and server operations.
-* `PLUGIN_SOURCE_INVENTORY.md`: uncertain SMX provenance and rebuild status.
+* `README.md`: project intent, mode positioning, and current AstRedux implementation.
+* `docs/ROADMAP.md`: planned work; `docs/CHANGELOG.md`: completed repository changes and version history.
+* `docs/architecture.md`: configuration layers, runtime ownership, and where to make gameplay/config changes.
+* `docs/server-operations.md`: deployment and server operations.
+* `docs/plugin-sources.md`: uncertain SMX provenance and rebuild status.
 * Actual cfgs, SourcePawn, VScript, Stripper, and plugin-load files: runtime behavior.
 * `tools/validate_astmod_integration.ps1`: maintained static validation.
 
@@ -55,14 +56,17 @@ Keep each document in its own lane. AGENTS contains durable Agent maintenance ru
 ## Scope and Delivery
 
 * When the maintainer asks for research, inspection, comparison, or report-only work, do not edit files or implement fixes.
-* Completed small fixes or completed implementation plans may be committed after appropriate technical validation; wait for the maintainer to confirm local playtesting and request a push, then deploy only when separately requested.
+* Commit only when explicitly requested or approved by the maintainer; completing work or passing checks does not authorize a commit. Push only when explicitly requested or approved, and deploy only when separately requested.
 * `origin` is the primary GitHub remote and `gitea` is the Gitea backup; when pushing, push the requested branches or tags to both and report any failure; commit-only requests do not authorize pushing.
 * Preserve unrelated and user-created work; untracked files are not disposable.
+
+* 随代码变更及时更新 `docs/ROADMAP.md` 和 `docs/CHANGELOG.md`：前者记录后续计划，完成事项归入后者的未发布部分；两者记录仓库状态，不作为试玩验收清单。
 
 ## 版本发布
 
 * 使用 `vX.Y.Z` 附注标签标记整套配置版本，各插件保留独立版本号；发布前核对相关源码与编译产物，并完成必要检查和维护者试玩确认。
-* 打标签及创建 Release 须经维护者授权；分支与标签按既有远端规则同步，Release 发布到 GitHub `origin`，正文作为发布更新记录。
+* 日常值得记录的变更积累在 `docs/CHANGELOG.md` 的“未发布”部分；发布时归入对应版本和日期，GitHub Release 正文复用该版本记录。
+* 打标签及创建 Release 须经维护者明确批准或指令；分支与标签按既有远端规则同步，Release 发布到 GitHub `origin`。
 * 凭据、运行时数据、缓存、日志及备份保留在 Git 之外。
 
 ## Final Principle
