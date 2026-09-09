@@ -56,13 +56,13 @@ AstRedux 每轮全员准备后倒计时开局，`!fs` 也走倒计时；暂停�
 
 | 功能 | 编辑入口 | 使用方式 |
 | --- | --- | --- |
-| 战役商店 | `cfg/sourcemod/campaign_shop.cfg` 控制开关和状态限制；`addons/sourcemod/configs/campaign_shop.txt` 控制奖励、商品开关、初价与个人购买涨价 | `!buy` 打开菜单，`!ammo` 购买主武器备用弹药；管理员 `sm_campaign_shop_reload` 重读商品与奖励，错误配置保留上一份有效设置。 |
+| 战役商店（默认关闭） | `cfg/sourcemod/campaign_shop.cfg` 控制开关和状态限制；`addons/sourcemod/configs/campaign_shop.txt` 控制奖励、商品开关、初价与个人购买涨价 | `!buy` 打开菜单，`!ammo` 购买主武器备用弹药；管理员 `sm_campaign_shop_reload` 重读商品与奖励，错误配置保留上一份有效设置。 |
 | 追加延迟 | `cfg/sourcemod/player_fakelag.cfg` 设置上限 | `!fakelag` 查询，`!fakelag <毫秒>` 设置自己，0 关闭；配置管理员可用 `!fakelag <玩家> <毫秒>` 与 `!printlag`。默认不追加延迟。 |
 | 旁观 HUD | `spechud.sp` 的 PVE 显示层 | 旁观者 `!spechud` / `!tankhud` 切换；准备和暂停期间避让准备面板。AstRedux 不再同时加载旧 `tank_hud.smx`。 |
 | 帽子 | `addons/sourcemod/data/l4d_hats.cfg` 保存原生模型与位置、角度、大小 | `!hat` / `!hats`；免费开放，保留上游的帽子偏好 cookie，不建立积分解锁数据库。 |
 | 称号 | `addons/sourcemod/configs/chat_tags.cfg` | `!tag` / `!tags` 显示、隐藏或选择允许的称号；管理员默认“管理员”，普通玩家默认无称号，不开放任意文字输入。 |
 
-商店积分和个人商品购买次数保存在内存，跨章节、团灭重开不回滚；切换战役清空，服务器重启或商店插件卸载也会清空。修改价格与奖励请使用配置重载命令，不要通过卸载插件重载。配置中的数值是临时试玩值；Witch 奖励暂为 0，电击器默认不开放，尚未完成完整 AstRedux 规则下的实际使用验证。
+商店当前默认关闭，暂停购买和积分奖励，保留源码与配置。以下记账规则在启用时适用：积分和个人商品购买次数保存在内存，跨章节、团灭重开不回滚；切换战役清空，服务器重启或商店插件卸载也会清空。修改价格与奖励请使用配置重载命令，不要通过卸载插件重载。配置中的数值是临时试玩值；Witch 奖励暂为 0，电击器默认不开放，尚未完成完整 AstRedux 规则下的实际使用验证。
 
 
 ## AstRedux 寻敌规则

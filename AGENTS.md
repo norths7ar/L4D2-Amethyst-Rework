@@ -64,9 +64,9 @@ Keep each document in its own lane. AGENTS contains durable Agent maintenance ru
 
 ## 版本发布
 
-* 使用 `vX.Y.Z` 附注标签标记整套配置版本，各插件保留独立版本号；发布前核对相关源码与编译产物，并完成必要检查和维护者试玩确认。
-* 日常值得记录的变更积累在 `docs/CHANGELOG.md` 的“未发布”部分；发布时归入对应版本和日期，GitHub Release 正文复用该版本记录。
-* 打标签及创建 Release 须经维护者明确批准或指令；分支与标签按既有远端规则同步，Release 发布到 GitHub `origin`。
+* 使用 `vX.Y.Z` 附注标签标记整套配置版本，各插件保留独立版本号；发布前核对相关源码与编译产物并完成必要检查，试玩时机由维护者决定。
+* 日常变更积累在 `docs/CHANGELOG.md` 的“未发布”部分；发布时归入对应版本和日期，作为版本更新记录。
+* 打标签须经维护者明确授权；分支与标签按既有远端规则同步。
 * 凭据、运行时数据、缓存、日志及备份保留在 Git 之外。
 
 ## Final Principle
