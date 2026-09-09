@@ -1,0 +1,128 @@
+// Linux 2.2.4.3 (10097), audited against server_srv.so symbols and disassembly.
+// Replace only each local IsIT() call with false. The following test/branch stays intact.
+// Actual bile timers, common aggro, visibility, target-switch timers and attack logic are untouched.
+"Games"
+{
+	"left4dead2"
+	{
+		"Offsets"
+		{
+			"SupportedPlatform"
+			{
+				"linux"	"1"
+				"windows"	"0"
+			}
+		}
+		"Signatures"
+		{
+			"ChooseVictim"
+			{
+				"library"	"server"
+				"linux"	"@_ZN19BossZombiePlayerBot12ChooseVictimEP13CTerrorPlayeriP20CBaseCombatCharacter"
+			}
+			"BoomerContact"
+			{
+				"library"	"server"
+				"linux"	"@_ZN12BoomerAttack9OnContactEP6BoomerP11CBaseEntityP10CGameTrace"
+			}
+			"ChargerContact"
+			{
+				"library"	"server"
+				"linux"	"@_ZN13ChargerAttack9OnContactEP7ChargerP11CBaseEntityP10CGameTrace"
+			}
+			"HunterContact"
+			{
+				"library"	"server"
+				"linux"	"@_ZN12HunterAttack9OnContactEP6HunterP11CBaseEntityP10CGameTrace"
+			}
+			"JockeyContact"
+			{
+				"library"	"server"
+				"linux"	"@_ZN12JockeyAttack9OnContactEP6JockeyP11CBaseEntityP10CGameTrace"
+			}
+			"SmokerContact"
+			{
+				"library"	"server"
+				"linux"	"@_ZN12SmokerAttack9OnContactEP6SmokerP11CBaseEntityP10CGameTrace"
+			}
+			"TankContact"
+			{
+				"library"	"server"
+				"linux"	"@_ZN10TankAttack9OnContactEP4TankP11CBaseEntityP10CGameTrace"
+			}
+		}
+		"MemPatches"
+		{
+			"ChooseVictim"
+			{
+				"signature"	"ChooseVictim"
+				"linux"
+				{
+					"offset"	"1BBh"
+					"verify"	"\xFF\x90\x50\x05\x00\x00\x84\xC0\x0F\x85\xAF\xFE\xFF\xFF"
+					"patch"	"\x31\xC0\x90\x90\x90\x90\x84\xC0\x0F\x85\xAF\xFE\xFF\xFF"
+				}
+			}
+			"BoomerContact"
+			{
+				"signature"	"BoomerContact"
+				"linux"
+				{
+					"offset"	"FAh"
+					"verify"	"\xFF\x92\x50\x05\x00\x00\x84\xC0\x74\x94"
+					"patch"	"\x31\xC0\x90\x90\x90\x90\x84\xC0\x74\x94"
+				}
+			}
+			"ChargerContact"
+			{
+				"signature"	"ChargerContact"
+				"linux"
+				{
+					"offset"	"182h"
+					"verify"	"\xFF\x92\x50\x05\x00\x00\x84\xC0\x0F\x84\x4D\xFF\xFF\xFF"
+					"patch"	"\x31\xC0\x90\x90\x90\x90\x84\xC0\x0F\x84\x4D\xFF\xFF\xFF"
+				}
+			}
+			"HunterContact"
+			{
+				"signature"	"HunterContact"
+				"linux"
+				{
+					"offset"	"FAh"
+					"verify"	"\xFF\x92\x50\x05\x00\x00\x84\xC0\x74\x94"
+					"patch"	"\x31\xC0\x90\x90\x90\x90\x84\xC0\x74\x94"
+				}
+			}
+			"JockeyContact"
+			{
+				"signature"	"JockeyContact"
+				"linux"
+				{
+					"offset"	"FAh"
+					"verify"	"\xFF\x92\x50\x05\x00\x00\x84\xC0\x74\x94"
+					"patch"	"\x31\xC0\x90\x90\x90\x90\x84\xC0\x74\x94"
+				}
+			}
+			"SmokerContact"
+			{
+				"signature"	"SmokerContact"
+				"linux"
+				{
+					"offset"	"FAh"
+					"verify"	"\xFF\x92\x50\x05\x00\x00\x84\xC0\x74\x94"
+					"patch"	"\x31\xC0\x90\x90\x90\x90\x84\xC0\x74\x94"
+				}
+			}
+			"TankContact"
+			{
+				"signature"	"TankContact"
+				"linux"
+				{
+					"offset"	"127h"
+					"verify"	"\xFF\x92\x50\x05\x00\x00\x84\xC0\x74\x97"
+					"patch"	"\x31\xC0\x90\x90\x90\x90\x84\xC0\x74\x97"
+				}
+			}
+		}
+	}
+}

@@ -91,35 +91,6 @@ bool Charger_IsAbilityReady(int charger)
 		&& GetEntPropFloat(ability, Prop_Send, "m_timestamp") <= GetGameTime();
 }
 
-int Charger_GetCloseTarget(int charger, int current)
-{
-	// Never redirect an ongoing carry/pummel/charge or interrupt its victim.
-	int ability = GetEntPropEnt(charger, Prop_Send, "m_customAbility");
-	if (GetEntPropEnt(charger, Prop_Send, "m_carryVictim") > 0
-		|| GetEntPropEnt(charger, Prop_Send, "m_pummelVictim") > 0
-		|| (ability > MaxClients && IsValidEntity(ability) && GetEntProp(ability, Prop_Send, "m_isCharging"))) return -1;
-	float origin[3], targetPos[3];
-	GetClientAbsOrigin(charger, origin);
-	float nearest = 80.0;
-	// Keep a valid close target stable instead of alternating between players.
-	if (Charger_IsFreeTarget(current))
-	{
-		GetClientAbsOrigin(current, targetPos);
-		if (GetVectorDistance(origin, targetPos) <= nearest && Charger_HasChargeLine(charger, current)) return current;
-	}
-	int best = -1;
-	for (int survivor = 1; survivor <= MaxClients; survivor++)
-	{
-		if (!Charger_IsFreeTarget(survivor)) continue;
-		GetClientAbsOrigin(survivor, targetPos);
-		float distance = GetVectorDistance(origin, targetPos);
-		if (distance > nearest || !Charger_HasChargeLine(charger, survivor)) continue;
-		nearest = distance;
-		best = survivor;
-	}
-	return best;
-}
-
 int Charger_GetNearbyUnpinnedTarget(int charger, int excluded)
 {
 	float chargerPos[3], survivorPos[3];

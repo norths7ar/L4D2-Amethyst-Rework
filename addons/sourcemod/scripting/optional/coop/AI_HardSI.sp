@@ -231,14 +231,6 @@ public Action L4D2_OnChooseVictim(int specialInfected, int &curTarget)
 	}
 	else if (zombieClass == L4D2Infected_Charger)
 	{
-		// Do not keep chasing a distant engine-selected victim while a free
-		// survivor is within striking distance. Leave attack timing to the AI.
-		int closeTarget = Charger_GetCloseTarget(specialInfected, curTarget);
-		if (closeTarget > 0 && closeTarget != curTarget)
-		{
-			curTarget = closeTarget;
-			return Plugin_Changed;
-		}
 		if (!IsSurvivor(curTarget) || !IsPinned(curTarget)) return Plugin_Continue;
 		int alternative = Charger_GetNearbyUnpinnedTarget(specialInfected, curTarget);
 		// When charge is unavailable ("no cooldown") or nobody else is close,
