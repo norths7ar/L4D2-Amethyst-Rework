@@ -1,0 +1,28 @@
+"Phrases"
+{
+    "You"
+    {
+        "en" "{green}You"
+    }
+    "FFAnnounceToVictim"
+    {
+        "#format" "{1:N},{2:d}"
+        "en" "{olive}{1} {default}hurt you: {green}{2}"
+    }
+    "FFAnnounceToGuilty1"
+    {
+        "en" "{GUILTY} {default}hurt {olive}{VICTIM1_NAME}{default}: {green}{VICTIM1_DMG}"
+    }
+    "FFAnnounceToGuilty2"
+    {
+        "en" "{GUILTY} {default}hurt {olive}{VICTIM1_NAME}{default}: {green}{VICTIM1_DMG}{default}, {olive}{VICTIM2_NAME}{default}: {green}{VICTIM2_DMG}"
+    }
+    "FFAnnounceToGuilty3"
+    {
+        "en" "{GUILTY} {default}hurt {olive}{VICTIM1_NAME}{default}: {green}{VICTIM1_DMG}{default}, {olive}{VICTIM2_NAME}{default}: {green}{VICTIM2_DMG}{default}, {olive}{VICTIM3_NAME}{default}: {green}{VICTIM3_DMG}"
+    }
+    "FFAnnounceToGuilty4"
+    {
+        "en" "{GUILTY} {default}hurt {olive}{VICTIM1_NAME}{default}: {green}{VICTIM1_DMG}{default}, {olive}{VICTIM2_NAME}{default}: {green}{VICTIM2_DMG}{default}, {olive}{VICTIM3_NAME}{default}: {green}{VICTIM3_DMG}{default}, {olive}{VICTIM4_NAME}{default}: {green}{VICTIM4_DMG}"
+    }
+}

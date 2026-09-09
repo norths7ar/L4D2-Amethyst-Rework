@@ -1,0 +1,28 @@
+"Phrases"
+{
+    "You"
+    {
+        "chi" "{green}你"
+    }
+    "FFAnnounceToVictim"
+    {
+        "#format" "{1:N},{2:d}"
+        "chi" "{olive}{1} {default}误伤了你：{green}{2}"
+    }
+    "FFAnnounceToGuilty1"
+    {
+        "chi" "{GUILTY} {default}误伤了 {olive}{VICTIM1_NAME}{default}：{green}{VICTIM1_DMG}"
+    }
+    "FFAnnounceToGuilty2"
+    {
+        "chi" "{GUILTY} {default}误伤了 {olive}{VICTIM1_NAME}{default}：{green}{VICTIM1_DMG}{default}，{olive}{VICTIM2_NAME}{default}：{green}{VICTIM2_DMG}"
+    }
+    "FFAnnounceToGuilty3"
+    {
+        "chi" "{GUILTY} {default}误伤了 {olive}{VICTIM1_NAME}{default}：{green}{VICTIM1_DMG}{default}，{olive}{VICTIM2_NAME}{default}：{green}{VICTIM2_DMG}{default}，{olive}{VICTIM3_NAME}{default}：{green}{VICTIM3_DMG}"
+    }
+    "FFAnnounceToGuilty4"
+    {
+        "chi" "{GUILTY} {default}误伤了 {olive}{VICTIM1_NAME}{default}：{green}{VICTIM1_DMG}{default}，{olive}{VICTIM2_NAME}{default}：{green}{VICTIM2_DMG}{default}，{olive}{VICTIM3_NAME}{default}：{green}{VICTIM3_DMG}{default}，{olive}{VICTIM4_NAME}{default}：{green}{VICTIM4_DMG}"
+    }
+}
