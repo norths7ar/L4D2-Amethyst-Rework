@@ -27,7 +27,6 @@ int g_iSlotOverrideMask[5];
 int g_iSlotOverride[5][17];
 int g_iPendingSlot;
 Handle g_hEmptyResetTimer;
-Handle g_hReminderTimer;
 
 ConVar hRehealth;
 ConVar hReammo;
@@ -43,7 +42,7 @@ public Plugin myinfo =
 	name = "Coop Challenge",
 	author = "海洋空氣, norths7ar",
 	description = "Difficulty Controller for Coop.",
-	version = "2.7-integration",
+	version = "2.8-integration",
 	url = "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
 };
 
@@ -61,7 +60,6 @@ public void OnPluginStart()
 	hDmgThreshold = FindConVar("si_damage_base");
 	hRatioDamage = FindConVar("si_damage_ratio_enable");
 
-	g_hReminderTimer = CreateTimer(300.0, Timer_RemindOverrides, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 	ClearAllSlotOverrides();
 }
 
@@ -964,18 +962,14 @@ void GetWavePhrase(int field, char[] phrase, int maxlen)
 	strcopy(phrase, maxlen, phrases[field]);
 }
 
-public Action Timer_RemindOverrides(Handle timer)
+// Called only when the shared advertisement rotation reaches this entry.
+public Action Advertisements_OnDynamicChat(const char[] key, int client, char[] buffer, int maxlen)
 {
-	if (CountOverrides() > 0) {
-		for (int client = 1; client <= MaxClients; client++)
-		{
-			if (!IsClientInGame(client) || IsFakeClient(client)) continue;
-			char status[64];
-			GetGameplayStatus(client, status, sizeof(status));
-			PrintToChat(client, "\x04[Ast] \x01%t", "OverrideReminder", status);
-		}
-	}
-	return Plugin_Continue;
+    if (!StrEqual(key, "ast_overrides") || CountOverrides() <= 0) return Plugin_Continue;
+    char status[64];
+    GetGameplayStatus(client, status, sizeof(status));
+    FormatEx(buffer, maxlen, "\x04[Ast] \x01%T", "OverrideReminder", client, status);
+    return Plugin_Handled;
 }
 
 public Action Timer_ShowJoinStatus(Handle timer, int userId)
@@ -995,13 +989,8 @@ public Action Timer_EmptyServerReset(Handle timer)
 	return Plugin_Stop;
 }
 
-public void OnMapStart() {
-	if (g_hReminderTimer == null) g_hReminderTimer = CreateTimer(300.0, Timer_RemindOverrides, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
-}
-
 public void OnMapEnd()
 {
-	g_hReminderTimer = null;
 	g_hEmptyResetTimer = null;
 }
 

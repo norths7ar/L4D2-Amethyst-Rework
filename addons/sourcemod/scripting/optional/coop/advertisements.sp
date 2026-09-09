@@ -9,7 +9,7 @@
 #include "advertisements/chatcolors.sp"
 #include "advertisements/topcolors.sp"
 
-#define PL_VERSION	"2.1.2"
+#define PL_VERSION	"2.1.3"
 #define UPDATE_URL	"http://ErikMinekus.github.io/sm-advertisements/update.txt"
 
 public Plugin myinfo =
@@ -24,6 +24,7 @@ public Plugin myinfo =
 
 enum struct Advertisement
 {
+    char dynamic[64];
     char center[1024];
     char chat[2048];
     char hint[1024];
@@ -47,6 +48,7 @@ ConVar g_hFile;
 ConVar g_hInterval;
 ConVar g_hRandom;
 Handle g_hTimer;
+GlobalForward g_hDynamicChat;
 
 
 /**
@@ -68,6 +70,9 @@ public void OnPluginStart()
     g_hAdvertisements = new ArrayList(sizeof(Advertisement));
 
     RegServerCmd("sm_advertisements_reload", Command_ReloadAds, "Reload the advertisements");
+
+    // Providers return Plugin_Handled with per-client chat text, or leave it empty.
+    g_hDynamicChat = new GlobalForward("Advertisements_OnDynamicChat", ET_Hook, Param_String, Param_Cell, Param_String, Param_Cell);
 
     AddChatColors();
     AddTopColors();
@@ -141,7 +146,34 @@ public void Timer_DisplayAd(Handle timer)
     }
 
     Advertisement ad;
-    g_hAdvertisements.GetArray(g_iCurrentAd, ad);
+    // Skip unavailable dynamic entries within this tick, bounded by the list size.
+    bool selected;
+    for (int attempt; attempt < g_hAdvertisements.Length; attempt++) {
+        g_hAdvertisements.GetArray(g_iCurrentAd, ad);
+        if (!ad.dynamic[0]) {
+            selected = true;
+            break;
+        }
+        bool sent;
+        for (int client = 1; client <= MaxClients; client++) {
+            if (!IsValidClient(client, ad)) continue;
+            char text[1024];
+            Action result = Plugin_Continue;
+            Call_StartForward(g_hDynamicChat);
+            Call_PushString(ad.dynamic);
+            Call_PushCell(client);
+            Call_PushStringEx(text, sizeof(text), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+            Call_PushCell(sizeof(text));
+            Call_Finish(result);
+            if (result == Plugin_Handled && text[0]) {
+                PrintToChat(client, "%s", text);
+                sent = true;
+            }
+        }
+        g_iCurrentAd = (g_iCurrentAd + 1) % g_hAdvertisements.Length;
+        if (sent) return;
+    }
+    if (!selected) return;
     char message[1024];
 
     if (ad.center[0]) {
@@ -280,11 +312,15 @@ void ParseAds()
     KeyValues hConfig = new KeyValues("Advertisements");
     hConfig.SetEscapeSequences(true);
     hConfig.ImportFromFile(sPath);
-    hConfig.GotoFirstSubKey();
+    if (!hConfig.GotoFirstSubKey()) {
+        delete hConfig;
+        return;
+    }
 
     Advertisement ad;
     char flags[22];
     do {
+        hConfig.GetString("dynamic", ad.dynamic, sizeof(Advertisement::dynamic));
         hConfig.GetString("center", ad.center, sizeof(Advertisement::center));
         hConfig.GetString("chat",   ad.chat,   sizeof(Advertisement::chat));
         hConfig.GetString("hint",   ad.hint,   sizeof(Advertisement::hint));

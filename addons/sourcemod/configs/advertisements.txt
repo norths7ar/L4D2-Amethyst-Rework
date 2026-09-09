@@ -50,4 +50,9 @@
 	{
 		"chat"		"{green}[服主]{lightgreen} Steam 好友码：{olive}462385728{lightgreen}。欢迎反馈，也欢迎约人开黑。"
 	}
+    // Dynamic entries provide per-player chat; unavailable entries are skipped.
+    "ast_overrides"
+    {
+        "dynamic" "ast_overrides"
+    }
 }
