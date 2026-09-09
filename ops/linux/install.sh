@@ -7,7 +7,7 @@ CONFIG_PATH=/etc/l4d2-restart.conf
 LIBEXEC_DIR=/usr/local/libexec/l4d2
 
 [[ $# -eq 0 ]] || {
-    printf 'Usage: sudo ./ops/install.sh\n' >&2
+    printf 'Usage: sudo ./ops/linux/install.sh\n' >&2
     exit 2
 }
 [[ $EUID -eq 0 ]] || {

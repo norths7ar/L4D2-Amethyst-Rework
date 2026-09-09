@@ -2,6 +2,11 @@
 
 服务器采用单所有者模型：`ecs-user` 是 SSH/SFTP 维护账户，`l4d2` 是游戏进程账户，两者同属 `l4d2` 组。`/home/l4d2/server` 是唯一运行目录，`/home/l4d2/integration` 是 Git 管理内容的部署来源；不再使用 release tree、overlay 或 VPK 投递目录。
 
+## 目录结构
+
+- `linux/`：Linux 服务端安装脚本、运维命令、systemd 服务和测试。
+- `windows/`：Windows 本地操作入口，通过 SSH 调用服务端命令。
+
 ## 维护入口
 
 Windows 的更新入口是 `ops/windows/02-apply-content-and-restart.cmd`，远端执行 `sudo l4d2-update-and-restart`：它校验 Git checkout 的分支和工作树，只做 fast-forward 更新，将 Git 跟踪的 `addons/`、`cfg/`、`scripts/` 部署到游戏目录，再复用内容校验和重启。01 只检查内容，03 只重启；两者都不执行 Git。
@@ -28,7 +33,7 @@ sudo l4d2-content-apply
 cd /home/l4d2/integration
 git fetch origin main
 git merge --ff-only origin/main
-sudo ./ops/install.sh
+sudo ./ops/linux/install.sh
 sudo l4d2-content-apply --check
 sudo l4d2-content-apply
 systemctl status l4d2
