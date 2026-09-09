@@ -15,6 +15,9 @@ ConVar g_cvStuckTime;
 ConVar g_cvMoveTolerance;
 ConVar g_cvAttempts;
 ConVar g_cvRetryDelay;
+ConVar g_cvTankEnable;
+ConVar g_cvTankTime;
+ConVar g_cvTankMinDistance;
 
 float g_lastOrigin[MAXPLAYERS + 1][3];
 float g_lastProgress[MAXPLAYERS + 1];
@@ -27,7 +30,7 @@ public Plugin myinfo =
 	name = "SI Unstuck",
 	author = "OpenAI",
 	description = "Moves a stuck live AI special infected to a safe hidden nav position",
-	version = "1.0.0",
+	version = "1.1.0",
 	url = ""
 };
 
@@ -38,6 +41,9 @@ public void OnPluginStart()
 	g_cvMoveTolerance = CreateConVar("si_unstuck_move_tolerance", "24.0", "Distance which counts as movement", FCVAR_NONE, true, 1.0);
 	g_cvAttempts = CreateConVar("si_unstuck_attempts", "12", "Hidden spawn positions tested per relocation", FCVAR_NONE, true, 1.0);
 	g_cvRetryDelay = CreateConVar("si_unstuck_retry_delay", "2.0", "Delay after no safe destination was found", FCVAR_NONE, true, 0.1);
+	g_cvTankEnable = CreateConVar("tank_unstuck_enable", "0", "Enable stuck AI Tank relocation independently of normal SI", FCVAR_NONE, true, 0.0, true, 1.0);
+	g_cvTankTime = CreateConVar("tank_unstuck_time", "8.0", "Tank stationary movement-attempt time before relocation", FCVAR_NONE, true, 1.0);
+	g_cvTankMinDistance = CreateConVar("tank_unstuck_min_distance", "300.0", "Minimum Tank destination distance from every living survivor", FCVAR_NONE, true, 100.0);
 
 	HookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
 	CreateTimer(0.5, Timer_Monitor, _, TIMER_REPEAT);
@@ -73,7 +79,8 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 	{
 		g_lastCombatInput[client] = GetGameTime();
 	}
-	if (IsEligibleSI(client) && (buttons & (IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT | IN_JUMP)))
+	if (IsEligibleSI(client) && ((buttons & (IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT | IN_JUMP))
+		|| (GetEntProp(client, Prop_Send, "m_zombieClass") == 8 && (FloatAbs(vel[0]) > 1.0 || FloatAbs(vel[1]) > 1.0))))
 	{
 		g_lastMoveInput[client] = GetGameTime();
 	}
@@ -82,11 +89,6 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 
 public Action Timer_Monitor(Handle timer)
 {
-	if (!g_cvEnable.BoolValue)
-	{
-		return Plugin_Continue;
-	}
-
 	float now = GetGameTime();
 	for (int client = 1; client <= MaxClients; client++)
 	{
@@ -97,6 +99,8 @@ public Action Timer_Monitor(Handle timer)
 		}
 
 		float origin[3];
+		bool tank = GetEntProp(client, Prop_Send, "m_zombieClass") == 8;
+		float stuckTime = tank ? g_cvTankTime.FloatValue : g_cvStuckTime.FloatValue;
 		GetClientAbsOrigin(client, origin);
 		// An idle ambusher is not stuck. Only accumulate stationary time while
 		// NextBot is issuing movement input and failing to make progress.
@@ -120,12 +124,14 @@ public Action Timer_Monitor(Handle timer)
 			continue;
 		}
 
-		if (now < g_nextAttempt[client] || now - g_lastProgress[client] < g_cvStuckTime.FloatValue)
+		if (now < g_nextAttempt[client] || now - g_lastProgress[client] < stuckTime)
 		{
 			continue;
 		}
 
-		if (!IsPositionHidden(origin) || !TryRelocate(client, origin))
+		// A Tank stuck in a visible gap must still be rescued. Only its destination
+		// must be hidden; retain the existing unseen-origin rule for normal SI.
+		if ((!tank && !IsPositionHidden(origin)) || !TryRelocate(client, origin))
 		{
 			g_nextAttempt[client] = now + g_cvRetryDelay.FloatValue;
 			continue;
@@ -133,7 +139,7 @@ public Action Timer_Monitor(Handle timer)
 
 		GetClientAbsOrigin(client, g_lastOrigin[client]);
 		g_lastProgress[client] = now;
-		g_nextAttempt[client] = now + g_cvStuckTime.FloatValue;
+		g_nextAttempt[client] = now + stuckTime;
 	}
 	return Plugin_Continue;
 }
@@ -141,13 +147,17 @@ public Action Timer_Monitor(Handle timer)
 bool TryRelocate(int client, const float oldOrigin[3])
 {
 	int zombieClass = GetEntProp(client, Prop_Send, "m_zombieClass");
+	bool tank = zombieClass == 8;
+	float maxs[3];
+	GetClientMaxs(client, maxs);
 	for (int attempt = 0; attempt < g_cvAttempts.IntValue; attempt++)
 	{
 		float destination[3];
 		int anchor = GetRandomLivingSurvivor();
 		if (anchor < 1 || !L4D_GetRandomPZSpawnPosition(anchor, zombieClass, 5, destination)
 			|| GetVectorDistance(oldOrigin, destination) < 128.0
-			|| !IsPositionHidden(destination)
+			|| !IsPositionHidden(destination, tank ? maxs[2] : 74.0)
+			|| (tank && !IsTankDestinationFarEnough(destination))
 			|| !IsSafeHull(client, destination)
 			|| !HasPathToSurvivors(destination))
 		{
@@ -156,6 +166,7 @@ bool TryRelocate(int client, const float oldOrigin[3])
 
 		float zeroVelocity[3];
 		TeleportEntity(client, destination, NULL_VECTOR, zeroVelocity);
+		if (tank) L4D2_CommandABot(client, 0, BOT_CMD_RESET);
 		return true;
 	}
 	return false;
@@ -202,7 +213,7 @@ public bool TraceIgnorePlayers(int entity, int contentsMask)
 	return entity < 1 || entity > MaxClients;
 }
 
-bool IsPositionHidden(const float position[3])
+bool IsPositionHidden(const float position[3], float top = 74.0)
 {
 	for (int survivor = 1; survivor <= MaxClients; survivor++)
 	{
@@ -216,7 +227,7 @@ bool IsPositionHidden(const float position[3])
 		{
 			float point[3];
 			CopyVector(position, point);
-			point[2] += height * 36.0 + 2.0;
+			point[2] += height * (top - 2.0) / 2.0 + 2.0;
 			TR_TraceRayFilter(eye, point, MASK_VISIBLE, RayType_EndPoint, TraceIgnorePlayers);
 			if (!TR_DidHit()) return false;
 		}
@@ -226,6 +237,14 @@ bool IsPositionHidden(const float position[3])
 
 bool IsBusySI(int client, float now)
 {
+	if (GetEntProp(client, Prop_Send, "m_zombieClass") == 8)
+	{
+		// anim_hulk sequence numbers: climbing/ladders, shoves, attacks/throws,
+		// victory/rage and flinches. Never rescue a Tank during these actions.
+		int sequence = GetEntProp(client, Prop_Send, "m_nSequence");
+		if ((sequence >= 2 && sequence <= 4) || (sequence >= 16 && sequence <= 31) || (sequence >= 33 && sequence <= 64)
+			|| (GetEntityFlags(client) & FL_FROZEN)) return true;
+	}
 	if (now - g_lastCombatInput[client] < 1.0 || GetEntityMoveType(client) == MOVETYPE_LADDER)
 	{
 		return true;
@@ -256,7 +275,20 @@ bool IsEligibleSI(int client)
 		return false;
 	}
 	int zombieClass = GetEntProp(client, Prop_Send, "m_zombieClass");
-	return zombieClass >= FIRST_NORMAL_SI && zombieClass <= LAST_NORMAL_SI;
+	return zombieClass == 8 ? g_cvTankEnable.BoolValue
+		: g_cvEnable.BoolValue && zombieClass >= FIRST_NORMAL_SI && zombieClass <= LAST_NORMAL_SI;
+}
+
+bool IsTankDestinationFarEnough(const float position[3])
+{
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (!IsClientInGame(client) || GetClientTeam(client) != TEAM_SURVIVOR || !IsPlayerAlive(client)) continue;
+		float origin[3];
+		GetClientAbsOrigin(client, origin);
+		if (GetVectorDistance(position, origin) < g_cvTankMinDistance.FloatValue) return false;
+	}
+	return true;
 }
 
 void ResetTracking(int client)
