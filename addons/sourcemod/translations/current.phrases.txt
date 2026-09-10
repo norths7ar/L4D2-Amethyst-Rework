@@ -8,4 +8,9 @@
 	{
 		"en"		"{green}%d%%{default}"
 	}
+	"Unavailable"
+	{
+		"en" "Progress unavailable"
+		"chi" "路程不可用"
+	}
 }

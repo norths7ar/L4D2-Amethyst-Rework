@@ -14,7 +14,7 @@ public Plugin myinfo =
 	name = "L4D2 Survivor Progress",
 	author = "CanadaRox, Visor",
 	description = "Print survivor progress in flow percents ",
-	version = "2.0.7",
+	version = "2.0.8",
 	url = "https://github.com/SirPlease/L4D2-Competitive-Rework"
 };
 
@@ -32,7 +32,13 @@ Action CurrentCmd(int client, int args)
 	if (!client || !IsClientInGame(client))
 		return Plugin_Handled;
 
-	int boss_proximity = RoundToNearest(GetBossProximity() * 100.0);
+	float proximity;
+	if (!GetBossProximity(proximity))
+	{
+		CPrintToChat(client, "%t %t", "Tag", "Unavailable");
+		return Plugin_Handled;
+	}
+	int boss_proximity = RoundToNearest(proximity * 100.0);
 	CPrintToChat(client, "%t %t", "Tag", "Current", boss_proximity);
 	return Plugin_Handled;
 }
@@ -40,35 +46,50 @@ Action CurrentCmd(int client, int args)
 /**
  * Calculates the proximity of the boss to the survivors.
  *
- * @return The proximity value, ranging from 0.0 to 1.0.
+ * @return Whether valid flow data was available.
  */
-float GetBossProximity()
+bool GetBossProximity(float &proximity)
 {
-	float proximity = GetMaxSurvivorCompletion() + g_hVsBossBuffer.FloatValue / L4D2Direct_GetMapMaxFlowDistance();
-
-	return (proximity > 1.0) ? 1.0 : proximity;
+	float maxFlow = L4D2Direct_GetMapMaxFlowDistance();
+	float buffer = g_hVsBossBuffer.FloatValue;
+	float flow;
+	if (!IsValidFlow(maxFlow) || maxFlow <= 0.0 || !IsValidFlow(buffer)
+		|| !GetMaxSurvivorFlow(flow)) return false;
+	proximity = (flow + buffer) / maxFlow;
+	if (!IsValidFlow(proximity)) return false;
+	if (proximity > 1.0) proximity = 1.0;
+	return true;
 }
 
 /**
- * Calculates the maximum completion flow for survivors in the game.
+ * Reads the furthest valid flow among living survivors.
  *
- * @return The maximum completion flow for survivors.
+ * @return Whether at least one living survivor had valid nav flow.
  */
-float GetMaxSurvivorCompletion()
+bool GetMaxSurvivorFlow(float &flow)
 {
-	float flow = 0.0, tmp_flow = 0.0;
+	flow = 0.0;
+	bool found;
 	Address pNavArea;
 	for (int i = 1; i <= MaxClients; i++) {
 		if (IsClientInGame(i) && GetClientTeam(i) == TEAM_SURVIVORS && IsPlayerAlive(i)) {
 			pNavArea = L4D_GetLastKnownArea(i);
 			if (pNavArea != Address_Null) {
-				tmp_flow = L4D2Direct_GetTerrorNavAreaFlow(pNavArea);
+				float tmp_flow = L4D2Direct_GetTerrorNavAreaFlow(pNavArea);
+				if (!IsValidFlow(tmp_flow)) continue;
 				flow = (flow > tmp_flow) ? flow : tmp_flow;
+				found = true;
 			}
 		}
 	}
 
-	return (flow / L4D2Direct_GetMapMaxFlowDistance());
+	return found;
+}
+
+bool IsValidFlow(float value)
+{
+	// Reject negative/unreachable distances, NaN, infinity and FLT_MAX nav sentinels.
+	return value >= 0.0 && value < view_as<float>(0x7F7FFFFF);
 }
 
 /**
