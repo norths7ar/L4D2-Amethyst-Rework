@@ -12,19 +12,29 @@
 
 #define TEAM_SURVIVORS          2
 
-int tempTankDmg = -1;
-int tempTankBhop = -1;
-int tempTankRock = -1;
-int tempMorePills = -1;
-int tempKillMapPills = -1;
-int tempRatioDamage = -1;
-int tempRehealth = -1;
-int tempReammo = -1;
-int tempSIDamage = -1;
-int pendingMobLimit = -1;
-int g_iOverrideMask;
+enum
+{
+	Setting_TankDamage = 1,
+	Setting_TankBhop = 2,
+	Setting_TankRock = 3,
+	Setting_ExtraPills = 7,
+	Setting_RemoveMapPills = 8,
+	Setting_RatioDamage = 11,
+	Setting_KillHealth = 12,
+	Setting_KillAmmo = 13,
+	Setting_Reset = 14,
+	Setting_SIDamage = 15,
+	Setting_FiniteHordes = 16,
+	Setting_Count
+};
+
+// Applied overrides belong to their player-count profile, not to an active vote.
 int g_iSlotOverrideMask[5];
-int g_iSlotOverride[5][17];
+int g_iSlotOverride[5][Setting_Count];
+
+// Captured when voting starts; profile changes must not overwrite these values.
+int g_iPendingTarget;
+int g_iPendingValue;
 int g_iPendingSlot;
 Handle g_hEmptyResetTimer;
 
@@ -42,7 +52,7 @@ public Plugin myinfo =
 	name = "Coop Challenge",
 	author = "海洋空氣, norths7ar",
 	description = "Difficulty Controller for Coop.",
-	version = "2.8-integration",
+	version = "2.8.1-integration",
 	url = "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
 };
 
@@ -130,9 +140,9 @@ public int MenuHandler(Handle menu, MenuAction action, int client, int param)
 		char item[32];
 		GetMenuItem(menu, param, item, sizeof(item));
 		if (StrEqual(item, "tank_bhop")) {
-			TZ_CallVote(client, 2, !GetConVarBool(FindConVar("ai_tank_bhop")));
+			RequestGameplaySetting(client, Setting_TankBhop, !GetConVarBool(FindConVar("ai_tank_bhop")));
 		} else if (StrEqual(item, "tank_rock")) {
-			TZ_CallVote(client, 3, !GetConVarBool(FindConVar("ai_tank_rock")));
+			RequestGameplaySetting(client, Setting_TankRock, !GetConVarBool(FindConVar("ai_tank_rock")));
 		} else if (StrEqual(item, "tank_damage")) {
 			Menu_TankDmg(client, false);
 		} else if (StrEqual(item, "si")) {
@@ -151,31 +161,31 @@ public int MenuHandler(Handle menu, MenuAction action, int client, int param)
 				drawPanel(client, 0);
 				return 1;
 			}
-			TZ_CallVote(client, 11, !GetConVarBool(hRatioDamage));
+			RequestGameplaySetting(client, Setting_RatioDamage, !GetConVarBool(hRatioDamage));
 			drawPanel(client, 0);
 		} else if (StrEqual(item, "rehealth")) {
 			if (!IsClientSurvivor(client, true)) {
 				drawPanel(client, 0);
 				return 1;
 			}
-			TZ_CallVote(client, 12, !GetConVarBool(hRehealth));
+			RequestGameplaySetting(client, Setting_KillHealth, !GetConVarBool(hRehealth));
 			drawPanel(client, 0);
 		} else if (StrEqual(item, "reammo")) {
 			if (!IsClientSurvivor(client, true)) {
 				drawPanel(client, 0);
 				return 1;
 			}
-			TZ_CallVote(client, 13, !GetConVarBool(hReammo));
+			RequestGameplaySetting(client, Setting_KillAmmo, !GetConVarBool(hReammo));
 			drawPanel(client, 0);
 		} else if (StrEqual(item, "mob_limit")) {
 			ConVar mobLimit = FindConVar("l4d2_heq_enabled");
 			if (mobLimit == null) PrintToChat(client, "\x04[Ast] \x01%t", "FiniteHordesPluginUnavailable");
-			else TZ_CallVote(client, 16, !mobLimit.BoolValue);
+			else RequestGameplaySetting(client, Setting_FiniteHordes, !mobLimit.BoolValue);
 			drawPanel(client, 0);
 		} else if (StrEqual(item, "pills")) {
 			Menu_MorePills(client, false);
 		} else if (StrEqual(item, "reset")) {
-			TZ_CallVote(client, 14, 0);
+			RequestGameplaySetting(client, Setting_Reset, 0);
 			drawPanel(client, 0);
 		}
 	} else if (action == MenuAction_End) {
@@ -213,11 +223,16 @@ public Action Menu_TankDmg(int client, int args)
 
 public int Menu_TankDmgHandler(Handle menu, MenuAction action, int client, int param)
 {
+	if (action == MenuAction_End) {
+		delete menu;
+		return 1;
+	}
+
 	if (action == MenuAction_Select)
 	{
 		if (0 <= param < sizeof(g_tankDamages))
 		{
-			TZ_CallVote(client, 1, g_tankDamages[param]);
+			RequestGameplaySetting(client, Setting_TankDamage, g_tankDamages[param]);
 		}
 		drawPanel(client, 0);
 	}
@@ -229,7 +244,7 @@ public int Menu_TankDmgHandler(Handle menu, MenuAction action, int client, int p
 }
 
 
-public void TZ_CallVote(int client, int target, int value)
+public void RequestGameplaySetting(int client, int target, int value)
 {
 	if ( !IsClientSurvivor(client, true) ) return;
 	if (CountHumanSurvivors() == 1) {
@@ -238,6 +253,8 @@ public void TZ_CallVote(int client, int target, int value)
 	}
 
 	if ( IsNewBuiltinVoteAllowed() ) {
+		g_iPendingTarget = target;
+		g_iPendingValue = value;
 		g_iPendingSlot = GetCurrentProfile();
 		int iNumPlayers;
 		int iPlayers[MAXPLAYERS];
@@ -253,62 +270,42 @@ public void TZ_CallVote(int client, int target, int value)
 		g_iVoteInitiator = client;
 
 		switch (target) {
-			case 1: { // Tank 伤害
+			case Setting_TankDamage: { // Tank 伤害
 				FormatEx(sBuffer, sizeof(sBuffer), "%T", "VoteTankDamage", client, value);
-				tempTankDmg = value;
-				SetBuiltinVoteResultCallback(g_hVote, TankDmgVoteResultHandler);
 			}
-			case 2: { // Tank 连跳
+			case Setting_TankBhop: { // Tank 连跳
 				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteEnableTankBhop" : "VoteDisableTankBhop", client);
-				tempTankBhop = value;
-				SetBuiltinVoteResultCallback(g_hVote, TankBhopVoteResultHandler);
 			}
-			case 3: { // Tank 石头
+			case Setting_TankRock: { // Tank 石头
 				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteEnableTankRock" : "VoteDisableTankRock", client);
-				tempTankRock = value;
-				SetBuiltinVoteResultCallback(g_hVote, TankRockVoteResultHandler);
 			}
-			case 7: { // 额外发药
+			case Setting_ExtraPills: { // 额外发药
 				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteEnableExtraPills" : "VoteDisableExtraPills", client);
-				tempMorePills = value;
-				SetBuiltinVoteResultCallback(g_hVote, MorePillsVoteResultHandler);
 			}
-			case 8: { // 删除地图药
+			case Setting_RemoveMapPills: { // 删除地图药
 				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteRemoveMapPills" : "VoteKeepMapPills", client);
-				tempKillMapPills = value;
-				SetBuiltinVoteResultCallback(g_hVote, KillMapPillsVoteResultHandler);
 			}
-			case 11: {
+			case Setting_RatioDamage: {
 				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteEnableRatioDamage" : "VoteDisableRatioDamage", client);
-				tempRatioDamage = value;
-				SetBuiltinVoteResultCallback(g_hVote, RatioDamageVoteResultHandler);
 			}
-			case 12: {
+			case Setting_KillHealth: {
 				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteEnableRehealth" : "VoteDisableRehealth", client);
-				tempRehealth = value;
-				SetBuiltinVoteResultCallback(g_hVote, RehealthVoteResultHandler);
 			}
-			case 13: {
+			case Setting_KillAmmo: {
 				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteEnableReammo" : "VoteDisableReammo", client);
-				tempReammo = value;
-				SetBuiltinVoteResultCallback(g_hVote, ReammoVoteResultHandler);
 			}
-			case 14: {
+			case Setting_Reset: {
 				FormatEx(sBuffer, sizeof(sBuffer), "%T", "VoteResetAll", client);
-				SetBuiltinVoteResultCallback(g_hVote, ResetVoteResultHandler);
 			}
-			case 15: {
+			case Setting_SIDamage: {
 				FormatEx(sBuffer, sizeof(sBuffer), "%T", "VoteSIDamage", client, value);
-				tempSIDamage = value;
-				SetBuiltinVoteResultCallback(g_hVote, SIDamageVoteResultHandler);
 			}
-			case 16: {
+			case Setting_FiniteHordes: {
 				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteEnableFiniteHordes" : "VoteDisableFiniteHordes", client);
-				pendingMobLimit = value;
-				SetBuiltinVoteResultCallback(g_hVote, MobLimitVoteResultHandler);
 			}
 		}
 
+		SetBuiltinVoteResultCallback(g_hVote, GameplayVoteResultHandler);
 		SetBuiltinVoteArgument(g_hVote, sBuffer);
 		SetBuiltinVoteInitiator(g_hVote, client);
 		DisplayBuiltinVote(g_hVote, iPlayers, iNumPlayers, MENU_DISPLAY_TIME);
@@ -319,149 +316,62 @@ public void TZ_CallVote(int client, int target, int value)
 void ApplyGameplaySetting(int target, int value, bool announce, int slot)
 {
 	if (slot < 1 || slot > 4) slot = GetCurrentProfile();
-	if (slot < 1 || slot > 4 || target < 1 || target > 16) return;
+	if (slot < 1 || slot > 4 || target < 1 || target >= Setting_Count) return;
+	if (target == Setting_Reset) {
+		ResetSettings(true);
+		return;
+	}
+
+	ConVar setting = GetChallengeSetting(target);
+	if (setting == null) return;
 	g_iSlotOverride[slot][target] = value;
 	g_iSlotOverrideMask[slot] |= (1 << target);
 	if (slot != GetCurrentProfile()) return;
-	g_iOverrideMask = g_iSlotOverrideMask[slot];
-	switch (target) {
-		case 1: { tempTankDmg = value; SetConVarInt(FindConVar("vs_tank_damage"), value); }
-		case 2: { tempTankBhop = value; SetConVarInt(FindConVar("ai_tank_bhop"), value); }
-		case 3: { tempTankRock = value; SetConVarInt(FindConVar("ai_tank_rock"), value); }
-		case 7: { tempMorePills = value; SetConVarInt(FindConVar("ast_pills_enabled"), value); }
-		case 8: { tempKillMapPills = value; SetConVarInt(FindConVar("ast_pills_map_kill"), value); }
-		case 11: { tempRatioDamage = value; SetConVarInt(hRatioDamage, value); }
-		case 12: { tempRehealth = value; SetConVarInt(hRehealth, value); }
-		case 13: { tempReammo = value; SetConVarInt(hReammo, value); }
-		case 14: {
-			ResetSettings(true);
-			return;
-		}
-		case 15: { tempSIDamage = value; hDmgThreshold.FloatValue = float(value); }
-		case 16: {
-			ConVar mobLimit = FindConVar("l4d2_heq_enabled");
-			if (mobLimit == null) return;
-			mobLimit.IntValue = value;
-		}
-		default: return;
-	}
+	if (target == Setting_SIDamage) setting.FloatValue = float(value);
+	else setting.IntValue = value;
 
 	if (announce) {
 		PrintToChatAll("\x04[Ast] \x01%t", "SoloOverrideApplied");
 	}
 }
 
-void ApplyVoteSetting(int target, int value)
-{
-	int slot = g_iPendingSlot;
-	if (slot < 1 || slot > 4) slot = GetCurrentProfile();
-	ApplyGameplaySetting(target, value, false, slot);
-	g_iPendingSlot = 0;
-}
-
 void ReapplyGameplayOverrides()
 {
 	int slot = GetCurrentProfile();
 	if (slot < 1 || slot > 4) return;
-	SyncTempMirrors(slot);
-	g_iOverrideMask = g_iSlotOverrideMask[slot];
-	for (int target = 1; target <= 16; target++)
+	for (int target = 1; target < Setting_Count; target++)
 	{
-		if ((g_iOverrideMask & (1 << target)) != 0)
+		if ((g_iSlotOverrideMask[slot] & (1 << target)) != 0)
 		{
 			ApplyGameplaySetting(target, g_iSlotOverride[slot][target], false, slot);
 		}
 	}
 }
 
-void SyncTempMirrors(int slot)
+public void GameplayVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
 {
-	tempTankDmg = (g_iSlotOverrideMask[slot] & (1 << 1)) ? g_iSlotOverride[slot][1] : -1;
-	tempTankBhop = (g_iSlotOverrideMask[slot] & (1 << 2)) ? g_iSlotOverride[slot][2] : -1;
-	tempTankRock = (g_iSlotOverrideMask[slot] & (1 << 3)) ? g_iSlotOverride[slot][3] : -1;
-	tempMorePills = (g_iSlotOverrideMask[slot] & (1 << 7)) ? g_iSlotOverride[slot][7] : -1;
-	tempKillMapPills = (g_iSlotOverrideMask[slot] & (1 << 8)) ? g_iSlotOverride[slot][8] : -1;
-	tempRatioDamage = (g_iSlotOverrideMask[slot] & (1 << 11)) ? g_iSlotOverride[slot][11] : -1;
-	tempRehealth = (g_iSlotOverrideMask[slot] & (1 << 12)) ? g_iSlotOverride[slot][12] : -1;
-	tempReammo = (g_iSlotOverrideMask[slot] & (1 << 13)) ? g_iSlotOverride[slot][13] : -1;
-	tempSIDamage = (g_iSlotOverrideMask[slot] & (1 << 15)) ? g_iSlotOverride[slot][15] : -1;
-}
-
-public void TankDmgVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
-{
-	for (int i = 0; i < num_items; i++) {
-		if (item_info[i][BUILTINVOTEINFO_ITEM_INDEX] == BUILTINVOTES_VOTE_YES) {
-			if (item_info[i][BUILTINVOTEINFO_ITEM_VOTES] > (num_votes / 2)) {
-				DisplayVotePassPhrase(vote, "VotePassTankDamage");
-		ApplyVoteSetting(1, tempTankDmg);
-				return;
-			}
-		}
+	if (!DidVotePass(num_votes, num_items, item_info)) {
+		DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
+		return;
 	}
-	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
-	return;
-}
 
-public void TankBhopVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
-{
-	for (int i = 0; i < num_items; i++) {
-		if (item_info[i][BUILTINVOTEINFO_ITEM_INDEX] == BUILTINVOTES_VOTE_YES) {
-			if (item_info[i][BUILTINVOTEINFO_ITEM_VOTES] > (num_votes / 2)) {
-				DisplayVotePassPhrase(vote, "VotePassTankBhop");
-		ApplyVoteSetting(2, tempTankBhop);
-				return;
-			}
-		}
+	int target = g_iPendingTarget;
+	int value = g_iPendingValue;
+	int slot = g_iPendingSlot;
+	switch (target) {
+		case Setting_TankDamage: DisplayVotePassPhrase(vote, "VotePassTankDamage");
+		case Setting_TankBhop: DisplayVotePassPhrase(vote, "VotePassTankBhop");
+		case Setting_TankRock: DisplayVotePassPhrase(vote, "VotePassTankRock");
+		case Setting_ExtraPills: DisplayVotePassPhrase(vote, value ? "VotePassEnableExtraPills" : "VotePassDisableExtraPills");
+		case Setting_RemoveMapPills: DisplayVotePassPhrase(vote, value ? "VotePassRemoveMapPills" : "VotePassKeepMapPills");
+		case Setting_RatioDamage: DisplayVotePassPhrase(vote, "VotePassRatioDamage");
+		case Setting_KillHealth: DisplayVotePassPhrase(vote, "VotePassRehealth");
+		case Setting_KillAmmo: DisplayVotePassPhrase(vote, "VotePassReammo");
+		case Setting_Reset: DisplayVotePassPhrase(vote, "VotePassResetAll");
+		case Setting_SIDamage: DisplayVotePassPhrase(vote, "VotePassSIDamage");
+		case Setting_FiniteHordes: DisplayVotePassPhrase(vote, "VotePassFiniteHordes");
 	}
-	tempTankBhop = GetConVarInt(FindConVar("ai_tank_bhop"));
-	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
-	return;
-}
-
-public void TankRockVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
-{
-	for (int i = 0; i < num_items; i++) {
-		if (item_info[i][BUILTINVOTEINFO_ITEM_INDEX] == BUILTINVOTES_VOTE_YES) {
-			if (item_info[i][BUILTINVOTEINFO_ITEM_VOTES] > (num_votes / 2)) {
-				DisplayVotePassPhrase(vote, "VotePassTankRock");
-		ApplyVoteSetting(3, tempTankRock);
-				return;
-			}
-		}
-	}
-	tempTankRock = GetConVarInt(FindConVar("ai_tank_rock"));
-	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
-	return;
-}
-
-public void MorePillsVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
-{
-	for (int i = 0; i < num_items; i++) {
-		if (item_info[i][BUILTINVOTEINFO_ITEM_INDEX] == BUILTINVOTES_VOTE_YES) {
-			if (item_info[i][BUILTINVOTEINFO_ITEM_VOTES] > (num_votes / 2)) {
-				DisplayVotePassPhrase(vote, tempMorePills ? "VotePassEnableExtraPills" : "VotePassDisableExtraPills");
-		ApplyVoteSetting(7, tempMorePills);
-				return;
-			}
-		}
-	}
-	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
-	return;
-}
-
-public void KillMapPillsVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
-{
-	for (int i = 0; i < num_items; i++) {
-		if (item_info[i][BUILTINVOTEINFO_ITEM_INDEX] == BUILTINVOTES_VOTE_YES) {
-			if (item_info[i][BUILTINVOTEINFO_ITEM_VOTES] > (num_votes / 2)) {
-				DisplayVotePassPhrase(vote, tempKillMapPills ? "VotePassRemoveMapPills" : "VotePassKeepMapPills");
-		ApplyVoteSetting(8, tempKillMapPills);
-				return;
-			}
-		}
-	}
-	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
-	return;
+	ApplyGameplaySetting(target, value, false, slot);
 }
 
 bool DidVotePass(int num_votes, int num_items, const int[][] item_info)
@@ -474,81 +384,25 @@ bool DidVotePass(int num_votes, int num_items, const int[][] item_info)
 	return false;
 }
 
-public void RatioDamageVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
+void ClearPendingVote()
 {
-	if (DidVotePass(num_votes, num_items, item_info)) {
-		DisplayVotePassPhrase(vote, "VotePassRatioDamage");
-		ApplyVoteSetting(11, tempRatioDamage);
-		return;
-	}
-	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
-}
-
-public void RehealthVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
-{
-	if (DidVotePass(num_votes, num_items, item_info)) {
-		DisplayVotePassPhrase(vote, "VotePassRehealth");
-		ApplyVoteSetting(12, tempRehealth);
-		return;
-	}
-	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
-}
-
-public void ReammoVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
-{
-	if (DidVotePass(num_votes, num_items, item_info)) {
-		DisplayVotePassPhrase(vote, "VotePassReammo");
-		ApplyVoteSetting(13, tempReammo);
-		return;
-	}
-	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
-}
-
-public void ResetVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
-{
-	if (DidVotePass(num_votes, num_items, item_info)) {
-		DisplayVotePassPhrase(vote, "VotePassResetAll");
-		ResetSettings(true);
-		return;
-	}
-	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
-}
-
-public void SIDamageVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
-{
-	if (DidVotePass(num_votes, num_items, item_info)) {
-		DisplayVotePassPhrase(vote, "VotePassSIDamage");
-		ApplyVoteSetting(15, tempSIDamage);
-		return;
-	}
-	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
-}
-
-public void MobLimitVoteResultHandler(Handle vote, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
-{
-	if (DidVotePass(num_votes, num_items, item_info)) {
-		DisplayVotePassPhrase(vote, "VotePassFiniteHordes");
-		ApplyVoteSetting(16, pendingMobLimit);
-		pendingMobLimit = -1;
-		return;
-	}
-	pendingMobLimit = -1;
-	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
+	g_iPendingTarget = 0;
+	g_iPendingValue = 0;
+	g_iPendingSlot = 0;
+	g_iVoteInitiator = 0;
 }
 
 public void VoteHandler(Handle vote, BuiltinVoteAction action, int param1, int param2)
 {
 	switch (action) {
 		case BuiltinVoteAction_End: {
-			g_iPendingSlot = 0;
-			g_iVoteInitiator = 0;
+			ClearPendingVote();
 			g_hVote = INVALID_HANDLE;
 			CloseHandle(vote);
 			return;
 		}
 		case BuiltinVoteAction_Cancel: {
-			g_iPendingSlot = 0;
-			pendingMobLimit = -1;
+			ClearPendingVote();
 			DisplayBuiltinVoteFail( vote, view_as<BuiltinVoteFailReason>(param1) );
 			return;
 		}
@@ -564,36 +418,6 @@ void DisplayVotePassPhrase(Handle vote, const char[] phrase)
 	DisplayBuiltinVotePass(vote, message);
 }
 
-
-public Action Menu_SITimer(int client, int args)
-{
-	Menu menu = new Menu(Menu_SITimerHandler);
-	ConVar waveTimer = FindConVar("wave_interval");
-	ConVar waveLimit = FindConVar("wave_size");
-	char title[96];
-	if (waveTimer != null && waveLimit != null) {
-		FormatEx(title, sizeof(title), "%T", "SIWaveTitle", client, waveTimer.FloatValue, waveLimit.IntValue);
-	} else {
-		FormatEx(title, sizeof(title), "%T", "SIWaveUnavailableTitle", client);
-	}
-	menu.SetTitle(title);
-	menu.ExitBackButton = true;
-	char instruction[64];
-	FormatEx(instruction, sizeof(instruction), "%T", "SIWaveInstruction", client);
-	menu.AddItem("", instruction, ITEMDRAW_DISABLED);
-	menu.Display(client, MENU_DISPLAY_TIME);
-	return Plugin_Handled;
-}
-
-public int Menu_SITimerHandler(Menu menu, MenuAction action, int client, int param)
-{
-	if (action == MenuAction_Cancel && param == MenuCancel_ExitBack) {
-		drawPanel(client, 0);
-	} else if (action == MenuAction_End) {
-		delete menu;
-	}
-	return 0;
-}
 
 int SIDamageOptions[] = {8, 12, 24};
 
@@ -619,14 +443,21 @@ public Action Menu_SIDamage(int client, int args)
 
 public int Menu_SIDamageHandler(Handle menu, MenuAction action, int client, int param)
 {
+	if (action == MenuAction_End) {
+		delete menu;
+		return 1;
+	}
+	if (action != MenuAction_Select && action != MenuAction_Cancel) return 1;
+	if (!IsClientAndInGame(client)) return 1;
+
 	if (!IsClientSurvivor(client, true)) {
 		drawPanel(client, 0);
 		return 1;
 	}
 
 	if (action == MenuAction_Select) {
-		if ( param > sizeof(SIDamageOptions) ) return 1;
-		TZ_CallVote(client, 15, SIDamageOptions[param]);
+		if (param < 0 || param >= sizeof(SIDamageOptions)) return 1;
+		RequestGameplaySetting(client, Setting_SIDamage, SIDamageOptions[param]);
 		drawPanel(client, 0);
 	} else if (action == MenuAction_Cancel) {
 		drawPanel(client, 0);
@@ -637,17 +468,6 @@ public int Menu_SIDamageHandler(Handle menu, MenuAction action, int client, int 
 
 public void ResetSettings(bool announce)
 {
-	g_iOverrideMask = 0;
-	tempTankBhop = -1;
-	tempTankRock = -1;
-	tempTankDmg = -1;
-	tempMorePills = -1;
-	tempKillMapPills = -1;
-	tempRatioDamage = -1;
-	tempRehealth = -1;
-	tempReammo = -1;
-	tempSIDamage = -1;
-	pendingMobLimit = -1;
 	ClearAllSlotOverrides();
 	if (CanUseWaveSpawner()) WaveSpawner_ResetAllOverrides();
 	else LogError("[Ast] wave_spawner.smx is not available; wave overrides were not reset.");
@@ -685,7 +505,7 @@ void ClearAllSlotOverrides()
 	for (int slot = 1; slot <= 4; slot++)
 	{
 		g_iSlotOverrideMask[slot] = 0;
-		for (int target = 0; target <= 16; target++)
+		for (int target = 0; target < Setting_Count; target++)
 		{
 			g_iSlotOverride[slot][target] = -1;
 		}
@@ -718,16 +538,21 @@ public Action Menu_MorePills(int client, int args)
 
 public int Menu_MorePillsHandler(Handle menu, MenuAction action, int client, int param)
 {
+	if (action == MenuAction_End) {
+		delete menu;
+		return 1;
+	}
+
 	if (action == MenuAction_Select) {
 		switch (param)
 		{
 			case 0: {
 				bool bPillsEnabled = GetConVarBool(FindConVar("ast_pills_enabled"));
-				TZ_CallVote(client, 7, !bPillsEnabled);
+				RequestGameplaySetting(client, Setting_ExtraPills, !bPillsEnabled);
 			}
 			case 1: {
 				bool bPillsMapKill = GetConVarBool(FindConVar("ast_pills_map_kill"));
-				TZ_CallVote(client, 8, !bPillsMapKill);
+				RequestGameplaySetting(client, Setting_RemoveMapPills, !bPillsMapKill);
 			}
 		}
 		drawPanel(client, 7);
@@ -755,11 +580,11 @@ public Action OnChangeTeam(Handle event, const char[] name, bool dontBroadcast)
 public Action Timer_SetTankConVar(Handle timer)
 {
 	int slot = GetCurrentProfile();
-	if (slot >= 1 && slot <= 4 && (g_iSlotOverrideMask[slot] & (1 << 2)) != 0) {
-		SetConVarInt(FindConVar("ai_tank_bhop"), g_iSlotOverride[slot][2]);
+	if (slot >= 1 && slot <= 4 && (g_iSlotOverrideMask[slot] & (1 << Setting_TankBhop)) != 0) {
+		SetConVarInt(FindConVar("ai_tank_bhop"), g_iSlotOverride[slot][Setting_TankBhop]);
 	}
-	if (slot >= 1 && slot <= 4 && (g_iSlotOverrideMask[slot] & (1 << 3)) != 0) {
-		SetConVarInt(FindConVar("ai_tank_rock"), g_iSlotOverride[slot][3]);
+	if (slot >= 1 && slot <= 4 && (g_iSlotOverrideMask[slot] & (1 << Setting_TankRock)) != 0) {
+		SetConVarInt(FindConVar("ai_tank_rock"), g_iSlotOverride[slot][Setting_TankRock]);
 	}
 	return Plugin_Stop;
 }
@@ -825,7 +650,7 @@ int CountOverrides()
 {
 	if (!CanReadProfileDefaults()) return -1;
 	int count;
-	for (int target = 1; target <= 16; target++)
+	for (int target = 1; target < Setting_Count; target++)
 		if (DiffersFromProfile(GetChallengeSetting(target))) count++;
 	for (int field = 0; field < 9; field++)
 		if (DiffersFromProfile(GetWaveSetting(field))) count++;
@@ -851,16 +676,16 @@ ConVar GetChallengeSetting(int target)
 {
 	switch (target)
 	{
-		case 1: return FindConVar("vs_tank_damage");
-		case 2: return FindConVar("ai_tank_bhop");
-		case 3: return FindConVar("ai_tank_rock");
-		case 7: return FindConVar("ast_pills_enabled");
-		case 8: return FindConVar("ast_pills_map_kill");
-		case 11: return hRatioDamage;
-		case 12: return hRehealth;
-		case 13: return hReammo;
-		case 15: return hDmgThreshold;
-		case 16: return FindConVar("l4d2_heq_enabled");
+		case Setting_TankDamage: return FindConVar("vs_tank_damage");
+		case Setting_TankBhop: return FindConVar("ai_tank_bhop");
+		case Setting_TankRock: return FindConVar("ai_tank_rock");
+		case Setting_ExtraPills: return FindConVar("ast_pills_enabled");
+		case Setting_RemoveMapPills: return FindConVar("ast_pills_map_kill");
+		case Setting_RatioDamage: return hRatioDamage;
+		case Setting_KillHealth: return hRehealth;
+		case Setting_KillAmmo: return hReammo;
+		case Setting_SIDamage: return hDmgThreshold;
+		case Setting_FiniteHordes: return FindConVar("l4d2_heq_enabled");
 	}
 	return null;
 }
@@ -902,7 +727,7 @@ void PrintOverrideSummary(int client)
 
 void PrintOverrideDetails(int client)
 {
-	for (int target = 1; target <= 16; target++)
+	for (int target = 1; target < Setting_Count; target++)
 	{
 		ConVar setting = GetChallengeSetting(target);
 		if (!DiffersFromProfile(setting)) continue;
@@ -934,24 +759,24 @@ void PrintOverrideDetails(int client)
 
 bool IsBooleanChallengeTarget(int target)
 {
-	return target == 2 || target == 3 || target == 7 || target == 8
-		|| target == 11 || target == 12 || target == 13 || target == 16;
+	return target == Setting_TankBhop || target == Setting_TankRock || target == Setting_ExtraPills || target == Setting_RemoveMapPills
+		|| target == Setting_RatioDamage || target == Setting_KillHealth || target == Setting_KillAmmo || target == Setting_FiniteHordes;
 }
 
 void GetChallengePhrase(int target, char[] phrase, int maxlen)
 {
 	switch (target)
 	{
-		case 1: strcopy(phrase, maxlen, "InfoTankDamage");
-		case 2: strcopy(phrase, maxlen, "InfoTankBhop");
-		case 3: strcopy(phrase, maxlen, "InfoTankRock");
-		case 7: strcopy(phrase, maxlen, "InfoExtraPills");
-		case 8: strcopy(phrase, maxlen, "InfoMapPills");
-		case 11: strcopy(phrase, maxlen, "InfoRatioDamage");
-		case 12: strcopy(phrase, maxlen, "InfoRehealth");
-		case 13: strcopy(phrase, maxlen, "InfoReammo");
-		case 15: strcopy(phrase, maxlen, "InfoSIDamage");
-		case 16: strcopy(phrase, maxlen, "InfoMobLimit");
+		case Setting_TankDamage: strcopy(phrase, maxlen, "InfoTankDamage");
+		case Setting_TankBhop: strcopy(phrase, maxlen, "InfoTankBhop");
+		case Setting_TankRock: strcopy(phrase, maxlen, "InfoTankRock");
+		case Setting_ExtraPills: strcopy(phrase, maxlen, "InfoExtraPills");
+		case Setting_RemoveMapPills: strcopy(phrase, maxlen, "InfoMapPills");
+		case Setting_RatioDamage: strcopy(phrase, maxlen, "InfoRatioDamage");
+		case Setting_KillHealth: strcopy(phrase, maxlen, "InfoRehealth");
+		case Setting_KillAmmo: strcopy(phrase, maxlen, "InfoReammo");
+		case Setting_SIDamage: strcopy(phrase, maxlen, "InfoSIDamage");
+		case Setting_FiniteHordes: strcopy(phrase, maxlen, "InfoMobLimit");
 		default: strcopy(phrase, maxlen, "InfoNoOverrides");
 	}
 }
