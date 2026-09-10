@@ -130,7 +130,7 @@ function InitHUD() {
 			SIInfo = {
 				slot = DirectorScript.HUD_TICKER,
 				flags = DirectorScript.HUD_FLAG_NOBG | DirectorScript.HUD_FLAG_ALIGN_CENTER,
-				dataval = HUDInfo.si_text,
+				datafunc = GetHUDText,
 				name = "siInfo"
 			}
 		}
@@ -167,13 +167,18 @@ function UpdateHUDSI()
 function UpdateHUDStats()
 {
 	HUDInfo.hud_mode = "stats";
-	local timer_new = Convars.GetStr("wave_interval").tofloat();
-	local limit_new = Convars.GetStr("wave_size").tointeger();
-
-	HUDInfo.si_text = format("当前特感刷新速度：%.1f秒%d特", timer_new, limit_new);
-	HUDInfo.si_text += "\n使用 !si 修改";
-
 	InitHUD();
+}
+
+function GetHUDText()
+{
+	if (HUDInfo.hud_mode != "stats") return HUDInfo.si_text;
+
+	// Read the selected settings on each HUD refresh, independently of when
+	// Wave Spawner applies them to the next wave.
+	local interval = Convars.GetStr("wave_interval").tofloat();
+	local count = Convars.GetStr("wave_size").tointeger();
+	return format("当前特感刷新速度：%.1f秒%d特\n使用 !si 修改", interval, count);
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------
