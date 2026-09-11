@@ -70,7 +70,7 @@ public Plugin myinfo =
 	name = "Coop ready and pause",
 	author = "CanadaRox, 海洋空氣, norths7ar",
 	description = "Per-player readiness, loading gate and start/resume countdowns",
-	version = "1.1.0"
+	version = "1.1.1"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -97,7 +97,7 @@ public void OnPluginStart()
 	g_svNoclipDuringPause = FindConVar("sv_noclipduringpause");
 	g_pauseDelay = CreateConVar("sm_pausedelay", "0", "Seconds before a normal coop pause begins.", _, true, 0.0);
 	g_unpauseDelay = CreateConVar("sm_unpausedelay", "3", "Ready countdown before a pause ends.", _, true, 0.0);
-	g_readyBlips = CreateConVar("sm_pause_ready_blips", "1", "Play a countdown sound before unpausing.", _, true, 0.0, true, 1.0);
+	g_readyBlips = CreateConVar("sm_pause_ready_blips", "1", "Play a countdown sound before the round starts.", _, true, 0.0, true, 1.0);
 	g_readyEnabled = CreateConVar("ready_enabled", "1", "Require loading completion and every survivor's readiness before starting.", _, true, 0.0, true, 1.0);
 	g_readyCountdownCvar = CreateConVar("ready_countdown", "3", "Seconds after all survivors are ready before starting.", _, true, 0.0);
 	g_loadingTimeoutCvar = CreateConVar("ready_loading_timeout", "90", "Seconds before an unresponsive loading client is kicked.", _, true, 0.0);
@@ -475,7 +475,7 @@ void StartCountdown()
 void ShowCountdown()
 {
 	PrintHintTextToAll("%t", g_isPaused ? "PauseCountdown" : "RoundCountdown", g_countdownRemaining);
-	if (g_readyBlips.BoolValue) EmitSoundToAll("buttons/blip2.wav");
+	if (!g_isPaused && g_readyBlips.BoolValue) EmitSoundToAll("buttons/blip2.wav");
 }
 
 public Action TimerCountdown(Handle timer)
