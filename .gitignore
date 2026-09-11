@@ -24,3 +24,13 @@ $RECYCLE.BIN/
 
 # Visual Studio Code files
 /.vscode
+# Local databases and SQLite sidecars
+*.sq3
+*.db
+*.db3
+*.sqlite
+*.sqlite3
+*-wal
+*-shm
+*-journal
+/addons/sourcemod/data/sqlite/

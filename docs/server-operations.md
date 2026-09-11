@@ -43,7 +43,9 @@ Git 跟踪的 CFG、管理员、公告和 Stripper 文件在仓库中维护，�
 
 ## 应用 VPK/SMX
 
-Windows 的唯一更新/部署入口是 `ops/windows/02-apply-content-and-restart.cmd`，远端执行 `sudo l4d2-update-and-restart`。命令要求 Git checkout 位于配置分支且工作树干净，fetch 后仅允许 fast-forward，并以 `OWNER_USER` 身份运行 Git；只部署 Git 跟踪的 `addons/`、`cfg/`、`scripts/` 到 `GAME_DIR`，不覆盖未跟踪文件，也不执行 `rsync --delete`。首次运行以更新前的 checkout revision 为基线，后续使用已成功部署的 revision；只按 Git revision 差异删除被删除或重命名的运行时路径。检查或重启失败时 marker 不更新，01 仍只检查内容，03 仍只重启。
+部署保护脚本须先更新到 `/usr/local/sbin/l4d2-update-and-restart`，再部署包含数据库取消跟踪的版本；仅拉取仓库不会自动更新这个已安装脚本。
+
+Windows 的唯一更新/部署入口是 `ops/windows/02-apply-content-and-restart.cmd`，远端执行 `sudo l4d2-update-and-restart`。命令要求 Git checkout 位于配置分支且工作树干净，fetch 后仅允许 fast-forward，并以 `OWNER_USER` 身份运行 Git；只部署 Git 跟踪的 `addons/`、`cfg/`、`scripts/` 到 `GAME_DIR`，不覆盖未跟踪文件，也不执行 `rsync --delete`。数据库及 SQLite 辅助文件在复制和删除阶段均排除，即使旧版本曾跟踪数据库，也保留运行服现有数据。首次运行以更新前的 checkout revision 为基线，后续使用已成功部署的 revision；只按 Git revision 差异删除被删除或重命名的运行时路径。检查或重启失败时 marker 不更新，01 仍只检查内容，03 仍只重启。
 
 文件仍然直接上传到游戏目录。整批 VPK/SMX 传完后先检查：
 

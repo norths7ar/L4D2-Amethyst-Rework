@@ -31,6 +31,9 @@ mkdir -p "$publisher/addons" "$publisher/cfg" "$publisher/scripts"
 printf 'old\n' >"$publisher/addons/old.smx"
 printf 'old cfg\n' >"$publisher/cfg/server.cfg"
 printf 'old script\n' >"$publisher/scripts/runtime.nut"
+mkdir -p "$publisher/addons/sourcemod/data/sqlite"
+printf 'tracked database\n' >"$publisher/addons/sourcemod/data/sqlite/clientprefs-sqlite.sq3"
+printf 'tracked prefs\n' >"$publisher/addons/prefs.sqlite3"
 git -C "$publisher" add addons cfg scripts
 git -C "$publisher" commit -m initial >/dev/null
 git -C "$publisher" push origin main >/dev/null 2>&1
@@ -39,10 +42,17 @@ git clone "$remote" "$checkout" >/dev/null 2>&1
 mkdir -p "$game_dir"
 cp -a "$checkout/addons" "$checkout/cfg" "$checkout/scripts" "$game_dir/"
 printf 'local content\n' >"$game_dir/addons/local.vpk"
+printf 'player data\n' >"$game_dir/addons/sourcemod/data/sqlite/clientprefs-sqlite.sq3"
+printf 'player prefs\n' >"$game_dir/addons/prefs.sqlite3"
+printf 'pending writes\n' >"$game_dir/addons/prefs.sqlite3-wal"
 
 rm "$publisher/addons/old.smx"
+rm "$publisher/addons/sourcemod/data/sqlite/clientprefs-sqlite.sq3"
+printf 'replacement prefs\n' >"$publisher/addons/prefs.sqlite3"
+printf 'tracked pending writes\n' >"$publisher/addons/prefs.sqlite3-wal"
+printf 'new database\n' >"$publisher/addons/new.db"
 printf 'new\n' >"$publisher/addons/new.smx"
-printf 'new cfg\n' >"$publisher/cfg/server.cfg"
+printf 'updated cfg\n' >"$publisher/cfg/server.cfg"
 git -C "$publisher" add -A addons cfg scripts
 git -C "$publisher" commit -m update >/dev/null
 git -C "$publisher" push origin main >/dev/null 2>&1
@@ -72,7 +82,11 @@ L4D2_DEPLOY_MARKER="$marker" \
 [[ -f "$game_dir/addons/new.smx" ]]
 [[ ! -e "$game_dir/addons/old.smx" ]]
 [[ -f "$game_dir/addons/local.vpk" ]]
-[[ $(<"$game_dir/cfg/server.cfg") == 'new cfg' ]]
+[[ $(<"$game_dir/addons/sourcemod/data/sqlite/clientprefs-sqlite.sq3") == 'player data' ]]
+[[ $(<"$game_dir/addons/prefs.sqlite3") == 'player prefs' ]]
+[[ $(<"$game_dir/addons/prefs.sqlite3-wal") == 'pending writes' ]]
+[[ ! -e "$game_dir/addons/new.db" ]]
+[[ $(<"$game_dir/cfg/server.cfg") == 'updated cfg' ]]
 [[ $(wc -l <"$apply_log") -eq 1 ]]
 
 printf 'dirty\n' >"$checkout/untracked-local-file"
