@@ -326,7 +326,7 @@ def collapse_versus_aliases(
     return collapsed
 
 
-def inspect_directory(directory: Path) -> dict[str, object]:
+def inspect_directory(directory: Path, cache_path: Path | None = None) -> dict[str, object]:
     if not directory.is_dir():
         raise VpkError(f"VPK directory does not exist: {directory}")
 
@@ -344,8 +344,34 @@ def inspect_directory(directory: Path) -> dict[str, object]:
     referenced_chunks: set[str] = set()
     campaigns: list[dict[str, object]] = []
     errors: list[str] = []
+    cached = {}
+    if cache_path and cache_path.exists():
+        saved = json.loads(cache_path.read_text(encoding="utf-8"))
+        if saved.get("directory") == str(directory.resolve()):
+            cached = saved.get("entries", {})
+    updated = {}
+    reused = 0
+
+    def fingerprint(names: list[str]) -> dict[str, list[int]]:
+        result = {}
+        for name in names:
+            stat = (directory / name).stat()
+            result[name] = [stat.st_size, stat.st_mtime_ns]
+        return result
 
     for vpk_path in primary_vpks:
+        previous = cached.get(vpk_path.name)
+        if previous:
+            try:
+                unchanged = fingerprint(list(previous["files"])) == previous["files"]
+            except FileNotFoundError:
+                unchanged = False
+            if unchanged:
+                campaigns.extend(previous["campaigns"])
+                referenced_chunks.update(previous["chunks"])
+                updated[vpk_path.name] = previous
+                reused += 1
+                continue
         vpk_campaigns: list[dict[str, object]] = []
         vpk_missions: list[str] = []
         vpk_chunks: set[str] = set()
@@ -375,6 +401,11 @@ def inspect_directory(directory: Path) -> dict[str, object]:
             continue
         campaigns.extend(vpk_campaigns)
         referenced_chunks.update(vpk_chunks)
+        updated[vpk_path.name] = {
+            "files": fingerprint([vpk_path.name, *sorted(vpk_chunks)]),
+            "campaigns": vpk_campaigns,
+            "chunks": sorted(vpk_chunks),
+        }
 
     campaigns = collapse_versus_aliases(campaigns)
 
@@ -411,6 +442,15 @@ def inspect_directory(directory: Path) -> dict[str, object]:
     if errors:
         details = "\n".join(f"  - {error}" for error in errors)
         raise VpkError(f"validation failed:\n{details}")
+
+    if cache_path:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = cache_path.with_suffix(".tmp")
+        temporary.write_text(json.dumps({
+            "directory": str(directory.resolve()), "entries": updated,
+        }, ensure_ascii=False), encoding="utf-8")
+        temporary.replace(cache_path)
+        print(f"VPK scan: {len(primary_vpks) - reused} validated, {reused} cached.", file=sys.stderr)
 
     campaigns.sort(
         key=lambda item: (
@@ -505,6 +545,7 @@ def parse_args() -> argparse.Namespace:
     )
     inventory.add_argument("directory", type=Path)
     inventory.add_argument("--output", type=Path)
+    inventory.add_argument("--cache", type=Path)
 
     reconcile = subparsers.add_parser(
         "reconcile", help="replace only the managed mission-cycle section"
@@ -520,7 +561,7 @@ def main() -> int:
     args = parse_args()
     try:
         if args.command == "inventory":
-            result = inspect_directory(args.directory)
+            result = inspect_directory(args.directory, args.cache)
             serialized = json.dumps(result, ensure_ascii=False, indent=2) + "\n"
             if args.output:
                 args.output.write_text(serialized, encoding="utf-8", newline="\n")

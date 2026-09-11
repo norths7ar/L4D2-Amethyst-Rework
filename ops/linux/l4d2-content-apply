@@ -54,7 +54,8 @@ cleanup() {
 trap cleanup EXIT
 
 inventory="$work_dir/inventory.json"
-"$VPK_TOOL" inventory "$GAME_DIR/addons" --output "$inventory"
+"$VPK_TOOL" inventory "$GAME_DIR/addons" --output "$inventory" \
+    --cache /var/cache/l4d2/vpk-campaigns.json
 "$VPK_TOOL" reconcile \
     --source "$missioncycle" \
     --inventory "$inventory" \
@@ -75,7 +76,7 @@ else
 fi
 
 if [[ "$mode" == check ]]; then
-    printf 'Check complete; no files changed and no restart requested.\n'
+    printf 'Check complete; mission cycle unchanged and no restart requested.\n'
     exit 0
 fi
 

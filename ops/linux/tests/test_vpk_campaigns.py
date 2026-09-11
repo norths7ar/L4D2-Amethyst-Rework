@@ -6,6 +6,7 @@ import struct
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 import zlib
 from pathlib import Path
 
@@ -98,6 +99,59 @@ def mission(
 
 
 class VpkCampaignTests(unittest.TestCase):
+    def test_cache_invalidates_when_archive_chunk_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            cache = directory / "cache.json"
+            primary = directory / "example_dir.vpk"
+            chunk = directory / "example_000.vpk"
+            payload = mission()
+            write_single_file_vpk(primary, "missions/example.txt", payload)
+            data = bytearray(primary.read_bytes())
+            tree_end = 12 + struct.unpack_from("<I", data, 8)[0]
+            entry_offset = 12 + len(b"txt\0missions\0example\0")
+            struct.pack_into("<H", data, entry_offset + 6, 0)
+            primary.write_bytes(data[:tree_end])
+            chunk.write_bytes(payload)
+            VPK.inspect_directory(directory, cache)
+            with patch.object(VPK, "iter_vpk_entries", side_effect=AssertionError("read unchanged VPK")):
+                VPK.inspect_directory(directory, cache)
+            chunk.write_bytes(payload.replace(b"Example Display", b"Changed Display") + b"\n")
+            with self.assertRaisesRegex(VPK.VpkError, "CRC mismatch"):
+                VPK.inspect_directory(directory, cache)
+
+    def test_cache_reuses_unchanged_and_checks_changed_added_deleted(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            cache = directory / "cache.json"
+            first = directory / "first.vpk"
+            write_single_file_vpk(first, "missions/first.txt", mission())
+            expected = VPK.inspect_directory(directory, cache)
+            with patch.object(VPK, "iter_vpk_entries", side_effect=AssertionError("read unchanged VPK")):
+                self.assertEqual(expected, VPK.inspect_directory(directory, cache))
+            write_single_file_vpk(first, "missions/first.txt", mission("changed_m1", "changed_m2"))
+            self.assertEqual(VPK.inspect_directory(directory, cache)["campaigns"][0]["first_map"], "changed_m1")
+            second = directory / "second.vpk"
+            write_single_file_vpk(second, "missions/second.txt", mission())
+            self.assertEqual(len(VPK.inspect_directory(directory, cache)["campaigns"]), 2)
+            first.unlink()
+            self.assertEqual(len(VPK.inspect_directory(directory, cache)["campaigns"]), 1)
+            before = cache.read_bytes()
+            write_single_file_vpk(second, "missions/second.txt", mission(include_versus=False))
+            with self.assertRaises(VPK.VpkError):
+                VPK.inspect_directory(directory, cache)
+            self.assertEqual(before, cache.read_bytes())
+
+    def test_cached_campaigns_still_participate_in_conflict_checks(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            cache = directory / "cache.json"
+            write_single_file_vpk(directory / "first.vpk", "missions/first.txt", mission())
+            VPK.inspect_directory(directory, cache)
+            write_single_file_vpk(directory / "second.vpk", "missions/second.txt", mission())
+            with self.assertRaisesRegex(VPK.VpkError, "declared more than once"):
+                VPK.inspect_directory(directory, cache)
+
     def test_identical_vs_alias_prefers_base_mission(self) -> None:
         campaigns = [
             {

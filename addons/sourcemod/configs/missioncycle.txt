@@ -71,11 +71,11 @@
 		}
 		"cdta_01detour"
 		{
-			"name"	"Detour Ahead  (迂回前进)"
+			"name"	"Detour Ahead (迂回前进)"
 		}
 		"l4d2_diescraper1_apartment_361"
 		{
-			"name"	"Diescraper (喋血蜃楼)"
+			"name"	"Diescraper Redux (喋血蜃楼)"
 		}
 		"cwm1_intro"
 		{
@@ -123,7 +123,7 @@
 		}
 		"bloodtracks_01"
 		{
-			"name"	"Blood Tracks"
+			"name"	"Blood Tracks （血之轨迹）"
 		}
 		"CCR1_alleys"
 		{
@@ -131,7 +131,7 @@
 		}
 		"l4d2_daybreak01_hotel"
 		{
-			"name"	"Day Break"
+			"name"	"Day Break （黎明）"
 		}
 		"dc2025_1"
 		{
@@ -179,7 +179,7 @@
 		}
 		"saltwell_1_d"
 		{
-			"name"	"SaltHell Park"
+			"name"	"SaltHell Park （盐井地狱公园）"
 		}
 		"snowtown_m1"
 		{
