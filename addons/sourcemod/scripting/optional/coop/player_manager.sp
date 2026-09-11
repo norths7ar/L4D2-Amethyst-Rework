@@ -30,6 +30,7 @@ int g_reservationGeneration[MAX_RESERVATIONS];
 bool g_reservationClaimed[MAX_RESERVATIONS];
 char g_reservationName[MAX_RESERVATIONS][MAX_NAME_LENGTH];
 bool g_wantsSpectator[MAXPLAYERS + 1];
+bool g_voluntaryDisconnect[MAXPLAYERS + 1];
 StringMap g_reservations;
 
 public Plugin myinfo =
@@ -37,7 +38,7 @@ public Plugin myinfo =
 	name = "Coop player manager",
 	author = "海洋空氣, norths7ar",
 	description = "Coop join, spectator, bot-slot and player-team lifecycle",
-	version = "1.0.0"
+	version = "1.0.1"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -79,6 +80,7 @@ public void OnPluginStart()
 	HookEvent("round_start", EventRoundStart, EventHookMode_PostNoCopy);
 	HookEvent("map_transition", EventMapTransition, EventHookMode_Post);
 	HookEvent("player_team", EventPlayerTeam, EventHookMode_Post);
+	HookEvent("player_disconnect", EventPlayerDisconnect, EventHookMode_Pre);
 	for (int client = 1; client <= MaxClients; client++)
 		if (IsHumanClient(client)) CreateTimer(0.2, TimerCheckHumanTeam, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
 }
@@ -192,6 +194,7 @@ public void OnMapEnd()
 
 public void OnClientPutInServer(int client)
 {
+	g_voluntaryDisconnect[client] = false;
 	if (!IsFakeClient(client)) CancelBotCleanup();
 	g_pendingReservation[client] = -1;
 	g_requestToken[client]++;
@@ -208,13 +211,28 @@ public void OnClientPostAdminCheck(int client)
 	CreateTimer(0.2, TimerCheckHumanTeam, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
 }
 
+public void EventPlayerDisconnect(Event event, const char[] name, bool dontBroadcast)
+{
+	int client = GetClientOfUserId(event.GetInt("userid"));
+	if (client <= 0 || IsFakeClient(client)) return;
+	char reason[128];
+	event.GetString("reason", reason, sizeof(reason));
+	if (!StrEqual(reason, "Disconnect by user.", false)) return;
+	g_voluntaryDisconnect[client] = true;
+	// Explicit quit releases even a next-map reservation; timeouts retain it.
+	char steamId[32];
+	int value;
+	if (GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId), true)
+		&& g_reservations.GetValue(steamId, value)) ClearReservation(value - 1);
+}
+
 public void OnClientDisconnect(int client)
 {
 	if (IsHumanClient(client))
 	{
 		// map_transition already captured the next-map role/generation. A later
 		// disconnect must not overwrite that reservation with the old generation.
-		if (!g_transitionCaptured) RememberRole(client);
+		if (!g_transitionCaptured && !g_voluntaryDisconnect[client]) RememberRole(client);
 		if (g_roundLive && GetHumanSurvivors() == 1)
 			ScheduleBotCleanup();
 	}
