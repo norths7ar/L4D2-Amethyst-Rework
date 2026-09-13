@@ -1,7 +1,7 @@
 # Installed as /etc/l4d2-restart.conf.
 SERVICE_USER=l4d2
 SERVICE_GROUP=l4d2
-OWNER_USER=ecs-user
+OWNER_USER=root
 SERVICE_NAME=l4d2.service
 
 SERVER_ROOT=/home/l4d2/server

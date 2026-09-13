@@ -18,10 +18,6 @@ id l4d2 >/dev/null 2>&1 || {
     printf 'install.sh: service account l4d2 does not exist\n' >&2
     exit 1
 }
-id ecs-user >/dev/null 2>&1 || {
-    printf 'install.sh: owner account ecs-user does not exist\n' >&2
-    exit 1
-}
 
 assert_owned_unit() {
     local path=$1
@@ -61,6 +57,10 @@ fi
 
 # shellcheck source=/dev/null
 source "$CONFIG_PATH"
+id "$OWNER_USER" >/dev/null 2>&1 || {
+    printf 'install.sh: owner account %s does not exist\n' "$OWNER_USER" >&2
+    exit 1
+}
 chown root:"$SERVICE_GROUP" "$CONFIG_PATH"
 chmod 0640 "$CONFIG_PATH"
 
@@ -69,8 +69,7 @@ if [[ ${SRCDS_DEBUG:-1} == 1 ]] && ! command -v gdb >/dev/null 2>&1; then
     exit 1
 fi
 
-# The SSH/SFTP owner and the game process intentionally share the whole install.
-usermod -a -G "$SERVICE_GROUP" "$OWNER_USER"
+# Root maintains files; the game keeps its existing runtime write access.
 chown "$OWNER_USER:$SERVICE_GROUP" "$SERVER_ROOT" "$GAME_DIR"
 chmod 2775 "$SERVER_ROOT" "$GAME_DIR"
 chmod 0750 /home/l4d2
@@ -90,4 +89,4 @@ systemctl restart l4d2-observe.service
 
 printf 'Installed direct-owner L4D2 operations with explicit content apply.\n'
 printf 'The update helper requires git, rsync, flock, and sudo on the host.\n'
-printf 'Reconnect SSH/SFTP once so ecs-user receives the l4d2 group.\n'
+printf 'Upload VPKs with read access (normally 0644); content apply also grants VPK read access.\n'

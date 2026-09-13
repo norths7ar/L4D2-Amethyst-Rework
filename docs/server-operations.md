@@ -18,11 +18,11 @@ sudo python3 /usr/local/libexec/l4d2/observe_report.py --date 2026-09-10
 
 报告是事后命令，不会自动给玩家发送消息。第一次部署后应检查 observer 的 active 状态、两端新日志及一次标记落盘；实时游玩表现仍需实际验证。
 
-服务器是单所有者环境。`ecs-user` 用于 SSH/WinSCP，`l4d2` 只运行游戏；两个账户共享 `l4d2` 组。游戏目录 `/home/l4d2/server` 是唯一运行状态，Git checkout `/home/l4d2/integration` 是仓库内容的部署来源；不使用 overlay、release staging 或单独的 VPK 投递目录。
+服务器是单所有者环境。`root` 用于 SSH/WinSCP 和部署，`l4d2` 只运行游戏，不授予 root 权限。游戏目录 `/home/l4d2/server` 是唯一运行状态，Git checkout `/home/l4d2/integration` 是仓库内容的部署来源；不使用 overlay、release staging 或单独的 VPK 投递目录。
 
 ## 直接修改
 
-重新连接 SSH/WinSCP 后，`ecs-user` 可以直接进入：
+通过 root 登录 SSH/WinSCP 后，可以直接进入：
 
 ```text
 /home/l4d2/server/left4dead2/
@@ -45,7 +45,7 @@ Git 跟踪的 CFG、管理员、公告和 Stripper 文件在仓库中维护，�
 
 部署保护脚本须先更新到 `/usr/local/sbin/l4d2-update-and-restart`，再部署包含数据库取消跟踪的版本；仅拉取仓库不会自动更新这个已安装脚本。
 
-Windows 的唯一更新/部署入口是 `ops/windows/02-apply-content-and-restart.cmd`，远端执行 `sudo l4d2-update-and-restart`。命令要求 Git checkout 位于配置分支且工作树干净，fetch 后仅允许 fast-forward，并以 `OWNER_USER` 身份运行 Git；只部署 Git 跟踪的 `addons/`、`cfg/`、`scripts/` 到 `GAME_DIR`，不覆盖未跟踪文件，也不执行 `rsync --delete`。数据库及 SQLite 辅助文件在复制和删除阶段均排除，即使旧版本曾跟踪数据库，也保留运行服现有数据。首次运行以更新前的 checkout revision 为基线，后续使用已成功部署的 revision；只按 Git revision 差异删除被删除或重命名的运行时路径。检查或重启失败时 marker 不更新，01 仍只检查内容，03 仍只重启。
+Windows 的唯一更新/部署入口是 `ops/windows/02-apply-content-and-restart.cmd`，远端执行 `sudo l4d2-update-and-restart`。命令要求 Git checkout 位于配置分支且工作树干净，fetch 后仅允许 fast-forward，并以 `OWNER_USER` 身份运行 Git；只部署 Git 跟踪的 `addons/`、`cfg/`、`scripts/` 到 `GAME_DIR`，不覆盖未跟踪文件，也不执行 `rsync --delete`。数据库及 SQLite 辅助文件在复制和删除阶段均排除，即使旧版本曾跟踪数据库，也保留运行服现有数据。首次运行以更新前的 checkout revision 为基线，后续使用已成功部署的 revision；只按 Git revision 差异删除被删除或重命名的运行时路径。检查或重启失败时 marker 不更新，01 仍只检查内容，03 仍只重启。Git fetch 最多尝试 3 次，失败间隔 3 秒；连续失败时明确提示仓库未更新，跳过 Git 合并和文件部署，仍使用现有 checkout 清单执行 VPK 内容应用及重启，不推进部署 marker。内容应用失败仍返回失败。
 
 文件仍然直接上传到游戏目录。整批 VPK/SMX 传完后先检查：
 
@@ -59,7 +59,7 @@ sudo l4d2-content-apply --check
 sudo l4d2-content-apply
 ```
 
-命令按文件大小和修改时间缓存成功校验结果（`/var/cache/l4d2/vpk-campaigns.json`），仅完整校验新增或变化的 VPK；分卷任一变化会重新检查整组。汇总全部战役检查冲突，并要求第三方战役提供 AstMod/AstRedux 的 Versus 章节定义；随后合并并原子更新 `addons/sourcemod/configs/missioncycle.txt`，再重启一次。02 不直接覆盖云服清单：官图段使用仓库版本；三方图按“仓库顺序及译名、仓库外历史顺序及名字、本次新增地图”排列。新增地图被仓库收录后移到仓库指定位置，不重复出现；删除 VPK 则移除条目。直接内容应用使用相同规则，仓库来源为 `CHECKOUT_ROOT`（默认 `/home/l4d2/integration`）；`!mapvote`、`!nextmap` 使用每个战役的第一关，`!chaptervote` 由 Mission Cache 读取当前战役的全部章节。校验发现 VPK 损坏、任务定义不完整或 ID/地图冲突时，命令失败，不改清单也不重启。
+命令按文件大小和修改时间缓存成功校验结果（`/var/cache/l4d2/vpk-campaigns.json`），仅完整校验新增或变化的 VPK；分卷任一变化会重新检查整组。汇总全部战役检查冲突，并要求第三方战役提供 AstMod/AstRedux 的 Versus 章节定义；随后合并并原子更新 `addons/sourcemod/configs/missioncycle.txt`，再重启一次。02 不直接覆盖云服清单：官图段使用仓库版本；三方图按“仓库顺序及译名、仓库外历史顺序及名字、本次新增地图”排列。新增地图被仓库收录后移到仓库指定位置，不重复出现；删除 VPK 则移除条目。直接内容应用使用相同规则，仓库来源为 `CHECKOUT_ROOT`（默认 `/home/l4d2/integration`）；`!mapvote`、`!nextmap` 使用每个战役的第一关，`!chaptervote` 由 Mission Cache 读取当前战役的全部章节。VPK 损坏或任务定义错误时跳过该包；ID/地图冲突时跳过涉及的战役，列出原因，其余正常战役照常生成清单并重启。失败包不缓存为成功结果，修复后下次重新扫描；旧清单中对应的失败战役也不会保留为可选地图。
 
 ## 重启
 

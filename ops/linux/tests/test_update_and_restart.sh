@@ -95,6 +95,29 @@ L4D2_DEPLOY_MARKER="$marker" \
 [[ $(<"$checkout/addons/sourcemod/configs/missioncycle.txt") == 'updated repository policy' ]]
 [[ $(wc -l <"$apply_log") -eq 1 ]]
 
+# A failed fetch still applies local content, without deploying checkout files
+# or advancing the deployment marker.
+git -C "$checkout" remote set-url origin "$TEST_ROOT/missing.git"
+printf 'runtime-only cfg\n' >"$game_dir/cfg/server.cfg"
+L4D2_RESTART_CONFIG="$config" \
+L4D2_CONTENT_APPLY_TOOL="$apply_tool" \
+L4D2_DEPLOY_MARKER="$marker" \
+    "$HELPER" >"$TEST_ROOT/offline.log" 2>&1
+[[ $(grep -c 'Fetching repository (attempt' "$TEST_ROOT/offline.log") -eq 3 ]]
+grep -q 'repository was NOT updated' "$TEST_ROOT/offline.log"
+[[ $(<"$game_dir/cfg/server.cfg") == 'runtime-only cfg' ]]
+[[ $(<"$marker") == "$expected_rev" ]]
+[[ $(wc -l <"$apply_log") -eq 2 ]]
+
+# Failure of content apply must still propagate to the Windows caller.
+printf '#!/usr/bin/env bash\nexit 7\n' >"$apply_tool"
+result=0
+L4D2_RESTART_CONFIG="$config" \
+L4D2_CONTENT_APPLY_TOOL="$apply_tool" \
+L4D2_DEPLOY_MARKER="$marker" \
+    "$HELPER" >/dev/null 2>&1 || result=$?
+[[ $result -eq 7 ]]
+
 printf 'dirty\n' >"$checkout/untracked-local-file"
 if L4D2_RESTART_CONFIG="$config" \
     L4D2_CONTENT_APPLY_TOOL="$apply_tool" \
@@ -103,7 +126,7 @@ if L4D2_RESTART_CONFIG="$config" \
     printf 'Dirty checkout unexpectedly deployed.\n' >&2
     exit 1
 fi
-[[ $(wc -l <"$apply_log") -eq 1 ]]
+[[ $(wc -l <"$apply_log") -eq 2 ]]
 [[ $(<"$marker") == "$expected_rev" ]]
 
 printf 'l4d2-update-and-restart integration test passed.\n'

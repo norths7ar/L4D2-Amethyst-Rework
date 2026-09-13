@@ -46,6 +46,19 @@ flock -n 9 || {
     exit 1
 }
 
+# Root uploads may carry owner-only permissions. Maps need read access, not
+# ownership or elevated privileges for the game process.
+for vpk in "$GAME_DIR"/addons/*.vpk; do
+    [[ -f "$vpk" ]] || continue
+    if [[ "$mode" == apply ]]; then
+        chmod a+r -- "$vpk"
+    fi
+    if ! sudo -u "$SERVICE_USER" -- test -r "$vpk"; then
+        printf 'l4d2-content-apply: %s cannot read %s; run content apply to grant read access.\n' "$SERVICE_USER" "$vpk" >&2
+        exit 1
+    fi
+done
+
 work_dir=$(mktemp -d /tmp/l4d2-content-apply.XXXXXX)
 candidate=$(mktemp "$(dirname -- "$missioncycle")/.missioncycle.XXXXXX")
 cleanup() {
@@ -67,7 +80,7 @@ inventory="$work_dir/inventory.json"
 campaign_count=$(python3 -c \
     'import json,sys; print(len(json.load(open(sys.argv[1], encoding="utf-8"))["campaigns"]))' \
     "$inventory")
-printf 'Validated all addon VPK entries; found %s third-party campaign(s).\n' \
+printf 'VPK scan complete; found %s usable third-party campaign(s).\n' \
     "$campaign_count"
 
 if cmp -s "$missioncycle" "$candidate"; then

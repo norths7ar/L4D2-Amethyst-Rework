@@ -99,6 +99,28 @@ def mission(
 
 
 class VpkCampaignTests(unittest.TestCase):
+    def test_bad_package_does_not_block_good_campaign_or_cache_recovery(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            cache = directory / "cache.json"
+            bad = directory / "bad.vpk"
+            write_single_file_vpk(bad, "missions/bad.txt", mission(include_versus=False))
+            write_single_file_vpk(directory / "good.vpk", "missions/good.txt", mission())
+            result = VPK.inspect_directory(directory, cache)
+            self.assertEqual([c["mission_id"] for c in result["campaigns"]], ["good"])
+            self.assertTrue(result["warnings"])
+            self.assertEqual(set(json.loads(cache.read_text())["entries"]), {"good.vpk"})
+            live = directory / "live.txt"
+            live.write_text('"MissionCycle" { "第三方战役" {} }', encoding="utf-8")
+            inventory = directory / "inventory.json"
+            inventory.write_text(json.dumps(result), encoding="utf-8")
+            VPK.reconcile_missioncycle(live, inventory, live, "第三方战役")
+            self.assertIn('"example_m1"', live.read_text(encoding="utf-8"))
+            write_single_file_vpk(bad, "missions/bad.txt", mission("fixed_m1", "fixed_m2"))
+            recovered = VPK.inspect_directory(directory, cache)
+            self.assertEqual(len(recovered["campaigns"]), 2)
+            self.assertEqual(recovered["warnings"], [])
+
     def test_reconcile_curated_prefix_and_persistent_append_history(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
@@ -155,8 +177,9 @@ class VpkCampaignTests(unittest.TestCase):
             with patch.object(VPK, "iter_vpk_entries", side_effect=AssertionError("read unchanged VPK")):
                 VPK.inspect_directory(directory, cache)
             chunk.write_bytes(payload.replace(b"Example Display", b"Changed Display") + b"\n")
-            with self.assertRaisesRegex(VPK.VpkError, "CRC mismatch"):
-                VPK.inspect_directory(directory, cache)
+            result = VPK.inspect_directory(directory, cache)
+            self.assertEqual(result["campaigns"], [])
+            self.assertRegex("\n".join(result["warnings"]), "CRC mismatch")
 
     def test_cache_reuses_unchanged_and_checks_changed_added_deleted(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -174,11 +197,11 @@ class VpkCampaignTests(unittest.TestCase):
             self.assertEqual(len(VPK.inspect_directory(directory, cache)["campaigns"]), 2)
             first.unlink()
             self.assertEqual(len(VPK.inspect_directory(directory, cache)["campaigns"]), 1)
-            before = cache.read_bytes()
             write_single_file_vpk(second, "missions/second.txt", mission(include_versus=False))
-            with self.assertRaises(VPK.VpkError):
-                VPK.inspect_directory(directory, cache)
-            self.assertEqual(before, cache.read_bytes())
+            result = VPK.inspect_directory(directory, cache)
+            self.assertEqual(result["campaigns"], [])
+            self.assertTrue(result["warnings"])
+            self.assertEqual(json.loads(cache.read_text())["entries"], {})
 
     def test_cached_campaigns_still_participate_in_conflict_checks(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -187,8 +210,9 @@ class VpkCampaignTests(unittest.TestCase):
             write_single_file_vpk(directory / "first.vpk", "missions/first.txt", mission())
             VPK.inspect_directory(directory, cache)
             write_single_file_vpk(directory / "second.vpk", "missions/second.txt", mission())
-            with self.assertRaisesRegex(VPK.VpkError, "declared more than once"):
-                VPK.inspect_directory(directory, cache)
+            result = VPK.inspect_directory(directory, cache)
+            self.assertEqual(result["campaigns"], [])
+            self.assertRegex("\n".join(result["warnings"]), "declared more than once")
 
     def test_identical_vs_alias_prefers_base_mission(self) -> None:
         campaigns = [
@@ -237,11 +261,9 @@ class VpkCampaignTests(unittest.TestCase):
                 "missions/coop-only.txt",
                 mission(include_versus=False),
             )
-            with self.assertRaisesRegex(
-                VPK.VpkError,
-                "missing versus mode required by AstMod/AstRedux",
-            ):
-                VPK.inspect_directory(directory)
+            result = VPK.inspect_directory(directory)
+            self.assertEqual(result["campaigns"], [])
+            self.assertIn("missing versus mode required by AstMod/AstRedux", "\n".join(result["warnings"]))
 
     def test_inventory_accepts_separate_coop_and_versus_missions(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -280,8 +302,9 @@ class VpkCampaignTests(unittest.TestCase):
                 mission(),
                 corrupt_crc=True,
             )
-            with self.assertRaisesRegex(VPK.VpkError, "CRC mismatch"):
-                VPK.inspect_directory(directory)
+            result = VPK.inspect_directory(directory)
+            self.assertEqual(result["campaigns"], [])
+            self.assertRegex("\n".join(result["warnings"]), "CRC mismatch")
 
     def test_inventory_reports_all_invalid_vpks(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -298,11 +321,11 @@ class VpkCampaignTests(unittest.TestCase):
                 mission(),
                 corrupt_crc=True,
             )
-            with self.assertRaises(VPK.VpkError) as context:
-                VPK.inspect_directory(directory)
+            result = VPK.inspect_directory(directory)
 
-        self.assertIn("one.vpk", str(context.exception))
-        self.assertIn("two.vpk", str(context.exception))
+        self.assertEqual(result["campaigns"], [])
+        self.assertIn("one.vpk", "\n".join(result["warnings"]))
+        self.assertIn("two.vpk", "\n".join(result["warnings"]))
 
     def test_inventory_rejects_duplicate_map(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -312,8 +335,9 @@ class VpkCampaignTests(unittest.TestCase):
                 "missions/broken.txt",
                 mission("duplicate_m1", "duplicate_m1"),
             )
-            with self.assertRaisesRegex(VPK.VpkError, "declared more than once"):
-                VPK.inspect_directory(directory)
+            result = VPK.inspect_directory(directory)
+            self.assertEqual(result["campaigns"], [])
+            self.assertRegex("\n".join(result["warnings"]), "declared more than once")
 
     def test_inventory_rejects_duplicate_mission_id(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -324,8 +348,9 @@ class VpkCampaignTests(unittest.TestCase):
             write_single_file_vpk(
                 directory / "two.vpk", "missions/shared.txt", mission("two_m1")
             )
-            with self.assertRaisesRegex(VPK.VpkError, "mission ID 'shared'"):
-                VPK.inspect_directory(directory)
+            result = VPK.inspect_directory(directory)
+            self.assertEqual(result["campaigns"], [])
+            self.assertRegex("\n".join(result["warnings"]), "mission ID 'shared'")
 
     def test_reconcile_preserves_official_curated_name_and_order(self) -> None:
         source = '''"MissionCycle"

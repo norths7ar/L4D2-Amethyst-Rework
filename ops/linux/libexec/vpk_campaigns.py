@@ -415,12 +415,14 @@ def inspect_directory(directory: Path, cache_path: Path | None = None) -> dict[s
 
     seen_maps: dict[str, str] = {}
     seen_missions: dict[str, str] = {}
+    conflicting: set[str] = set()
     for campaign in campaigns:
         origin = f"{campaign['source']}:{campaign['mission']}"
         mission_id = str(campaign["mission_id"])
         normalized_id = mission_id.casefold()
         previous_mission = seen_missions.get(normalized_id)
         if previous_mission:
+            conflicting.update((previous_mission, origin))
             errors.append(
                 f"mission ID {mission_id!r} is declared by both "
                 f"{previous_mission!r} and {origin!r}"
@@ -432,6 +434,7 @@ def inspect_directory(directory: Path, cache_path: Path | None = None) -> dict[s
             normalized_map = map_name.casefold()
             previous_map = seen_maps.get(normalized_map)
             if previous_map:
+                conflicting.update((previous_map, origin))
                 errors.append(
                     f"map {map_name!r} is declared more than once by "
                     f"{previous_map!r} and {origin!r}"
@@ -441,7 +444,9 @@ def inspect_directory(directory: Path, cache_path: Path | None = None) -> dict[s
 
     if errors:
         details = "\n".join(f"  - {error}" for error in errors)
-        raise VpkError(f"validation failed:\n{details}")
+        print(f"VPK warnings (affected campaigns skipped):\n{details}", file=sys.stderr)
+    campaigns = [campaign for campaign in campaigns
+                 if f"{campaign['source']}:{campaign['mission']}" not in conflicting]
 
     if cache_path:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -450,7 +455,7 @@ def inspect_directory(directory: Path, cache_path: Path | None = None) -> dict[s
             "directory": str(directory.resolve()), "entries": updated,
         }, ensure_ascii=False), encoding="utf-8")
         temporary.replace(cache_path)
-        print(f"VPK scan: {len(primary_vpks) - reused} validated, {reused} cached.", file=sys.stderr)
+        print(f"VPK scan: {len(primary_vpks) - reused} scanned, {reused} cached; {len(errors)} warning(s).", file=sys.stderr)
 
     campaigns.sort(
         key=lambda item: (
@@ -458,7 +463,7 @@ def inspect_directory(directory: Path, cache_path: Path | None = None) -> dict[s
             str(item["first_map"]).casefold(),
         )
     )
-    return {"files": [path.name for path in all_vpks], "campaigns": campaigns}
+    return {"files": [path.name for path in all_vpks], "campaigns": campaigns, "warnings": errors}
 
 
 def escape_keyvalues(value: str) -> str:
