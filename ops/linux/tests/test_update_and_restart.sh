@@ -32,6 +32,8 @@ printf 'old\n' >"$publisher/addons/old.smx"
 printf 'old cfg\n' >"$publisher/cfg/server.cfg"
 printf 'old script\n' >"$publisher/scripts/runtime.nut"
 mkdir -p "$publisher/addons/sourcemod/data/sqlite"
+mkdir -p "$publisher/addons/sourcemod/configs"
+printf 'repository policy\n' >"$publisher/addons/sourcemod/configs/missioncycle.txt"
 printf 'tracked database\n' >"$publisher/addons/sourcemod/data/sqlite/clientprefs-sqlite.sq3"
 printf 'tracked prefs\n' >"$publisher/addons/prefs.sqlite3"
 git -C "$publisher" add addons cfg scripts
@@ -41,6 +43,7 @@ git -C "$publisher" push origin main >/dev/null 2>&1
 git clone "$remote" "$checkout" >/dev/null 2>&1
 mkdir -p "$game_dir"
 cp -a "$checkout/addons" "$checkout/cfg" "$checkout/scripts" "$game_dir/"
+printf 'live append history\n' >"$game_dir/addons/sourcemod/configs/missioncycle.txt"
 printf 'local content\n' >"$game_dir/addons/local.vpk"
 printf 'player data\n' >"$game_dir/addons/sourcemod/data/sqlite/clientprefs-sqlite.sq3"
 printf 'player prefs\n' >"$game_dir/addons/prefs.sqlite3"
@@ -53,6 +56,7 @@ printf 'tracked pending writes\n' >"$publisher/addons/prefs.sqlite3-wal"
 printf 'new database\n' >"$publisher/addons/new.db"
 printf 'new\n' >"$publisher/addons/new.smx"
 printf 'updated cfg\n' >"$publisher/cfg/server.cfg"
+printf 'updated repository policy\n' >"$publisher/addons/sourcemod/configs/missioncycle.txt"
 git -C "$publisher" add -A addons cfg scripts
 git -C "$publisher" commit -m update >/dev/null
 git -C "$publisher" push origin main >/dev/null 2>&1
@@ -87,6 +91,8 @@ L4D2_DEPLOY_MARKER="$marker" \
 [[ $(<"$game_dir/addons/prefs.sqlite3-wal") == 'pending writes' ]]
 [[ ! -e "$game_dir/addons/new.db" ]]
 [[ $(<"$game_dir/cfg/server.cfg") == 'updated cfg' ]]
+[[ $(<"$game_dir/addons/sourcemod/configs/missioncycle.txt") == 'live append history' ]]
+[[ $(<"$checkout/addons/sourcemod/configs/missioncycle.txt") == 'updated repository policy' ]]
 [[ $(wc -l <"$apply_log") -eq 1 ]]
 
 printf 'dirty\n' >"$checkout/untracked-local-file"

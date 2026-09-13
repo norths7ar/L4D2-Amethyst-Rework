@@ -99,6 +99,44 @@ def mission(
 
 
 class VpkCampaignTests(unittest.TestCase):
+    def test_reconcile_curated_prefix_and_persistent_append_history(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            live = directory / "live.txt"
+            policy = directory / "policy.txt"
+            inventory = directory / "inventory.json"
+
+            def write_policy(order: str) -> None:
+                entries = [(letter, [("name", "仓库" + letter)]) for letter in order]
+                policy.write_text(VPK.render_keyvalues([("MissionCycle", [
+                    ("官方战役", [("official", [("name", "官图")])]),
+                    ("第三方战役", entries),
+                ])]), encoding="utf-8")
+
+            def reconcile(installed: str) -> list[tuple[str, object]]:
+                # Reverse title order deliberately: new batch sorting must not
+                # reorder an earlier batch, regardless of inventory order.
+                inventory.write_text(json.dumps({"campaigns": [
+                    {"first_map": c, "name": str(100 - ord(c))} for c in installed
+                ]}), encoding="utf-8")
+                VPK.reconcile_missioncycle(live, inventory, live, "第三方战役", policy)
+                root = VPK.find_pair(VPK.parse_keyvalues(live.read_text(encoding="utf-8")), "MissionCycle")
+                self.assertEqual(VPK.find_pair(root, "官方战役"), [("official", [("name", "官图")])])
+                return VPK.find_pair(root, "第三方战役")
+
+            write_policy("HIJKLMN")
+            live.write_bytes(policy.read_bytes())
+            self.assertEqual([k for k, _ in reconcile("HIJKLMNABC")], list("HIJKLMNCBA"))
+            self.assertEqual([k for k, _ in reconcile("HIJKLMNABCDEF")], list("HIJKLMNCBAFED"))
+            write_policy("HIJKFLMN")
+            entries = reconcile("HIJKLMNABCDEF")
+            self.assertEqual([k for k, _ in entries], list("HIJKFLMNCBAED"))
+            self.assertEqual(dict(entries)["F"], [("name", "仓库F")])
+            self.assertEqual(entries, reconcile("FEDCBANMLKJIH"))
+            # Removed VPKs disappear even when curated; returning maps append.
+            self.assertEqual([k for k, _ in reconcile("HIJKLMNABDE")], list("HIJKLMNBAED"))
+            self.assertEqual([k for k, _ in reconcile("HIJKLMNABCDE")], list("HIJKLMNBAEDC"))
+
     def test_cache_invalidates_when_archive_chunk_changes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)

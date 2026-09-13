@@ -34,6 +34,7 @@ source "$CONFIG_PATH"
 }
 
 missioncycle="$GAME_DIR/addons/sourcemod/configs/missioncycle.txt"
+policy="${CHECKOUT_ROOT:-/home/l4d2/integration}/addons/sourcemod/configs/missioncycle.txt"
 [[ -f "$missioncycle" ]] || {
     printf 'l4d2-content-apply: mission cycle is missing: %s\n' "$missioncycle" >&2
     exit 1
@@ -58,6 +59,7 @@ inventory="$work_dir/inventory.json"
     --cache /var/cache/l4d2/vpk-campaigns.json
 "$VPK_TOOL" reconcile \
     --source "$missioncycle" \
+    --policy "$policy" \
     --inventory "$inventory" \
     --output "$candidate" \
     --section '第三方战役'

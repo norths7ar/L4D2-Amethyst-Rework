@@ -59,7 +59,7 @@ sudo l4d2-content-apply --check
 sudo l4d2-content-apply
 ```
 
-命令按文件大小和修改时间缓存成功校验结果（`/var/cache/l4d2/vpk-campaigns.json`），仅完整校验新增或变化的 VPK；分卷任一变化会重新检查整组。汇总全部战役检查冲突，并要求第三方战役提供 AstMod/AstRedux 的 Versus 章节定义；随后只原子更新 `addons/sourcemod/configs/missioncycle.txt` 的“第三方战役”段，再重启一次。官图段长期固定；`!mapvote`、`!nextmap` 使用每个战役的第一关，`!chaptervote` 由 Mission Cache 读取当前战役的全部章节。校验发现 VPK 损坏、任务定义不完整或 ID/地图冲突时，命令失败，不改清单也不重启。
+命令按文件大小和修改时间缓存成功校验结果（`/var/cache/l4d2/vpk-campaigns.json`），仅完整校验新增或变化的 VPK；分卷任一变化会重新检查整组。汇总全部战役检查冲突，并要求第三方战役提供 AstMod/AstRedux 的 Versus 章节定义；随后合并并原子更新 `addons/sourcemod/configs/missioncycle.txt`，再重启一次。02 不直接覆盖云服清单：官图段使用仓库版本；三方图按“仓库顺序及译名、仓库外历史顺序及名字、本次新增地图”排列。新增地图被仓库收录后移到仓库指定位置，不重复出现；删除 VPK 则移除条目。直接内容应用使用相同规则，仓库来源为 `CHECKOUT_ROOT`（默认 `/home/l4d2/integration`）；`!mapvote`、`!nextmap` 使用每个战役的第一关，`!chaptervote` 由 Mission Cache 读取当前战役的全部章节。校验发现 VPK 损坏、任务定义不完整或 ID/地图冲突时，命令失败，不改清单也不重启。
 
 ## 重启
 

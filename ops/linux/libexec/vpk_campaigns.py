@@ -480,7 +480,8 @@ def render_keyvalues(pairs: list[tuple[str, KVValue]], indent: int = 0) -> str:
 
 
 def reconcile_missioncycle(
-    source_path: Path, inventory_path: Path, output_path: Path, section: str
+    source_path: Path, inventory_path: Path, output_path: Path, section: str,
+    policy_path: Path | None = None,
 ) -> None:
     root = parse_keyvalues(source_path.read_text(encoding="utf-8-sig"))
     mission_cycle_value = find_pair(root, "MissionCycle")
@@ -506,12 +507,35 @@ def reconcile_missioncycle(
                         existing_names[first_map.casefold()] = existing_name
             break
 
+    policy_order: dict[str, int] = {}
+    if policy_path:
+        # The repository owns fixed sections and curated names/order; the live
+        # file above supplies the history of campaigns not yet curated.
+        root = parse_keyvalues(policy_path.read_text(encoding="utf-8-sig"))
+        mission_cycle_value = find_pair(root, "MissionCycle")
+        if not isinstance(mission_cycle_value, list):
+            raise VpkError(f"{policy_path}: missing MissionCycle root")
+        section_index = None
+        for index, (name, value) in enumerate(mission_cycle_value):
+            if name.casefold() == section.casefold() and isinstance(value, list):
+                section_index = index
+                for position, (first_map, details) in enumerate(value):
+                    normalized = first_map.casefold()
+                    policy_order[normalized] = position
+                    if isinstance(details, list):
+                        policy_name = scalar(details, "name")
+                        if policy_name:
+                            existing_names[normalized] = policy_name
+                break
+
     def campaign_order(campaign: dict[str, object]) -> tuple[int, int | str, str]:
         first_map = str(campaign["first_map"])
         normalized = first_map.casefold()
+        if normalized in policy_order:
+            return (0, policy_order[normalized], normalized)
         if normalized in existing_order:
-            return (0, existing_order[normalized], normalized)
-        return (1, str(campaign["name"]).casefold(), normalized)
+            return (1, existing_order[normalized], normalized)
+        return (2, str(campaign["name"]).casefold(), normalized)
 
     campaigns.sort(key=campaign_order)
     managed_section: list[tuple[str, KVValue]] = []
@@ -551,6 +575,7 @@ def parse_args() -> argparse.Namespace:
         "reconcile", help="replace only the managed mission-cycle section"
     )
     reconcile.add_argument("--source", required=True, type=Path)
+    reconcile.add_argument("--policy", type=Path, help="repository mission cycle with curated names and order")
     reconcile.add_argument("--inventory", required=True, type=Path)
     reconcile.add_argument("--output", required=True, type=Path)
     reconcile.add_argument("--section", default="第三方战役")
@@ -569,7 +594,7 @@ def main() -> int:
                 sys.stdout.write(serialized)
         else:
             reconcile_missioncycle(
-                args.source, args.inventory, args.output, args.section
+                args.source, args.inventory, args.output, args.section, args.policy
             )
     except (OSError, ValueError, VpkError) as error:
         print(f"vpk_campaigns: {error}", file=sys.stderr)

@@ -103,6 +103,7 @@ git_owner ls-files -z -- addons/ cfg/ scripts/ >"$work_dir/tracked"
 while IFS= read -r -d '' path; do
     is_runtime_path "$path" || { printf 'l4d2-update-and-restart: unsafe tracked path\n' >&2; exit 1; }
     is_database_path "$path" && continue
+    [[ "$path" == addons/sourcemod/configs/missioncycle.txt ]] && continue
     printf '%s\0' "$path" >>"$files"
 done <"$work_dir/tracked"
 
@@ -127,6 +128,7 @@ rsync -a --delay-updates --chown="$OWNER_USER:$SERVICE_GROUP" \
 if [[ -s "$work_dir/remove" ]]; then
     while IFS= read -r -d '' path; do
         is_database_path "$path" && continue
+        [[ "$path" == addons/sourcemod/configs/missioncycle.txt ]] && continue
         rm -f -- "$CONTENT_ROOT/$path"
     done <"$work_dir/remove"
 fi

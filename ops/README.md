@@ -21,7 +21,7 @@ VPK 或 SMX 上传完成后，显式执行：
 sudo l4d2-content-apply
 ```
 
-该命令按文件大小和修改时间复用 `/var/cache/l4d2/vpk-campaigns.json` 中的成功校验结果，扫描 `left4dead2/addons/` 根目录，仅对新增或变化的 VPK 完整读取并校验，并要求第三方战役提供 AstMod/AstRedux 所需的 Versus 章节定义。在全部校验成功后只重建 `missioncycle.txt` 的“第三方战役”段，然后执行一次正常重启。官图段、已有三方显示名和顺序不会被重新生成；新增战役追加，已删除 VPK 对应战役移除。`--check` 只显示清单差异，不修改清单、不重启，但会更新校验缓存。Git 跟踪的 CFG、管理员、公告和 Stripper 文件应在仓库中维护；未跟踪的服务器私有文件和第三方内容仍可直接维护。
+该命令按文件大小和修改时间复用 `/var/cache/l4d2/vpk-campaigns.json` 中的成功校验结果，扫描 `left4dead2/addons/` 根目录，仅对新增或变化的 VPK 完整读取并校验，并要求第三方战役提供 AstMod/AstRedux 所需的 Versus 章节定义。全部校验成功后合并仓库清单与云服旧清单，再执行一次正常重启：官图段使用仓库版本；第三方战役先按仓库顺序和名字排列，仓库外已有地图保留历史顺序和名字，本次新发现的地图按标题排序后追加，已删除 VPK 对应战役移除。02 部署不会直接覆盖或删除云服 `missioncycle.txt`，而是与直接内容应用一样，使用 `CHECKOUT_ROOT`（默认 `/home/l4d2/integration`）中的仓库清单完成合并。`--check` 只显示清单差异，不修改清单、不重启，但会更新校验缓存。Git 跟踪的 CFG、管理员、公告和 Stripper 文件应在仓库中维护；未跟踪的服务器私有文件和第三方内容仍可直接维护。
 
 游戏内 `!restart [原因]` 和 `!restartserver [原因]` 由 `server_restart.smx` 提供，需要 SourceMod 的 `m`（RCON）管理标志。插件记录管理员身份并广播提示，然后立即执行正常 `quit`；systemd 的 `Restart=always` 负责重新拉起，不向游戏进程开放 sudo。这里故意不用 SourceMod timer，避免空服休眠让倒计时挂起。
 
