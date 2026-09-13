@@ -1,0 +1,44 @@
+"Phrases"
+{
+	"Tag"
+	{
+		"chi"		"{blue}[{default}人数上限{blue}]{default}"
+	}
+	"NotConsoleVote"
+	{
+		"chi"		"[人数上限] 请在游戏中使用此命令。"
+	}
+	"LimitSlotsAbove"
+	{
+		"chi"		"本服务器的人数上限不能高于 {olive}%i{default}。"
+	}
+	"LimitedSlotsTo"
+	{
+		"#format"   "{1:s},{2:i}" // 1:sName 2:Int
+		"chi"		"{olive}{1}{default} 将人数上限设为 {blue}{2}{default}"
+	}
+	"RequiredPlayers"
+	{
+		"chi"		"人数上限不能低于游戏所需人数。"
+	}
+	"SlotsUsage"
+	{
+		"chi"		"用法：{olive}!slots{default} <{olive}人数{default}> {blue}|{default} 示例：{olive}!slots 8{default}"
+	}
+	"Spectators"
+	{
+		"chi"		"旁观者不能发起投票。"
+	}
+	"LimitSlots"
+	{
+		"chi"		"将人数上限设为“%s”？"
+	}
+	"CannotBeStarted"
+	{
+		"chi"		"当前无法发起投票。"
+	}
+	"LimitingSlots"
+	{
+		"chi"		"正在设置人数上限……"
+	}
+}

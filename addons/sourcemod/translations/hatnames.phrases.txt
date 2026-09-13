@@ -3,10 +3,12 @@
 	"models/infected/gibs/gibs.mdl"
 	{
 		"en"		"Hand Gib"
+        "chi" "断手"
 	}
 	"models/infected/limbs/exploded_boomer_head.mdl"
 	{
 		"en"		"Boomer Head"
+        "chi" "Boomer 头"
 	}
 	"models/infected/limbs/limb_male_head01.mdl"
 	{
@@ -15,14 +17,17 @@
 	"models/props/cs_militia/circularsaw01.mdl"
 	{
 		"en"		"Circular Saw"
+        "chi" "圆锯"
 	}
 	"models/props/de_nuke/emergency_lighta.mdl"
 	{
 		"en"		"Red Emergency Light"
+        "chi" "红色警示灯"
 	}
 	"models/props_fairgrounds/alligator.mdl"
 	{
 		"en"		"Alligator"
+        "chi" "鳄鱼玩偶"
 	}
 	"models/props_fairgrounds/mr_mustachio.mdl"
 	{
@@ -36,10 +41,12 @@
 	"models/props_interiors/teddy_bear.mdl"
 	{
 		"en"		"Teddy Bear"
+        "chi" "泰迪熊"
 	}
 	"models/props_interiors/toilet_b_breakable01_part13.mdl"
 	{
 		"en"		"Toilet Seat"
+        "chi" "马桶圈"
 	}
 	"models/props_interiors/waterbottle.mdl"
 	{
@@ -52,6 +59,7 @@
 	"models/props_urban/life_ring001.mdl"
 	{
 		"en"		"Life Ring"
+        "chi" "救生圈"
 	}
 	"models/props_lighting/light_construction02.mdl"
 	{
@@ -64,14 +72,17 @@
 	"models/infected/smoker_tongue_attach.mdl"
 	{
 		"en"		"Smoker Tongue"
+        "chi" "Smoker 舌头"
 	}
 	"models/props/de_inferno/ceiling_fan_blade.mdl"
 	{
 		"en"		"Ceiling Fan Blades"
+        "chi" "吊扇叶片"
 	}
 	"models/f18/f18_placeholder.mdl"
 	{
 		"en"		"F-18 Jet Plane"
+        "chi" "F-18 飞机"
 	}
 	"models/deadbodies/dead_male_civilian_radio.mdl"
 	{
@@ -80,30 +91,37 @@
 	"models/infected/cim_riot_faceplate.mdl"
 	{
 		"en"		"Riot Faceplate"
+        "chi" "防暴面罩"
 	}
 	"models/props_interiors/styrofoam_cups.mdl"
 	{
 		"en"		"Styrofoam Cups"
+        "chi" "纸杯"
 	}
 	"models/props_shacks/bug_lamp01.mdl"
 	{
 		"en"		"Bug Lamp Zapper"
+        "chi" "灭蚊灯"
 	}
 	"models/props_unique/grill_campground.mdl"
 	{
 		"en"		"BBQ Grill"
+        "chi" "烧烤架"
 	}
 	"models/props_unique/luggagecart01.mdl"
 	{
 		"en"		"Luggage Cart"
+        "chi" "行李车"
 	}
 	"models/props_unique/spawn_apartment/lantern.mdl"
 	{
 		"en"		"Lantern"
+        "chi" "提灯"
 	}
 	"models/props_urban/exit_sign002.mdl"
 	{
 		"en"		"Exit Sign"
+        "chi" "出口标志"
 	}
 	"models/props_urban/garden_hose001.mdl"
 	{
@@ -112,22 +130,27 @@
 	"models/props_urban/plastic_flamingo001.mdl"
 	{
 		"en"		"Pink Flamingo"
+        "chi" "粉色火烈鸟"
 	}
 	"models/props_waterfront/money_pile.mdl"
 	{
 		"en"		"Money Pile"
+        "chi" "钞票堆"
 	}
 	"models/props_fairgrounds/elephant.mdl"
 	{
 		"en"		"Elephant"
+        "chi" "大象玩偶"
 	}
 	"models/props_fairgrounds/giraffe.mdl"
 	{
 		"en"		"Giraffe"
+        "chi" "长颈鹿玩偶"
 	}
 	"models/props_fairgrounds/garbage_popcorn_box.mdl"
 	{
 		"en"		"Popcorn Box"
+        "chi" "爆米花盒"
 	}
 	"models/props_fairgrounds/gnome_closet.mdl"
 	{

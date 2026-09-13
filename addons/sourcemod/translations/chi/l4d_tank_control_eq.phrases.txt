@@ -1,0 +1,46 @@
+"Phrases"
+{
+	"TagRage"
+	{
+		"chi"		"{red}<{default}Tank 控制权{red}>"
+	}
+	"Refilled"
+	{
+		"chi"		"{default}（{green}%N{default}）的{olive}控制权{red}已回满"
+	}
+	"RefilledBot"
+	{
+		"chi"		"{olive}控制权{red}已回满"
+	}
+
+    "TagSelection"
+	{
+		"chi"		"{red}<{default}Tank 人选{red}>"
+	}
+    "YouBecomeTank"
+	{
+		"chi"		"{green}你{default}将成为 {red}Tank{default}！"
+	}
+   "BecomeTank"
+	{
+		"chi"		"{olive}%N {default}将成为 {red}Tank！"
+	}
+
+    "TagControl"
+	{
+		"chi"		"{green}[{olive}Tank 控制权{green}]"
+	}
+   "InvalidTarget"
+	{
+		"chi"		"{default}目标无效，无法移交 Tank。"
+	}
+   "NoInfected"
+	{
+		"chi"		"{olive}%N {default}不在感染者队伍，无法移交 Tank。"
+	}
+
+    "HintText"
+	{
+		"chi"		"怒气值已回满"
+	}
+}

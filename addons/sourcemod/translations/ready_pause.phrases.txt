@@ -1,5 +1,74 @@
 "Phrases"
 {
+	"ReadyPanelHeader"
+	{
+		"#format" "{1:s},{2:d},{3:d},{4:s}"
+		"en" "▸ Server: {1} \n▸ Slots: {2}/{3}\n▸ Config: {4}"
+	}
+	"ReadyPanelCommands"
+	{
+		"en" "▸ Commands:"
+	}
+	"ReadyPanelReadyCommand"
+	{
+		"en" "->1. F1 ready / F2 unready"
+	}
+	"ReadyPanelSurvivors"
+	{
+		"en" "Survivors"
+	}
+	"ReadyPanelInfected"
+	{
+		"en" "Infected"
+	}
+	"ReadyPanelCaster"
+	{
+		"en" "Caster"
+	}
+	"ReadyPanelCasters"
+	{
+		"en" "Casters"
+	}
+	"ReadyPanelSpectator"
+	{
+		"en" "Spectator"
+	}
+	"ReadyPanelSpectators"
+	{
+		"en" "Spectators"
+	}
+	"ReadyPanelMany"
+	{
+		"#format" "{1:d}"
+		"en" "**Many** ({1})"
+	}
+	"PausePanelHeader"
+	{
+		"#format" "{1:s},{2:d},{3:d}"
+		"en" "▸ Server: {1}\n▸ Slots: {2}/{3}"
+	}
+	"PausePanelReadyStatus"
+	{
+		"en" "▸ Ready Status"
+	}
+	"PausePanelRequireAdmin"
+	{
+		"en" "->0. Require Admin to Unpause"
+	}
+	"PausePanelAdminInitiator"
+	{
+		"#format" "{1:s}"
+		"en" "▸ Force Pause -> {1} (Admin)"
+	}
+	"PausePanelSurvivorInitiator"
+	{
+		"#format" "{1:s}"
+		"en" "▸ Initiator -> {1} (Survivors)"
+	}
+	"PausePanelDuration"
+	{
+		"en" "Duration"
+	}
 	"PauseInitiator"
 	{
 		"#format" "{1:s}"

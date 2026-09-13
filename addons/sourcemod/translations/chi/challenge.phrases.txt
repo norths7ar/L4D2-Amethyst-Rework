@@ -405,6 +405,6 @@
     {
         /* Context: Periodic reminder shown while any current-profile temporary override remains active. */
         "#format" "{1:s}"
-        "chi" "当前存在临时玩法调整：{1}。使用 !ast 查看或重置。"
+        "chi" "{1}。!ast 查看或重置。"
     }
 }

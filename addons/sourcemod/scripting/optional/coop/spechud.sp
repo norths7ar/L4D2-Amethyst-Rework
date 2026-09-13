@@ -81,13 +81,13 @@ public Action TimerDrawHud(Handle timer)
         {
             panel = new Panel();
             FillHeaderInfo(panel);
-            FillSurvivorInfo(panel);
-            if (tank > 0 && IsPlayerAlive(tank)) FillTankInfo(panel, tank, false);
+            FillSurvivorInfo(panel, client);
+            if (tank > 0 && IsPlayerAlive(tank)) FillTankInfo(panel, tank, false, client);
         }
         else if (g_tankHud[client] && tank > 0 && IsPlayerAlive(tank))
         {
             panel = new Panel();
-            FillTankInfo(panel, tank, true);
+            FillTankInfo(panel, tank, true, client);
         }
         if (panel != null) { panel.Send(client, IgnorePanel, 2); delete panel; }
     }
@@ -149,10 +149,13 @@ void GetWeaponInfo(int client, char[] info, int length)
     }
 }
 int SortSurvivors(int first, int second, const int[] array, Handle hndl) { return IdentifySurvivor(first) - IdentifySurvivor(second); }
-void FillSurvivorInfo(Panel panel)
+void FillSurvivorInfo(Panel panel, int viewer)
 {
-    char line[128], name[MAX_NAME_LENGTH], latency[8];
-    DrawPanelText(panel, " "); DrawPanelText(panel, "-> 生还者");
+    char line[192], name[MAX_NAME_LENGTH], latency[8], firstIncap[32], secondIncap[32];
+    FormatEx(firstIncap, sizeof(firstIncap), "%T", "HudFirstIncap", viewer);
+    FormatEx(secondIncap, sizeof(secondIncap), "%T", "HudSecondIncap", viewer);
+    FormatEx(line, sizeof(line), "-> %T", "HudSurvivors", viewer);
+    DrawPanelText(panel, " "); DrawPanelText(panel, line);
     int clients[MAXPLAYERS], total;
     for (int client = 1; client <= MaxClients; client++) if (IsClientInGame(client) && GetClientTeam(client) == L4D2Team_Survivor) clients[total++] = client;
     SortCustom1D(clients, total, SortSurvivors);
@@ -160,36 +163,37 @@ void FillSurvivorInfo(Panel panel)
     {
         int client = clients[index]; GetClientFixedName(client, name, sizeof(name));
         if (IsFakeClient(client)) strcopy(latency, sizeof(latency), "BOT"); else FormatEx(latency, sizeof(latency), "%dms", RoundToNearest(GetClientAvgLatency(client, NetFlow_Both) * 1000.0));
-        if (!IsPlayerAlive(client)) FormatEx(line, sizeof(line), "%s | %s: Dead", latency, name);
-        else if (IsHangingFromLedge(client)) FormatEx(line, sizeof(line), "%s | %s: <%dHP@Hang>", latency, name, GetClientHealth(client));
+        if (!IsPlayerAlive(client)) FormatEx(line, sizeof(line), "%s | %s: %T", latency, name, "HudDead", viewer);
+        else if (IsHangingFromLedge(client)) FormatEx(line, sizeof(line), "%s | %s: <%dHP@%T>", latency, name, GetClientHealth(client), "HudHang", viewer);
         else if (IsIncapacitated(client))
         {
             int active = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon"); GetLongWeaponName(IdentifyWeapon(active), line, sizeof(line));
-            Format(line, sizeof(line), "%s | %s: <%dHP@%s> [%s %d]", latency, name, GetClientHealth(client), GetSurvivorIncapCount(client) == 1 ? "2nd" : "1st", line, GetWeaponClipAmmo(active));
+            Format(line, sizeof(line), "%s | %s: <%dHP@%s> [%s %d]", latency, name, GetClientHealth(client), GetSurvivorIncapCount(client) == 1 ? secondIncap : firstIncap, line, GetWeaponClipAmmo(active));
         }
         else
         {
             GetWeaponInfo(client, line, sizeof(line)); int temporary = GetSurvivorTemporaryHealth(client); int health = GetClientHealth(client) + temporary; int incap = GetSurvivorIncapCount(client);
             if (!incap) Format(line, sizeof(line), "%s | %s: %dHP%s [%s]", latency, name, health, temporary > 0 ? "#" : "", line);
-            else Format(line, sizeof(line), "%s | %s: %dHP (#%s) [%s]", latency, name, health, incap == 2 ? "2nd" : "1st", line);
+            else Format(line, sizeof(line), "%s | %s: %dHP (#%s) [%s]", latency, name, health, incap == 2 ? secondIncap : firstIncap, line);
         }
         DrawPanelText(panel, line);
     }
 }
 // Hyper-V FillTankInfo reduced to PVE health/fire state; no controller, pass,
 // frustration, network or any other player-infected transfer information.
-void FillTankInfo(Panel panel, int tank, bool tankOnly)
+void FillTankInfo(Panel panel, int tank, bool tankOnly, int viewer)
 {
     char line[96];
-    if (tankOnly) DrawPanelText(panel, "Tank HUD"); else { DrawPanelText(panel, " "); DrawPanelText(panel, "-> Tank"); }
+    if (tankOnly) { FormatEx(line, sizeof(line), "%T", "HudTankTitle", viewer); DrawPanelText(panel, line); }
+    else { DrawPanelText(panel, " "); DrawPanelText(panel, "-> Tank"); }
     int health = GetClientHealth(tank), maximum = GetEntProp(tank, Prop_Send, "m_iMaxHealth");
-    if (health <= 0 || IsIncapacitated(tank)) strcopy(line, sizeof(line), "HP: Dead");
+    if (health <= 0 || IsIncapacitated(tank)) FormatEx(line, sizeof(line), "HP: %T", "HudDead", viewer);
     else FormatEx(line, sizeof(line), "HP: %d / %d%%", health, L4D2Util_GetMax(1, RoundFloat(L4D2Util_IntToPercentFloat(health, maximum))));
     DrawPanelText(panel, line);
     if (GetEntityFlags(tank) & FL_ONFIRE)
     {
         int remaining = RoundToCeil(L4D2Util_IntToPercentFloat(health, maximum) / 100.0 * g_tankBurnDurationValue);
-        FormatEx(line, sizeof(line), "Fire: %ds", remaining); DrawPanelText(panel, line);
+        FormatEx(line, sizeof(line), "%T", "HudFire", viewer, remaining); DrawPanelText(panel, line);
     }
 }
 

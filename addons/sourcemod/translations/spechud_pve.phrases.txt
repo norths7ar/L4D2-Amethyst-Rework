@@ -1,23 +1,59 @@
 "Phrases"
 {
+	"HudSurvivors"
+	{
+		"en" "Survivors"
+		"chi" "生还者"
+	}
+	"HudFirstIncap"
+	{
+		"en" "1st"
+		"chi" "1 倒"
+	}
+	"HudSecondIncap"
+	{
+		"en" "2nd"
+		"chi" "2 倒"
+	}
+	"HudDead"
+	{
+		"en" "Dead"
+		"chi" "死亡"
+	}
+	"HudHang"
+	{
+		"en" "Hang"
+		"chi" "挂边"
+	}
+	"HudTankTitle"
+	{
+		"en" "Tank HUD"
+		"chi" "Tank 状态"
+	}
+	"HudFire"
+	{
+		"#format" "{1:d}"
+		"en" "Fire: {1}s"
+		"chi" "燃烧：{1}s"
+	}
     "SpecHudSpectatorOnly"
     {
-        "chi" "[HUD] 仅观察者可使用 !spechud。"
+        "chi" "[HUD] 仅旁观者可使用 !spechud。"
         "en" "[HUD] Only spectators can use !spechud."
     }
     "TankHudSpectatorOnly"
     {
-        "chi" "[HUD] 仅观察者可使用 !tankhud。"
+        "chi" "[HUD] 仅旁观者可使用 !tankhud。"
         "en" "[HUD] Only spectators can use !tankhud."
     }
     "SpecHudEnabled"
     {
-        "chi" "[HUD] 观察 HUD 已开启。"
+        "chi" "[HUD] 旁观 HUD 已开启。"
         "en" "[HUD] Spectator HUD enabled."
     }
     "SpecHudDisabled"
     {
-        "chi" "[HUD] 观察 HUD 已关闭。"
+        "chi" "[HUD] 旁观 HUD 已关闭。"
         "en" "[HUD] Spectator HUD disabled."
     }
     "TankHudEnabled"
@@ -32,7 +68,7 @@
     }
     "SpecHudUsage"
     {
-        "chi" "[HUD] 输入 !spechud 可关闭观察 HUD。"
+        "chi" "[HUD] 输入 !spechud 可关闭旁观 HUD。"
         "en" "[HUD] Type !spechud to hide the spectator HUD."
     }
     "TankHudUsage"

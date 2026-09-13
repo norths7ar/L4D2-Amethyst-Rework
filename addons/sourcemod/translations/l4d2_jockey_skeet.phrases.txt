@@ -1,0 +1,23 @@
+"Phrases"
+{
+    "JockeySkeetedVictim"
+    {
+        "#format" "{1:N}"
+        "en" "{green}★★{default} You were {blue}skeeted{default} by {olive}{1}{default}."
+    }
+    "JockeySkeetedAttacker"
+    {
+        "#format" "{1:N}"
+        "en" "{green}★★{default} You {blue}skeeted {olive}{1}{default}'s Jockey."
+    }
+    "JockeySkeetedBot"
+    {
+        "#format" "{1:N}"
+        "en" "{green}★★{default} {olive}{1}{default} skeeted a Jockey."
+    }
+    "JockeySkeetedOther"
+    {
+        "#format" "{1:N},{2:N}"
+        "en" "{green}★★{default} {olive}{1}{default}'s Jockey was {blue}skeeted{default} by {olive}{2}{default}."
+    }
+}

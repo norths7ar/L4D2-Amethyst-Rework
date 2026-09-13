@@ -63,9 +63,12 @@ public Action CommandTag(int client, int args)
 {
     if (client <= 0 || !IsClientInGame(client) || IsFakeClient(client)) return Plugin_Handled;
     Menu menu = new Menu(MenuHandlerTag);
-    menu.SetTitle("%t", "TagMenuTitle");
-    menu.AddItem("__toggle", g_visible[client] ? "隐藏当前称号" : "显示当前称号");
-    menu.AddItem("__default", "恢复默认称号");
+    menu.SetTitle("%T", "TagMenuTitle", client);
+    char option[128];
+    FormatEx(option, sizeof(option), "%T", g_visible[client] ? "TagHideOption" : "TagShowOption", client);
+    menu.AddItem("__toggle", option);
+    FormatEx(option, sizeof(option), "%T", "TagDefaultOption", client);
+    menu.AddItem("__default", option);
     char id[64], name[128];
     for (int i = 0; i < g_ids.Length; i++)
     {

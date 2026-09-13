@@ -5,7 +5,7 @@
 
 static const char readySymbol[2][] = {"☐", "☑"};
 static const char g_readyPanelCommands[][] = {
-	"->1. F1 准备 / F2 取消准备",
+	"ReadyPanelReadyCommand",
 	"->2. !forcestart / !fs",
 	"->3. !show / !hide",
 	"->4. !join / !spec",
@@ -51,6 +51,25 @@ Action MenuCmd_Timer(Handle timer)
 
 void UpdateReadyPanel()
 {
+	for (int viewer = 1; viewer <= MaxClients; viewer++)
+	{
+		if (IsClientInGame(viewer) && !IsFakeClient(viewer) && !g_panelHidden[viewer]) DrawReadyPanel(viewer);
+	}
+}
+
+void DrawReadyPanel(int viewer)
+{
+	if (BuiltinVote_IsVoteInProgress() && IsClientInBuiltinVotePool(viewer)) return;
+	if (Game_IsVoteInProgress())
+	{
+		int voteTeam = Game_GetVoteTeam();
+		if (voteTeam == -1 || voteTeam == GetClientTeam(viewer)) return;
+	}
+	switch (GetClientMenu(viewer))
+	{
+		case MenuSource_External, MenuSource_Normal: return;
+	}
+
 	char survivorBuffer[400] = "";
 	char infectedBuffer[400] = "";
 	char casterBuffer[300] = "";
@@ -61,7 +80,7 @@ void UpdateReadyPanel()
 
 	Panel menuPanel = new Panel();
 
-	char ServerBuffer[128];
+	char ServerBuffer[256];
 	char ServerName[32];
 	char cfgName[32];
 
@@ -76,7 +95,7 @@ void UpdateReadyPanel()
 	serverNameCvar.GetString(ServerName, sizeof(ServerName));
 
 	g_readyPanelConfig.GetString(cfgName, sizeof(cfgName));
-	FormatEx(ServerBuffer, sizeof(ServerBuffer), "▸ Server: %s \n▸ Slots: %d/%d\n▸ Config: %s", ServerName, GetSeriousClientCount(), FindConVar("sv_maxplayers").IntValue, cfgName);
+	FormatEx(ServerBuffer, sizeof(ServerBuffer), "%T", "ReadyPanelHeader", viewer, ServerName, GetSeriousClientCount(), FindConVar("sv_maxplayers").IntValue, cfgName);
 	menuPanel.DrawText(ServerBuffer);
 
 	FormatTime(ServerBuffer, sizeof(ServerBuffer), "%m/%d/%Y - %I:%M%p");
@@ -84,8 +103,14 @@ void UpdateReadyPanel()
 	menuPanel.DrawText(ServerBuffer);
 
 	menuPanel.DrawText(" ");
-	menuPanel.DrawText("▸ Commands:");
-	menuPanel.DrawText(g_readyPanelCommands[g_readyPanelCommand]);
+	FormatEx(ServerBuffer, sizeof(ServerBuffer), "%T", "ReadyPanelCommands", viewer);
+	menuPanel.DrawText(ServerBuffer);
+	if (g_readyPanelCommand == 0)
+	{
+		FormatEx(ServerBuffer, sizeof(ServerBuffer), "%T", g_readyPanelCommands[g_readyPanelCommand], viewer);
+		menuPanel.DrawText(ServerBuffer);
+	}
+	else menuPanel.DrawText(g_readyPanelCommands[g_readyPanelCommand]);
 	menuPanel.DrawText(" ");
 
 	char nameBuf[64];
@@ -132,7 +157,7 @@ void UpdateReadyPanel()
 	{
 		survivorBuffer[bufLen] = '\0';
 		ReplaceString(survivorBuffer, sizeof(survivorBuffer), "#", "_");
-		FormatEx(nameBuf, sizeof(nameBuf), "->%d. Survivors%s", ++textCount, "");
+		FormatEx(nameBuf, sizeof(nameBuf), "->%d. %T", ++textCount, "ReadyPanelSurvivors", viewer);
 		menuPanel.DrawText(nameBuf);
 		menuPanel.DrawText(survivorBuffer);
 	}
@@ -142,7 +167,7 @@ void UpdateReadyPanel()
 	{
 		infectedBuffer[bufLen] = '\0';
 		ReplaceString(infectedBuffer, sizeof(infectedBuffer), "#", "_");
-		FormatEx(nameBuf, sizeof(nameBuf), "->%d. Infected%s", ++textCount, "");
+		FormatEx(nameBuf, sizeof(nameBuf), "->%d. %T", ++textCount, "ReadyPanelInfected", viewer);
 		menuPanel.DrawText(nameBuf);
 		menuPanel.DrawText(infectedBuffer);
 	}
@@ -155,7 +180,7 @@ void UpdateReadyPanel()
 		if (bufLen != 0)
 		{
 			casterBuffer[bufLen] = '\0';
-			FormatEx(nameBuf, sizeof(nameBuf), "->%d. Caster%s", ++textCount, casterCount > 1 ? "s" : "");
+			FormatEx(nameBuf, sizeof(nameBuf), "->%d. %T", ++textCount, casterCount > 1 ? "ReadyPanelCasters" : "ReadyPanelCaster", viewer);
 			menuPanel.DrawText(nameBuf);
 			ReplaceString(casterBuffer, sizeof(casterBuffer), "#", "_", true);
 			menuPanel.DrawText(casterBuffer);
@@ -166,11 +191,11 @@ void UpdateReadyPanel()
 	if (bufLen != 0)
 	{
 		specBuffer[bufLen] = '\0';
-		FormatEx(nameBuf, sizeof(nameBuf), "->%d. Spectator%s", ++textCount, specCount > 1 ? "s" : "");
+		FormatEx(nameBuf, sizeof(nameBuf), "->%d. %T", ++textCount, specCount > 1 ? "ReadyPanelSpectators" : "ReadyPanelSpectator", viewer);
 		menuPanel.DrawText(nameBuf);
 		ReplaceString(specBuffer, sizeof(specBuffer), "#", "_");
 		if (playerCount > g_readyPanelMaxPlayers.IntValue && specCount - casterCount > 1)
-			FormatEx(specBuffer, sizeof(specBuffer), "**Many** (%d)", specCount - casterCount);
+			FormatEx(specBuffer, sizeof(specBuffer), "%T", "ReadyPanelMany", viewer, specCount - casterCount);
 		menuPanel.DrawText(specBuffer);
 	}
 
@@ -185,54 +210,48 @@ void UpdateReadyPanel()
 		}
 	}
 
-	for (int client = 1; client <= MaxClients; client++)
-	{
-		if (IsClientInGame(client) && !IsFakeClient(client) && !g_panelHidden[client])
-		{
-			if (BuiltinVote_IsVoteInProgress() && IsClientInBuiltinVotePool(client))
-			{
-				continue;
-			}
-
-			if (Game_IsVoteInProgress())
-			{
-				int voteteam = Game_GetVoteTeam();
-				if (voteteam == -1 || voteteam == GetClientTeam(client))
-				{
-					continue;
-				}
-			}
-
-			switch (GetClientMenu(client))
-			{
-				case MenuSource_External, MenuSource_Normal: continue;
-			}
-
-			menuPanel.Send(client, ReadyPanelHandler, 1);
-		}
-	}
-
+	menuPanel.Send(viewer, ReadyPanelHandler, 1);
 	delete menuPanel;
 }
 // ZoneMod pause.sp::UpdatePanel. Team status rows become survivor player rows;
 // the remaining text, order and spacing are unchanged. Both vote types take priority.
 void UpdatePausePanel()
 {
+	for (int viewer = 1; viewer <= MaxClients; viewer++)
+	{
+		if (IsClientInGame(viewer) && !IsFakeClient(viewer) && !g_panelHidden[viewer]) DrawPausePanel(viewer);
+	}
+}
+
+void DrawPausePanel(int viewer)
+{
+	if (BuiltinVote_IsVoteInProgress() && IsClientInBuiltinVotePool(viewer)) return;
+	if (Game_IsVoteInProgress())
+	{
+		int voteTeam = Game_GetVoteTeam();
+		if (voteTeam == -1 || voteTeam == GetClientTeam(viewer)) return;
+	}
+
 	Panel menuPanel = new Panel();
 	char info[512], serverCvar[64];
 	g_readyPanelServerCvar.GetString(serverCvar, sizeof(serverCvar));
 	ConVar serverNameCvar = FindConVar(serverCvar);
 	if (serverNameCvar == null) serverNameCvar = FindConVar("hostname");
 	serverNameCvar.GetString(info, sizeof(info));
-	Format(info, sizeof(info), "▸ Server: %s\n▸ Slots: %d/%d", info, GetSeriousClientCount(), FindConVar("sv_maxplayers").IntValue);
+	Format(info, sizeof(info), "%T", "PausePanelHeader", viewer, info, GetSeriousClientCount(), FindConVar("sv_maxplayers").IntValue);
 	menuPanel.DrawText(info);
 	// passing NULL_STRING will use the rules defined in sm_datetime_format
 	FormatTime(info, sizeof(info), NULL_STRING);
 	Format(info, sizeof(info), "▸ %s", info);
 	menuPanel.DrawText(info);
 	menuPanel.DrawText(" ");
-	menuPanel.DrawText("▸ Ready Status");
-	if (g_adminPause) menuPanel.DrawText("->0. Require Admin to Unpause");
+	FormatEx(info, sizeof(info), "%T", "PausePanelReadyStatus", viewer);
+	menuPanel.DrawText(info);
+	if (g_adminPause)
+	{
+		FormatEx(info, sizeof(info), "%T", "PausePanelRequireAdmin", viewer);
+		menuPanel.DrawText(info);
+	}
 	int player;
 	for (int client = 1; client <= MaxClients; client++)
 	{
@@ -241,25 +260,13 @@ void UpdatePausePanel()
 		menuPanel.DrawText(info);
 	}
 	menuPanel.DrawText(" ");
-	if (g_adminPause) FormatEx(info, sizeof(info), "▸ Force Pause -> %s (Admin)", g_pauseInitiator);
-	else FormatEx(info, sizeof(info), "▸ Initiator -> %s (Survivors)", g_pauseInitiator);
+	if (g_adminPause) FormatEx(info, sizeof(info), "%T", "PausePanelAdminInitiator", viewer, g_pauseInitiator);
+	else FormatEx(info, sizeof(info), "%T", "PausePanelSurvivorInitiator", viewer, g_pauseInitiator);
 	menuPanel.DrawText(info);
 	int duration = RoundToNearest(GetEngineTime() - g_panelStarted);
-	FormatEx(info, sizeof(info), "▸ Duration: %02d:%02d", duration / 60, duration % 60);
+	FormatEx(info, sizeof(info), "▸ %T: %02d:%02d", "PausePanelDuration", viewer, duration / 60, duration % 60);
 	menuPanel.DrawText(info);
-	for (int client = 1; client <= MaxClients; client++)
-	{
-		if (IsClientInGame(client) && !IsFakeClient(client) && !g_panelHidden[client])
-		{
-			if (BuiltinVote_IsVoteInProgress() && IsClientInBuiltinVotePool(client)) continue;
-			if (Game_IsVoteInProgress())
-			{
-				int voteTeam = Game_GetVoteTeam();
-				if (voteTeam == -1 || voteTeam == GetClientTeam(client)) continue;
-			}
-			menuPanel.Send(client, ReadyPanelHandler, 1);
-		}
-	}
+	menuPanel.Send(viewer, ReadyPanelHandler, 1);
 	delete menuPanel;
 }
 

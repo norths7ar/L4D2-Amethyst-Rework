@@ -1,0 +1,142 @@
+"Phrases"
+{
+    "Tag"
+    {
+        "chi"		"{blue}<{green}Boss 投票{blue}>{default}"
+    }
+    // RunVoteChecks
+    "NotAvailable"
+    {
+        "chi"		"此地图不支持 Boss 投票。"
+    }
+    "Available"
+    {
+        "chi"		"只能在准备阶段发起 Boss 投票。"
+    }
+    "FirstRound"
+    {
+        "chi"		"只能在地图的第一回合发起 Boss 投票。"
+    }
+    "NotAvailableForSpec"
+    {
+        "chi"		"旁观者不能发起 Boss 投票。"
+    }
+    "CannotBeCalled"
+    {
+        "chi"		"当前无法发起 Boss 投票……"
+    }
+    // VoteBossCmd
+    "Usage"
+    {
+        "chi"		"用法：!voteboss {olive}<{default}tank{olive}> <{default}witch{olive}>{default}。"
+    }
+    "Usage2"
+    {
+        "chi"		"使用 {default}\"{blue}0{default}\" 表示{olive}不刷新{default}，\"{blue}-1{default}\" 表示{olive}保持不变。"
+    }
+    "Invalid"
+    {
+        "chi"		"刷新进度{olive}无效{default}。"
+    }
+    "TankStatic"
+    {
+        "chi"		"此地图的 Tank 刷新点固定，无法更改。"
+    }
+    "WitchStatic"
+    {
+        "chi"		"此地图的 Witch 刷新点固定，无法更改。"
+    }
+    "TankBanned"
+    {
+        "chi"		"该 Tank 刷新进度{blue}不允许使用{default}。"
+    }
+    "WitchBanned"
+    {
+        "chi"		"该 Witch 刷新进度{blue}不允许使用{default}。"
+    }
+    "SetBosses"
+    {
+        "chi"		"将 Tank 刷新设为 %s，Witch 刷新设为 %s？"
+    }
+    "SetTank"
+    {
+        "chi"		"将 Tank 刷新设为 %s，并禁用 Witch？"
+    }
+    "SetOnlyTank"
+    {
+        "chi"		"将 Tank 刷新设为 %s？"
+    }
+    "SetWitch"
+    {
+        "chi"		"禁用 Tank，并将 Witch 刷新设为 %s？"
+    }
+    "SetOnlyWitch"
+    {
+        "chi"		"将 Witch 刷新设为 %s？"
+    }
+    "SetBossesDisabled"
+    {
+        "chi"		"禁用 Tank 和 Witch？"
+    }
+    "SetTankDisabled"
+    {
+        "chi"		"禁用 Tank？"
+    }
+    "SetWitchDisabled"
+    {
+        "chi"		"禁用 Witch？"
+    }
+    // BossVoteResultHandler
+    "OnlyReadyUp"
+    {
+        "chi"		"只能在准备阶段设置刷新。"
+    }
+    "SettingBoss"
+    {
+        "chi"		"正在设置 Boss 刷新……"
+    }
+    "SettingTank"
+    {
+        "chi"		"正在设置 Tank 刷新……"
+    }
+    "SettingWitch"
+    {
+        "chi"		"正在设置 Witch 刷新……"
+    }
+    "SettingBossDisabled"
+    {
+        "chi"		"正在禁用 Boss 刷新……"
+    }
+    // ForceTankCommand
+    "CommandNotAvailable"
+    {
+        "chi"		"此地图不支持该命令。"
+    }
+    "TankSpawnStatic"
+    {
+        "chi"		"此地图的 Tank 刷新点固定，无法更改。"
+    }
+    "PercentageInvalid"
+    {
+        "chi"		"刷新进度{blue}无效{default}。"
+    }
+    "Percentagebanned"
+    {
+        "chi"		"该刷新进度{blue}不允许使用{default}。"
+    }
+    "TankSpawnAdmin"
+    {
+		"#format"   "{1:i},{2:s}" // 1:p_iRequestedPercent 2:clientName
+        "chi"		"Tank 刷新进度已设为 {olive}{1}%{default}，操作管理员：{blue}{2}{default}。"
+    }
+    // ForceWitchCommand
+    "WitchSpawnStatic"
+    {
+        "chi"		"此地图的 Witch 刷新点固定，无法更改。"
+    }
+    "WitchSpawnAdmin"
+    {
+		"#format"   "{1:i},{2:s}" // 1:p_iRequestedPercent 2:clientName
+        "chi"		"Witch 刷新进度已设为 {olive}{1}%{default}，操作管理员：{blue}{2}{default}。"
+    }
+}

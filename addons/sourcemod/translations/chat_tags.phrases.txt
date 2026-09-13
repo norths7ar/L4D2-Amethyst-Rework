@@ -5,6 +5,21 @@
         "chi" "我的称号"
         "en" "My tag"
     }
+    "TagHideOption"
+    {
+        "chi" "隐藏当前称号"
+        "en" "Hide current tag"
+    }
+    "TagShowOption"
+    {
+        "chi" "显示当前称号"
+        "en" "Show current tag"
+    }
+    "TagDefaultOption"
+    {
+        "chi" "恢复默认称号"
+        "en" "Restore default tag"
+    }
     "TagShown"
     {
         "chi" "[称号] 已显示当前称号。"

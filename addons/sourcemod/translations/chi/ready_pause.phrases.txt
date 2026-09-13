@@ -1,5 +1,74 @@
 "Phrases"
 {
+	"ReadyPanelHeader"
+	{
+		"#format" "{1:s},{2:d},{3:d},{4:s}"
+		"chi" "▸ 服务器：{1} \n▸ 人数：{2}/{3}\n▸ 配置：{4}"
+	}
+	"ReadyPanelCommands"
+	{
+		"chi" "▸ 指令："
+	}
+	"ReadyPanelReadyCommand"
+	{
+		"chi" "->1. F1 准备 / F2 取消准备"
+	}
+	"ReadyPanelSurvivors"
+	{
+		"chi" "生还者"
+	}
+	"ReadyPanelInfected"
+	{
+		"chi" "感染者"
+	}
+	"ReadyPanelCaster"
+	{
+		"chi" "解说"
+	}
+	"ReadyPanelCasters"
+	{
+		"chi" "解说"
+	}
+	"ReadyPanelSpectator"
+	{
+		"chi" "旁观者"
+	}
+	"ReadyPanelSpectators"
+	{
+		"chi" "旁观者"
+	}
+	"ReadyPanelMany"
+	{
+		"#format" "{1:d}"
+		"chi" "**多人**（{1}）"
+	}
+	"PausePanelHeader"
+	{
+		"#format" "{1:s},{2:d},{3:d}"
+		"chi" "▸ 服务器：{1}\n▸ 人数：{2}/{3}"
+	}
+	"PausePanelReadyStatus"
+	{
+		"chi" "▸ 准备状态"
+	}
+	"PausePanelRequireAdmin"
+	{
+		"chi" "->0. 需要管理员解除暂停"
+	}
+	"PausePanelAdminInitiator"
+	{
+		"#format" "{1:s}"
+		"chi" "▸ 强制暂停 -> {1}（管理员）"
+	}
+	"PausePanelSurvivorInitiator"
+	{
+		"#format" "{1:s}"
+		"chi" "▸ 发起者 -> {1}（生还者）"
+	}
+	"PausePanelDuration"
+	{
+		"chi" "持续时间"
+	}
 	"PauseInitiator"
 	{
 		"#format" "{1:s}"
@@ -18,7 +87,7 @@
 	"PanelReservedPlayer"
 	{
 		"#format" "{1:s},{2:d}"
-		"chi" "等待 {1} 返回（席位保留剩余 {2} 秒）"
+		"chi" "等待 {1} 返回（位置保留剩余 {2} 秒）"
 	}
 	"PanelReadyHelp"
 	{

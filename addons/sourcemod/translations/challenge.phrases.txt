@@ -405,6 +405,6 @@
     {
         /* Context: Periodic reminder shown while any current-profile temporary override remains active. */
         "#format" "{1:s}"
-        "en" "Temporary gameplay settings are active: {1}. Use !ast to review or reset them."
+        "en" "{1}. !ast: view or reset."
     }
 }

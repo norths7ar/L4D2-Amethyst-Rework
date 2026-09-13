@@ -1,0 +1,23 @@
+"Phrases"
+{
+    "JockeySkeetedVictim"
+    {
+        "#format" "{1:N}"
+        "chi" "{green}★★{default} 你被 {olive}{1}{default} 空爆了。"
+    }
+    "JockeySkeetedAttacker"
+    {
+        "#format" "{1:N}"
+        "chi" "{green}★★{default} 你空爆了 {olive}{1}{default} 的 Jockey。"
+    }
+    "JockeySkeetedBot"
+    {
+        "#format" "{1:N}"
+        "chi" "{green}★★{default} {olive}{1}{default} 空爆了 Jockey。"
+    }
+    "JockeySkeetedOther"
+    {
+        "#format" "{1:N},{2:N}"
+        "chi" "{green}★★{default} {olive}{2}{default} 空爆了 {olive}{1}{default} 的 Jockey。"
+    }
+}
