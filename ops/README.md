@@ -1,6 +1,6 @@
 # 服务器运行与重启
 
-服务器采用单所有者模型：`ecs-user` 是 SSH/SFTP 维护账户，`l4d2` 是游戏进程账户，两者同属 `l4d2` 组。`/home/l4d2/server` 是唯一运行目录，`/home/l4d2/integration` 是 Git 管理内容的部署来源；不再使用 release tree、overlay 或 VPK 投递目录。
+服务器采用单所有者模型：`ecs-user` 是部署文件所有者（当前云服通过 `root` SSH/SFTP 维护），`l4d2` 是游戏进程账户，两者同属 `l4d2` 组。`/home/l4d2/server` 是唯一运行目录，`/home/l4d2/integration` 是 Git 管理内容的部署来源；不再使用 release tree、overlay 或 VPK 投递目录。
 
 ## 目录结构
 
@@ -42,8 +42,8 @@ journalctl -u l4d2 -t l4d2-restart --since today
 
 此后 Git 更新、运行文件部署、内容检查和重启统一由 Windows 的 02 入口完成，不再重复手动 bootstrap。
 
-安装脚本把 `ecs-user` 加入 `l4d2` 组，并让 `/home/l4d2/server` 保持组可写和目录 setgid。首次执行后重新连接 SSH/WinSCP，之后可直接维护未由 Git 跟踪的服务器内容。维护记录统一查看 systemd journal，不再维护文件 manifest、overlay baseline 或独立 history 文件。
+安装脚本把 `ecs-user` 加入 `l4d2` 组，并让 `/home/l4d2/server` 保持组可写和目录 setgid。使用该账户维护时，首次执行后重新连接 SSH/WinSCP，之后可直接维护未由 Git 跟踪的服务器内容。维护记录统一查看 systemd journal，不再维护文件 manifest、overlay baseline 或独立 history 文件。
 
-Windows 下可直接运行 `ops/windows/` 中的三个 `.cmd` 入口，分别执行内容检查、内容应用并重启、仅重启服务器。它们只调用本机 SSH 配置中的 `l4d2-vps`，不保存服务器地址或密钥。
+Windows 下可直接运行 `ops/windows/` 中的三个 `.cmd` 入口，分别执行内容检查、内容应用并重启、仅重启服务器。它们只调用本机 SSH 配置中的 `l4d2-coreyun`，不保存服务器地址或密钥。
 
 更新 helper 使用配置中的 `CHECKOUT_ROOT`、`CHECKOUT_BRANCH` 和 `CHECKOUT_REMOTE`，复用 `OWNER_USER` 与 `GAME_DIR`。首次部署没有 marker 时，以更新前的 checkout revision 作为部署基线；之后使用 `/var/lib/l4d2/last-deployed-revision`。它只删除基线到新 revision 间被 Git 删除或重命名的运行时路径，不使用 `rsync --delete`，未跟踪的本地服务器文件会保留。marker 仅在部署、内容校验和重启全部成功后更新；失败时 checkout 可能已更新，但不会被标记为已部署。

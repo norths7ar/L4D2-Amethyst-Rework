@@ -25,6 +25,7 @@ server_args=(
     -game left4dead2 \
     -console \
     -usercon \
+    -ip "${BIND_IP:-0.0.0.0}" \
     -tickrate "$TICKRATE" \
     +port "$PORT" \
     +sv_lan 0 \
