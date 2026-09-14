@@ -30,7 +30,7 @@ int g_reservationGeneration[MAX_RESERVATIONS];
 bool g_reservationClaimed[MAX_RESERVATIONS];
 char g_reservationName[MAX_RESERVATIONS][MAX_NAME_LENGTH];
 bool g_wantsSpectator[MAXPLAYERS + 1];
-char g_loadedSteamId[MAXPLAYERS + 1][32];
+bool g_voluntaryDisconnect[MAXPLAYERS + 1];
 StringMap g_reservations;
 
 public Plugin myinfo =
@@ -38,7 +38,7 @@ public Plugin myinfo =
 	name = "Coop player manager",
 	author = "海洋空氣, norths7ar",
 	description = "Coop join, spectator, bot-slot and player-team lifecycle",
-	version = "1.1.0"
+	version = "1.0.1"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -89,8 +89,12 @@ public void EventPlayerTeam(Event event, const char[] name, bool dontBroadcast)
 {
 	if (!event.GetBool("disconnect"))
 	{
-		// A restored identity remains protected from late loaders, but team
-		// events must never turn it back into an outstanding loading wait.
+		int client = GetClientOfUserId(event.GetInt("userid"));
+		if (IsHumanClient(client) && !g_transitionCaptured && event.GetInt("team") != TEAM_SURVIVORS)
+		{
+			int reservation = FindReservation(client);
+			if (ValidReservation(reservation) && g_reservationRole[reservation] == RESERVATION_SURVIVOR) g_reservationClaimed[reservation] = false;
+		}
 		CreateTimer(0.2, TimerCheckHumanTeam, event.GetInt("userid"), TIMER_FLAG_NO_MAPCHANGE);
 	}
 }
@@ -190,7 +194,7 @@ public void OnMapEnd()
 
 public void OnClientPutInServer(int client)
 {
-	g_loadedSteamId[client][0] = '\0';
+	g_voluntaryDisconnect[client] = false;
 	if (!IsFakeClient(client)) CancelBotCleanup();
 	g_pendingReservation[client] = -1;
 	g_requestToken[client]++;
@@ -202,7 +206,6 @@ public void OnClientPostAdminCheck(int client)
 {
 	// This callback runs after both entering the game and Steam authentication.
 	if (!IsHumanClient(client)) return;
-	GetClientAuthId(client, AuthId_SteamID64, g_loadedSteamId[client], sizeof(g_loadedSteamId[]), true);
 	g_pendingReservation[client] = FindReservation(client);
 	if (ValidReservation(g_pendingReservation[client])) ScheduleReservationRestore(client, 0, g_reservationRole[g_pendingReservation[client]]);
 	CreateTimer(0.2, TimerCheckHumanTeam, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
@@ -215,28 +218,25 @@ public void EventPlayerDisconnect(Event event, const char[] name, bool dontBroad
 	char reason[128];
 	event.GetString("reason", reason, sizeof(reason));
 	if (!StrEqual(reason, "Disconnect by user.", false)) return;
-	// Explicit quit releases even a not-yet-restored next-map reservation.
+	g_voluntaryDisconnect[client] = true;
+	// Explicit quit releases even a next-map reservation; timeouts retain it.
 	char steamId[32];
 	int value;
-	if (g_loadedSteamId[client][0]) strcopy(steamId, sizeof(steamId), g_loadedSteamId[client]);
-	else GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId), false);
-	if (steamId[0] && g_reservations.GetValue(steamId, value)) ClearReservation(value - 1);
+	if (GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId), true)
+		&& g_reservations.GetValue(steamId, value)) ClearReservation(value - 1);
 }
 
 public void OnClientDisconnect(int client)
 {
-	// Reservations are created only by map_transition. Once loaded into the
-	// destination, any disconnect releases that seat, including Steam errors.
-	int value;
-	if (!g_transitionCaptured && g_loadedSteamId[client][0]
-		&& g_reservations.GetValue(g_loadedSteamId[client], value)) ClearReservation(value - 1);
 	if (IsHumanClient(client))
 	{
+		// map_transition already captured the next-map role/generation. A later
+		// disconnect must not overwrite that reservation with the old generation.
+		if (!g_transitionCaptured && !g_voluntaryDisconnect[client]) RememberRole(client);
 		if (g_roundLive && GetHumanSurvivors() == 1)
 			ScheduleBotCleanup();
 	}
 	g_pendingReservation[client] = -1;
-	g_loadedSteamId[client][0] = '\0';
 }
 
 public Action CommandJoin(int client, int args)
@@ -515,7 +515,7 @@ void CaptureReservations()
 		if (IsHumanClient(client) && (GetClientTeam(client) == TEAM_SURVIVORS || GetClientTeam(client) == TEAM_SPECTATORS)) RememberRole(client, g_generation + 1);
 }
 
-void RememberRole(int client, int targetGeneration)
+void RememberRole(int client, int targetGeneration = -1)
 {
 	char steamId[32];
 	if (!GetClientAuthId(client, AuthId_SteamID64, steamId, sizeof(steamId), true)) return;
@@ -532,7 +532,7 @@ void RememberRole(int client, int targetGeneration)
 	GetClientName(client, g_reservationName[index], sizeof(g_reservationName[]));
 	g_reservationRole[index] = GetClientTeam(client) == TEAM_SURVIVORS ? RESERVATION_SURVIVOR : RESERVATION_SPECTATOR;
 	g_reservationExpires[index] = GetTime() + RoundToNearest(RESERVATION_TTL);
-	g_reservationGeneration[index] = targetGeneration;
+	g_reservationGeneration[index] = targetGeneration < 0 ? g_generation : targetGeneration;
 	g_reservationClaimed[index] = false;
 }
 
