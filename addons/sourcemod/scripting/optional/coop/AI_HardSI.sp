@@ -27,7 +27,6 @@ enum AimTarget {
 #include "AI_HardSI/AI_Spitter.sp"
 #include "AI_HardSI/AI_Charger.sp"
 #include "AI_HardSI/AI_Jockey.sp"
-#include "AI_HardSI/AI_Tank.sp"
 #include "AI_HardSI/AI_Witch.sp"
 
 public Plugin myinfo = 
@@ -35,7 +34,7 @@ public Plugin myinfo =
 	name = "AI: Hard SI",
 	author = "Breezy",
 	description = "Improves the AI behaviour of special infected",
-	version = "1.2-integration",
+	version = "1.3-integration",
 	url = "github.com/breezyplease"
 };
 
@@ -71,7 +70,6 @@ void EnableHardSI()
 	Boomer_OnModuleStart();
 	Charger_OnModuleStart();
 	Jockey_OnModuleStart();
-	Tank_OnModuleStart();
 	Witch_OnModuleStart();
 	g_bHardSIActive = true;
 
@@ -97,7 +95,6 @@ void DisableHardSI()
 	Boomer_OnModuleEnd();
 	Charger_OnModuleEnd();
 	Jockey_OnModuleEnd();
-	Tank_OnModuleEnd();
 	Witch_OnModuleEnd();
 	g_bHardSIActive = false;
 }
@@ -190,10 +187,6 @@ public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3
 			
 			case (L4D2Infected_Jockey): {
 				return Jockey_OnPlayerRunCmd( botInfected, buttons, impulse, vel, angles, weapon, bHasBeenShoved[botInfected] );
-			}
-			
-			case (L4D2Infected_Tank): {
-				return Tank_OnPlayerRunCmd( botInfected, buttons, impulse, vel, angles, weapon );
 			}
 			
 			case (L4D2Infected_Boomer): {
