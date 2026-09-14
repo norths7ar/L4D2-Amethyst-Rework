@@ -46,7 +46,7 @@ AstMod/AstRedux 只定义进入 Ast 模式后如何游玩。某项功能是否�
 
 玩家队伍与跨图席位看 `player_manager`，准备和暂停看 `ready_pause`，初始药物与背包看 `survivor_loadout`，异常管理命令看 `admin_tools`。AstMod 保留自己的 Legacy 实现。
 
-AstRedux 每轮全员准备后倒计时开局，`!fs` 也走倒计时；暂停恢复共用每人准备与面板。开局倒计时结束触发 `OnRoundIsLive`，由 `survivor_loadout` 每轮清理医疗槽、恢复健康并发起始药；恢复暂停不会重做这些操作。准备面板支持 `!hide`／`!show`，避让菜单与投票，并列出加载玩家和待返回生还者的席位剩余时间。换章席位按 SteamID 保留，从下一张图开始计时，恢复、主动 `!spec`、超时或正式开局结束相应等待；旁观者预留不阻塞开局。
+AstRedux 每轮全员准备后倒计时开局，`!fs` 也走倒计时；暂停恢复共用每人准备与面板。开局倒计时结束触发 `OnRoundIsLive`，由 `survivor_loadout` 每轮清理医疗槽、恢复健康并发起始药；恢复暂停不会重做这些操作。准备面板支持 `!hide`／`!show`，避让菜单与投票，并列出加载玩家和待返回生还者的席位剩余时间。席位只在换章时按 SteamID 保留，从下一张图开始计时，防止加载期间被新玩家占用；主动退出或 `!spec` 释放席位，成功进入下一图后再次掉线也不保留。恢复、超时或正式开局结束相应等待；已恢复玩家的身份标记仅用于保护原席位，不重新产生等待，旁观者预留不阻塞开局。正常倒计时中有人掉线会取消当前倒计时，剩余玩家仍全员准备时重新完整倒计时。
 
 连接公告由 `optional/coop/cannounce.sp`（Arg! 1.9 的本地适配版）构建，复用随源码保存的 multicolors。`sm_ca_showconnecting` 控制加载前提示，`sm_ca_connectdisplaytype` 保留原版的公告时点设置；默认在管理员检查后输出完整身份和地域公告。既有 `data/cannounce_settings.txt`、`cannounce_messages.txt` 与自动生成的 `cfg/sourcemod/cannounce.cfg` 格式保留。
 
