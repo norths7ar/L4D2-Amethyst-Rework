@@ -66,7 +66,7 @@ public void Hunter_OnModuleStart() {
 	// How far in front of hunter to check for a wall
 	hCvarWallDetectionDistance = CreateConVar("ai_wall_detection_distance", "-1", "How far in front of himself infected bot will check for a wall. Use '-1' to disable feature");
 	
-	SetConVarInt(FindConVar("z_pounce_damage_interrupt"), 150);
+	// Skeet threshold belongs to the mode configuration, not Hunter movement.
 }
 
 public void Hunter_OnModuleEnd() {
@@ -76,7 +76,6 @@ public void Hunter_OnModuleEnd() {
 	ResetConVar(hCvarHunterLeapAwayGiveUpRange);
 	ResetConVar(hCvarHunterPounceMaxLoftAngle);
 	
-	ResetConVar(FindConVar("z_pounce_damage_interrupt"));
 }
 
 public Action Hunter_OnSpawn(int botHunter) {
