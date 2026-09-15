@@ -1,10 +1,10 @@
 # L4D2 AstMod Rework
 
-基于 [L4D2 Competitive Rework](https://github.com/SirPlease/L4D2-Competitive-Rework) 的 求生之路 2 服务端配置，保留 Rework 原药抗框架，并整合 AstMod 与 AstRedux 药役。
+基于 [L4D2 Competitive Rework](https://github.com/SirPlease/L4D2-Competitive-Rework) 的 求生之路 2 服务端配置，保留 Rework 原药抗框架，并提供 AstRedux 药役。
 
 AstMod (Amethyst) 为 海洋空气 开发的药役模式。Ast作为模式统一简称后，Redux后缀意为在原Mod基础上进行的二次开发修改; AstFlex 的 Flex 后缀本意是低压力休闲模式。
 
-当前主要维护 **AstRedux**，AstFlex 暂停开发。
+当前主要维护 **AstRedux**，AstFlex 暂停开发。AstMod 已归档至 `archive/astmod-legacy` 分支（`v1.3.0`），主线不再提供或维护。
 
 ## 常用入口
 

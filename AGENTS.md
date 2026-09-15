@@ -3,7 +3,7 @@
 ## Project Identity
 
 * Maintain this repository as an L4D2 server configuration built on L4D2 Competitive Rework.
-* AstRedux is the actively maintained Coop/PVE mainline. AstMod is retained for legacy compatibility/reference. AstFlex is frozen unless explicitly reopened by the maintainer.
+* AstRedux is the actively maintained Coop/PVE mainline. AstMod is archived on `archive/astmod-legacy` at `v1.3.0`; main no longer ships or maintains AstMod compatibility. AstFlex is frozen unless explicitly reopened by the maintainer.
 * Read `README.md` for current project positioning and priorities. Do not duplicate the roadmap or current implementation inventory here.
 * Do not broadly rewrite Competitive Rework core without a concrete project need and review.
 
@@ -15,7 +15,7 @@
 * `docs/server-operations.md`: deployment and server operations.
 * `docs/plugin-sources.md`: uncertain SMX provenance and rebuild status.
 * Actual cfgs, SourcePawn, VScript, Stripper, and plugin-load files: runtime behavior.
-* `tools/validate_astmod_integration.ps1`: maintained static validation.
+* `tools/validate_astredux_integration.ps1`: maintained static validation.
 
 Keep each document in its own lane. AGENTS contains durable Agent maintenance rules, not a second copy of those documents.
 
@@ -47,7 +47,7 @@ Keep each document in its own lane. AGENTS contains durable Agent maintenance ru
 ## Runtime and Validation
 
 * Use the repository's existing tooling; do not introduce unrelated project infrastructure.
-* Primary static validation: `pwsh -File tools/validate_astmod_integration.ps1`.
+* Primary static validation: `pwsh -File tools/validate_astredux_integration.ps1`.
 * Inspect focused diffs and search for stale references after moves, renames, or API changes.
 * Compilation/static validation is not runtime verification.
 * For gameplay or lifecycle changes, prefer reproducing and testing locally in the maintainer's WSL2 server environment when practical.

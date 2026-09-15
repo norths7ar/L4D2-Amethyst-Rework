@@ -263,7 +263,7 @@ class VpkCampaignTests(unittest.TestCase):
             )
             result = VPK.inspect_directory(directory)
             self.assertEqual(result["campaigns"], [])
-            self.assertIn("missing versus mode required by AstMod/AstRedux", "\n".join(result["warnings"]))
+            self.assertIn("missing versus mode required by AstRedux", "\n".join(result["warnings"]))
 
     def test_inventory_accepts_separate_coop_and_versus_missions(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

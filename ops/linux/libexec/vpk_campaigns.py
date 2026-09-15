@@ -396,7 +396,7 @@ def inspect_directory(directory: Path, cache_path: Path | None = None) -> dict[s
         if vpk_missions and not vpk_campaigns:
             errors.append(
                 f"{vpk_path.name}:{', '.join(vpk_missions)}: missing versus mode "
-                "required by AstMod/AstRedux"
+                "required by AstRedux"
             )
             continue
         campaigns.extend(vpk_campaigns)

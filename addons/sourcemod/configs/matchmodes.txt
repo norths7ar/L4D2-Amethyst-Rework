@@ -126,10 +126,6 @@
 	}
 	"Co-op Configs"
 	{
-		"astmod"
-		{
-			"name" "AstMod - 药役"
-		}
 		"astredux"
 		{
 			"name" "AstRedux - 实验药役"

@@ -1,0 +1,6 @@
+"AddonInfo"
+{
+addontitle "AstRedux"
+addonversion "1.0"
+addonauthor "海洋空氣"
+}
