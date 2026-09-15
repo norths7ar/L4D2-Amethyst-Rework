@@ -61,6 +61,14 @@
 	}
 	"第三方战役"
 	{
+		"dc2025_1"
+		{
+			"name"	"Dead Center 2025"
+		}
+		"dcr_m1_hotel"
+		{
+			"name"	"Dead Center: Rebirth"
+		}
 		"dkr_m1_motel"
 		{
 			"name"	"Dark Carnival: Remix"
@@ -68,6 +76,18 @@
 		"dprm1_milltown_a"
 		{
 			"name"	"Hard Rain: Downpour"
+		}
+		"PR1_Waterfront_F"
+		{
+			"name"	"Parish: OverGrowth"
+		}
+		"nmrm1_apartment"
+		{
+			"name"	"No Mercy: Rehab"
+		}
+		"CCR1_alleys"
+		{
+			"name"	"Crash Course: ReRouted"
 		}
 		"cdta_01detour"
 		{
@@ -123,67 +143,47 @@
 		}
 		"bloodtracks_01"
 		{
-			"name"	"Blood Tracks （血之轨迹）"
-		}
-		"CCR1_alleys"
-		{
-			"name"	"Crash Course: ReRouted"
+			"name"	"Blood Tracks (血之轨迹)"
 		}
 		"l4d2_daybreak01_hotel"
 		{
-			"name"	"Day Break （黎明）"
-		}
-		"dc2025_1"
-		{
-			"name"	"Dead Center 2025"
-		}
-		"dcr_m1_hotel"
-		{
-			"name"	"Dead Center: Rebirth"
+			"name"	"Day Break (黎明)"
 		}
 		"l4d2_ff01_woods"
 		{
-			"name"	"Fatal Freight"
+			"name"	"Fatal Freight (致命货运站)"
 		}
 		"hf01_theforest"
 		{
-			"name"	"Haunted Forest"
-		}
-		"nmrm1_apartment"
-		{
-			"name"	"No Mercy: Rehab"
+			"name"	"Haunted Forest (颤栗森林)"
 		}
 		"x1m1_cliffs"
 		{
-			"name"	"Open Road"
-		}
-		"PR1_Waterfront_F"
-		{
-			"name"	"Parish: OverGrowth"
+			"name"	"Open Road (绝命公路)"
 		}
 		"quethics_1"
 		{
-			"name"	"Questionable Ethics Remake (v1.1)"
+			"name"	"Questionable Ethics Remake 伦理问题重制版"
 		}
 		"qe_1_cliche"
 		{
-			"name"	"Questionable Ethics v1.2"
+			"name"	"Questionable Ethics v1.2 伦理问题"
 		}
 		"qe2_ep1"
 		{
-			"name"	"Questionable Ethics: Alpha test"
+			"name"	"Questionable Ethics: Alpha test 伦理问题2"
 		}
 		"qe3_1"
 		{
-			"name"	"Questionable Ethics: Combined"
+			"name"	"Questionable Ethics: Combined 伦理问题3结合版"
 		}
 		"saltwell_1_d"
 		{
-			"name"	"SaltHell Park （盐井地狱公园）"
+			"name"	"SaltHell Park (盐井地狱公园)"
 		}
 		"snowtown_m1"
 		{
-			"name"	"Snow Town Match"
+			"name"	"Snow Town 雪镇"
 		}
 	}
 }
