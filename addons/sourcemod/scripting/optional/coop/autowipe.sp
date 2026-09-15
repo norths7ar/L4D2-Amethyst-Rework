@@ -19,7 +19,7 @@ public Plugin myinfo =
     name = "AutoWipe",
     author = "Breezy, 海洋空氣, norths7ar",
     description = "Automatically revives survivors when the whole team is immobilised.",
-    version = "1.3"
+    version = "1.4"
 };
 
 ConVar g_cvEnabled;
@@ -29,6 +29,7 @@ ConVar g_cvReviveHealth;
 
 bool g_bCanStart;      // Prevent AutoWipe before survivors have left the start area.
 bool g_bWipePending;   // Prevent multiple wipe timers from being scheduled together.
+Handle g_hWipeTimer;
 bool g_bRoundLive;
 // Health is captured while a survivor is standing. The last standing snapshot
 // remains valid while that survivor is pinned or incapacitated.
@@ -61,6 +62,11 @@ public void OnMapStart()
     }
 }
 
+public void OnMapEnd()
+{
+    g_hWipeTimer = null; // TIMER_FLAG_NO_MAPCHANGE owns its destruction.
+}
+
 public void OnClientDisconnect(int client)
 {
     g_bHasHealthSnapshot[client] = false;
@@ -71,6 +77,8 @@ public Action Event_DisableAutoWipe(Event event, const char[] name, bool dontBro
     g_bCanStart = false;
     g_bWipePending = false;
     g_bRoundLive = false;
+    delete g_hWipeTimer;
+    ClearHealthSnapshots();
     return Plugin_Continue;
 }
 
@@ -87,6 +95,7 @@ public void OnGameFrame()
     {
         g_bCanStart = false;
         g_bWipePending = false;
+        delete g_hWipeTimer;
         ClearHealthSnapshots();
         return;
     }
@@ -106,13 +115,13 @@ public void OnGameFrame()
     // A fully pinned team cannot recover by itself, so release it quickly.
     if (IsTeamPinned())
     {
-        CreateTimer(1.0, Timer_AutoWipe, _, TIMER_FLAG_NO_MAPCHANGE);
+        g_hWipeTimer = CreateTimer(1.0, Timer_AutoWipe, _, TIMER_FLAG_NO_MAPCHANGE);
         g_bWipePending = true;
     }
     // Incapacitated survivors may still be saved, so retain the original grace period.
     else if (IsTeamImmobilised())
     {
-        CreateTimer(GRACE_TIME, Timer_AutoWipe, _, TIMER_FLAG_NO_MAPCHANGE);
+        g_hWipeTimer = CreateTimer(GRACE_TIME, Timer_AutoWipe, _, TIMER_FLAG_NO_MAPCHANGE);
         g_bCanStart = false;
         g_bWipePending = true;
     }
@@ -120,7 +129,8 @@ public void OnGameFrame()
 
 public Action Timer_AutoWipe(Handle timer)
 {
-    if (IsEnabled() && IsTeamImmobilised() && !IsTeamIncapacitated())
+    g_hWipeTimer = null;
+    if (g_bRoundLive && IsEnabled() && IsTeamImmobilised() && !IsTeamIncapacitated())
     {
         WipeSurvivors();
     }
@@ -132,6 +142,17 @@ public Action Timer_AutoWipe(Handle timer)
 
 void WipeSurvivors()
 {
+    // Release attackers before restoring survivors, regardless of client slot order.
+    // Their normal death handling ends pins/carries; an active Tank is preserved.
+    for (int attacker = 1; attacker <= MaxClients; attacker++)
+    {
+        if (IsInfected(attacker) && IsPlayerAlive(attacker)
+            && GetEntProp(attacker, Prop_Send, "m_zombieClass") != ZOMBIECLASS_TANK)
+        {
+            ForcePlayerSuicide(attacker);
+        }
+    }
+
     for (int client = 1; client <= MaxClients; client++)
     {
         if (IsSurvivor(client) && IsPlayerAlive(client))
@@ -144,10 +165,18 @@ void WipeSurvivors()
             int remainingHealth = standingHealth - g_cvWipeDamage.IntValue;
             float remainingTotal = standingTempHealth + float(remainingHealth);
 
-            // Stand the survivor up before restoring the captured health state.
+            // OnRevived restores the hidden secondary weapon and completes ledge rescue.
+            // Preserve our existing incap accounting: the native must not add another
+            // incap or replace black-and-white state before the wipe cost is applied.
+            int reviveCount = GetEntProp(client, Prop_Send, "m_currentReviveCount");
+            int goingToDie = GetEntProp(client, Prop_Send, "m_isGoingToDie");
+            int thirdStrike = GetEntProp(client, Prop_Send, "m_bIsOnThirdStrike");
             if (IsIncapacitated(client))
             {
-                SetEntProp(client, Prop_Send, "m_isIncapacitated", false);
+                L4D_ReviveSurvivor(client);
+                SetEntProp(client, Prop_Send, "m_currentReviveCount", reviveCount);
+                SetEntProp(client, Prop_Send, "m_isGoingToDie", goingToDie);
+                SetEntProp(client, Prop_Send, "m_bIsOnThirdStrike", thirdStrike);
             }
 
             if (remainingHealth >= 1)
@@ -163,7 +192,7 @@ void WipeSurvivors()
             else
             {
                 // Not enough total health remains: consume one incap and apply revive health.
-                int reviveCount = GetEntProp(client, Prop_Send, "m_currentReviveCount") + 1;
+                reviveCount++;
                 SetEntProp(client, Prop_Send, "m_currentReviveCount", reviveCount);
                 SetEntityHealth(client, 1);
 
@@ -184,11 +213,6 @@ void WipeSurvivors()
                 }
             }
             g_bHasHealthSnapshot[client] = false;
-        }
-        // Clear the non-Tank infected that caused the lock, but preserve an active Tank.
-        else if (IsInfected(client) && GetEntProp(client, Prop_Send, "m_zombieClass") != ZOMBIECLASS_TANK)
-        {
-            ForcePlayerSuicide(client);
         }
     }
 }
@@ -295,12 +319,14 @@ bool IsPinned(int client)
     return GetEntPropEnt(client, Prop_Send, "m_tongueOwner") > 0
         || GetEntPropEnt(client, Prop_Send, "m_pounceAttacker") > 0
         || GetEntPropEnt(client, Prop_Send, "m_pummelAttacker") > 0
+        || GetEntPropEnt(client, Prop_Send, "m_carryAttacker") > 0
         || GetEntPropEnt(client, Prop_Send, "m_jockeyAttacker") > 0;
 }
 
 bool IsIncapacitated(int client)
 {
-    return IsSurvivor(client) && (GetEntProp(client, Prop_Send, "m_isIncapacitated") > 0 || !IsPlayerAlive(client));
+    return IsSurvivor(client) && (GetEntProp(client, Prop_Send, "m_isIncapacitated") > 0
+        || GetEntProp(client, Prop_Send, "m_isHangingFromLedge") > 0 || !IsPlayerAlive(client));
 }
 
 bool IsSurvivor(int client)
