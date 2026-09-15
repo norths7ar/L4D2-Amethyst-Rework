@@ -541,6 +541,7 @@ static bool
 	Weapon_bRemoveExtraItems = true;
 
 static ConVar
+	Weapon_hRemoveDirectKits = null,
 	Weapon_hConvar[NUM_OF_WEAPONS] = {null, ...},
 	Weapon_hReplaceTier2 = null,
 	Weapon_hReplaceTier2_Finale = null,
@@ -574,6 +575,8 @@ void WI_OnMapEnd()
 //====================================================
 static void WI_Convar_Setup()
 {
+	// Opt-in for Coop modes that remove map medkits, including direct item entities.
+	Weapon_hRemoveDirectKits = CreateConVarEx("remove_directkits", "0", "Remove unowned direct medkit entities during the round-start item scan", _, true, 0.0, true, 1.0);
 	Weapon_hConvar[WEAPON_SMG_MP5_INDEX] = CreateConVarEx("replace_cssweapons", "1", "Replace CSS weapons with normal L4D2 weapons", _, true, 0.0, true, 1.0);
 
 	Weapon_hConvar[WEAPON_RIFLE_SG552_INDEX] = Weapon_hConvar[WEAPON_SMG_MP5_INDEX];
@@ -1226,6 +1229,17 @@ static Action WI_RoundStartLoop(Handle hTimer)
 	}
 
 	WI_PrecacheModels();
+
+	// Direct map kits are not weapon spawners. Scan the full edict range rather
+	// than using the entity count as an index limit (edict slots may have holes).
+	if (Weapon_hRemoveDirectKits.BoolValue) {
+		int kit = -1;
+		while ((kit = FindEntityByClassname(kit, "weapon_first_aid_kit")) != -1) {
+			if (GetEntPropEnt(kit, Prop_Send, "m_hOwnerEntity") == -1) {
+				KillEntity(kit);
+			}
+		}
+	}
 
 #if (DEBUG_WI)
 	LogMessage("[%s] Round Start Loop( )", WI_MODULE_NAME);

@@ -17,7 +17,14 @@ ConVar g_survivorsOnly;
 int g_glowRef[ENTITY_LIMIT];
 int g_itemRef[ENTITY_LIMIT];
 int g_rgb;
-bool g_pills;
+enum
+{
+    Glow_Pills = 1,
+    Glow_Medkit = 2,
+    Glow_Defib = 4,
+    Glow_Ammo = 8
+};
+int g_itemTypes;
 bool g_rebuilding;
 
 public Plugin myinfo =
@@ -25,7 +32,7 @@ public Plugin myinfo =
 	name = "Coop item glow",
 	author = "norths7ar",
 	description = "Visible-item outlines with per-player line-of-sight checks.",
-	version = "1.0.0"
+	version = "1.1.0"
 };
 
 public void OnPluginStart()
@@ -33,7 +40,7 @@ public void OnPluginStart()
 	g_mode = CreateConVar("item_glow_mode", "0", "0: off; 1: nearby visible items; 2: visible items without a distance cap.", _, true, 0.0, true, 2.0);
 	g_range = CreateConVar("item_glow_range", "600", "Maximum distance in mode 1 (Source units).", _, true, 1.0);
 	g_color = CreateConVar("item_glow_color", "100 200 255", "Outline color: R G B, each 0-255.");
-	g_items = CreateConVar("item_glow_items", "pain_pills", "Comma-separated item names. Currently supported: pain_pills. Empty disables all items.");
+	g_items = CreateConVar("item_glow_items", "pain_pills", "Comma-separated item names: pain_pills, first_aid_kit, defibrillator, ammo. Empty disables all items.");
 	g_survivorsOnly = CreateConVar("item_glow_survivors_only", "1", "Only show outlines to living survivors; 0 allows all human players.", _, true, 0.0, true, 1.0);
 	g_mode.AddChangeHook(OnSettingsChanged);
 	g_range.AddChangeHook(OnSettingsChanged);
@@ -81,11 +88,14 @@ void RebuildGlows()
 	char buffer[128], parts[16][32];
 	g_items.GetString(buffer, sizeof(buffer));
 	int count = ExplodeString(buffer, ",", parts, sizeof(parts), sizeof(parts[]));
-	g_pills = false;
+	g_itemTypes = 0;
 	for (int i = 0; i < count; i++)
 	{
 		TrimString(parts[i]);
-		if (StrEqual(parts[i], "pain_pills", false)) g_pills = true;
+		if (StrEqual(parts[i], "pain_pills", false)) g_itemTypes |= Glow_Pills;
+		else if (StrEqual(parts[i], "first_aid_kit", false)) g_itemTypes |= Glow_Medkit;
+		else if (StrEqual(parts[i], "defibrillator", false)) g_itemTypes |= Glow_Defib;
+		else if (StrEqual(parts[i], "ammo", false)) g_itemTypes |= Glow_Ammo;
 	}
 	g_color.GetString(buffer, sizeof(buffer));
 	char rgb[3][8];
@@ -98,7 +108,7 @@ void RebuildGlows()
 		if (value > 255) value = 255;
 		g_rgb |= value << (8 * i);
 	}
-	if (!g_mode.IntValue || !g_pills) return;
+	if (!g_mode.IntValue || !g_itemTypes) return;
 	// One scan on configuration changes; later spawns are handled by SpawnPost.
 	for (int entity = MaxClients + 1; entity < GetMaxEntities() && entity < ENTITY_LIMIT; entity++)
 	{
@@ -111,7 +121,10 @@ public void OnEntityCreated(int entity, const char[] classname)
 	if (entity <= MaxClients || entity >= ENTITY_LIMIT) return;
 	g_glowRef[entity] = INVALID_ENT_REFERENCE;
 	g_itemRef[entity] = INVALID_ENT_REFERENCE;
-	if (StrEqual(classname, "weapon_pain_pills") || StrEqual(classname, "weapon_pain_pills_spawn") || StrEqual(classname, "weapon_spawn"))
+	if (StrEqual(classname, "weapon_pain_pills") || StrEqual(classname, "weapon_pain_pills_spawn")
+		|| StrEqual(classname, "weapon_first_aid_kit") || StrEqual(classname, "weapon_first_aid_kit_spawn")
+		|| StrEqual(classname, "weapon_defibrillator") || StrEqual(classname, "weapon_defibrillator_spawn")
+		|| StrEqual(classname, "weapon_ammo_spawn") || StrEqual(classname, "weapon_spawn"))
 		SDKHook(entity, SDKHook_SpawnPost, OnItemSpawned);
 }
 
@@ -129,7 +142,7 @@ void AddGlowNextFrame(int reference)
 
 void AddGlow(int entity)
 {
-	if (!g_mode.IntValue || !g_pills || entity >= ENTITY_LIMIT || IdentifyWeapon(entity) != WEPID_PAIN_PILLS) return;
+	if (!g_mode.IntValue || entity >= ENTITY_LIMIT || !(g_itemTypes & GetGlowItemType(entity))) return;
 	if (EntRefToEntIndex(g_glowRef[entity]) > MaxClients) return;
 	char model[PLATFORM_MAX_PATH];
 	GetEntPropString(entity, Prop_Data, "m_ModelName", model, sizeof(model));
@@ -156,6 +169,21 @@ void AddGlow(int entity)
 	g_glowRef[entity] = EntIndexToEntRef(glow);
 	g_itemRef[glow] = EntIndexToEntRef(entity);
 	SDKHook(glow, SDKHook_SetTransmit, OnGlowTransmit);
+}
+
+int GetGlowItemType(int entity)
+{
+	// Standard ammo entities only: do not infer functionality from model names.
+	char classname[64];
+	GetEntityClassname(entity, classname, sizeof(classname));
+	if (StrEqual(classname, "weapon_ammo_spawn")) return Glow_Ammo;
+	switch (IdentifyWeapon(entity))
+	{
+		case WEPID_PAIN_PILLS: return Glow_Pills;
+		case WEPID_FIRST_AID_KIT: return Glow_Medkit;
+		case WEPID_DEFIBRILLATOR: return Glow_Defib;
+	}
+	return 0;
 }
 
 public void OnEntityDestroyed(int entity)
