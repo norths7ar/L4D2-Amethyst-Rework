@@ -4,8 +4,7 @@
 
 ### 主线清理
 
-- 将清理前的完整状态保留在 `v1.3.0` 标签与 `archive/astmod-legacy` 分支，主线移除 AstMod 模式入口、专属插件与源码、旧 DAS 配置和 VScript，不再维护其兼容行为。
-- 保留 AstRedux 使用的共享组件，将模式资源包和构建、校验工具更名为 AstRedux，并移除资源包中的 AstMod 模式定义。
+- 移除 AstMod ，保留 AstRedux 使用的共享组件，将模式资源包和构建、校验工具更名为 AstRedux，并移除资源包中的 AstMod 模式定义。
 - AstFlex 仍处于冻结状态，未随本次清理修复其 Legacy 依赖；主线不再提供这些依赖。
 
 ## v1.3.0 — 2026-09-15
