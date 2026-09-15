@@ -76,6 +76,7 @@ bool
 	g_bSnapshotValid[MAXPLAYERS + 1];
 
 ConVar
+	g_hEnabled,
 	g_hTongueDragDamageInterval = null,
 	g_hTongueDragFirstDamageInterval = null,
 	g_hTongueDragFirstDamage = null,
@@ -89,12 +90,13 @@ public Plugin myinfo =
 	name = "L4D2 smoker drag damage interval",
 	author = "Visor, Sir, A1m`",
 	description = "Implements a native-like cvar and functionality that should've been there out of the box",
-	version = "2.4",
+	version = "2.4.1",
 	url = "https://github.com/SirPlease/L4D2-Competitive-Rework"
 };
 
 public void OnPluginStart()
 {
+	g_hEnabled = CreateConVar("tongue_drag_damage_control", "1", "Enable custom tongue drag timing and damage. 0 retains engine behavior.", _, true, 0.0, true, 1.0);
 	InitGameData();
 
 	HookEvent("tongue_grab", Event_OnTongueGrab);
@@ -176,6 +178,7 @@ public void OnClientDisconnect(int iClient)
 
 void Event_OnTongueGrab(Event hEvent, const char[] eName, bool bDontBroadcast)
 {
+	if (!g_hEnabled.BoolValue) return;
 	// Replacing variable value 'CTerrorPlayer::m_tongueDragDamageTimer',
 	// ​​after calling a function 'CTerrorPlayer::OnGrabbedByTongue'.
 	// Fix damage interval.
@@ -197,6 +200,7 @@ void Event_OnTongueGrab(Event hEvent, const char[] eName, bool bDontBroadcast)
 
 Action Hook_OnTakeDamage(int iVictim, int &iAttacker, int &iInflictor, float &fDamage, int &iDamageType)
 {
+	if (!g_hEnabled.BoolValue) return Plugin_Continue;
 	// Replacing the function patch 'CTerrorPlayer::UpdateHangingFromTongue'.
 	// This dmg function is called after variable 'CTerrorPlayer::m_tongueDragDamageTimer' is set, we can't get it here.
 	if (!(iDamageType & DMG_CHOKE)) {
@@ -236,6 +240,7 @@ Action Hook_OnTakeDamage(int iVictim, int &iAttacker, int &iInflictor, float &fD
 
 MRESReturn Detour_OnStartHangingFromTongue_Pre(int client, DHookParam hParams)
 {
+	if (!g_hEnabled.BoolValue) return MRES_Ignored;
 	if (client < 1 || client > MaxClients) {
 		return MRES_Ignored;
 	}
@@ -255,6 +260,7 @@ MRESReturn Detour_OnStartHangingFromTongue_Pre(int client, DHookParam hParams)
 
 MRESReturn Detour_OnStartHangingFromTongue_Post(int client, DHookParam hParams)
 {
+	if (!g_hEnabled.BoolValue) return MRES_Ignored;
 	if (client < 1 || client > MaxClients) {
 		return MRES_Ignored;
 	}
@@ -315,6 +321,7 @@ void Event_OnTongueRelease(Event hEvent, const char[] eName, bool bDontBroadcast
 
 void Event_OnChokeEnd(Event hEvent, const char[] eName, bool bDontBroadcast)
 {
+	if (!g_hEnabled.BoolValue) return;
 	if (!g_hTongueDamageContinuity.BoolValue) {
 		return;
 	}

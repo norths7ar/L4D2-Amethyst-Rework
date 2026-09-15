@@ -49,6 +49,7 @@
 ConVar
 	g_hPatchEnable,
 	g_hMobMaxSize,
+	g_hAmountScale,
 	g_hOldBehaviourEvents;
 
 MemoryPatch
@@ -67,7 +68,7 @@ public Plugin myinfo =
 {
 	name = "Boomer Horde Equalizer (Refactored)",
 	author = "Visor, Jacob, A1m`, Sir",
-	version = "1.6",
+	version = "1.6.2",
 	description = "Fixes boomer hordes being different sizes based on wandering commons (1.5) as well as adding zombies to the queue rather than relying on max_mob_size",
 	url = "https://github.com/SirPlease/L4D2-Competitive-Rework"
 };
@@ -86,6 +87,7 @@ public void OnPluginStart()
 	g_hPatchEnable           = CreateConVar("boomer_horde_equalizer", "1", "Fix boomer hordes being different sizes based on wandering commons. (1 - enable, 0 - disable)", _, true, 0.0, true, 1.0);
 	g_hOldBehaviourEvents    = CreateConVar("boomer_horde_equalizer_events_default", "1", "Use default boomer behaviour during event hordes? - 1:Yes - 0:Override", _, true, 0.0, true, 1.0);
 	g_hMobMaxSize            = FindConVar("z_mob_spawn_max_size");
+	g_hAmountScale = CreateConVar("boomer_horde_amount_scale", "1.0", "Scale configured per-survivor queue additions, rounded to nearest integer. Event fallback still uses z_mob_spawn_max_size.", _, true, 0.0);
 
 	// Server Commands.
 	RegServerCmd("boomer_horde_amount", ServerCmdSetBoomHorde, "Usage: boomer_horde_amount <amount of boomed survivors> <amount of horde to spawn>");
@@ -206,6 +208,8 @@ void Event_PlayerBoomedExpired(Event event, const char[] name, bool dontBroadcas
 
 public Action L4D_OnSpawnITMob(int &iAmount)
 {
+	// Disabling must release both the memory patch and the horde override.
+	if (!g_hPatchEnable.BoolValue) return Plugin_Continue;
 	// Rather than spawning common through this, we add them to the pending queue.
 	// This allows us to go past the z_common_limit
 	// Keep in mind that the default value of wandering common is 20 and will be added to the outcome of the calculation if they are within the default range of 3000 units.
@@ -256,7 +260,7 @@ public Action L4D_OnSpawnITMob(int &iAmount)
 		// Did we specify the amount of common for this amount of Survivors biled?
 		if (BoomHordeEvent[BoomedSurvivorCount] > 0)
 		{
-			HordeToQueue = BoomHordeEvent[BoomedSurvivorCount];
+			HordeToQueue = RoundToNearest(float(BoomHordeEvent[BoomedSurvivorCount]) * g_hAmountScale.FloatValue);
 
 			#if defined _DEBUG
 				PrintToChatAll("BoomHordeEvent[BoomedSurvivorCount] : %i", BoomHordeEvent[BoomedSurvivorCount]);
