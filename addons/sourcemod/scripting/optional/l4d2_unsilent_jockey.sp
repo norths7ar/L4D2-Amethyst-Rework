@@ -1,6 +1,9 @@
 /*
 	Changelog
 	---------
+		0.9
+			- Bind voice timers to user IDs and clear them on round/map end and disconnect.
+			- Revalidate the live Jockey before every forced sound.
 	    0.8 (Sir + J.)
 		    - Corrected Sound level to the actual level used by the files when played normally.
 		0.7 (Forgetest)
@@ -67,7 +70,7 @@ public Plugin myinfo =
 	name = "Unsilent Jockey",
 	author = "Tabun, robex, Sir, A1m`",
 	description = "Makes jockeys emit sound constantly.",
-	version = "0.8",
+	version = "0.9",
 	url = "https://github.com/SirPlease/L4D2-Competitive-Rework"
 };
 
@@ -82,6 +85,8 @@ public void OnPluginStart()
 	HookEvent("player_team", PlayerTeam_Event);
 	HookEvent("jockey_ride", JockeyRideStart_Event);
 	HookEvent("jockey_ride_end", JockeyRideEnd_Event);
+	HookEvent("round_start", RoundBoundary_Event, EventHookMode_PostNoCopy);
+	HookEvent("round_end", RoundBoundary_Event, EventHookMode_PostNoCopy);
 }
 
 public void OnMapStart()
@@ -89,6 +94,28 @@ public void OnMapStart()
 	// Precache
 	for (int i = 0; i < sizeof(g_sJockeySound); i++) {
 		PrecacheSound(g_sJockeySound[i], true);
+	}
+}
+
+public void OnMapEnd()
+{
+	ClearJockeyTimers();
+}
+
+public void OnClientDisconnect(int client)
+{
+	ChangeJockeyTimerStatus(client, false);
+}
+
+void RoundBoundary_Event(Event event, const char[] name, bool dontBroadcast)
+{
+	ClearJockeyTimers();
+}
+
+void ClearJockeyTimers()
+{
+	for (int client = 1; client <= MaxClients; client++) {
+		ChangeJockeyTimerStatus(client, false);
 	}
 }
 
@@ -158,10 +185,8 @@ void JockeyRideStart_Event(Event event, const char[] name, bool dontBroadcast)
 
 void JockeyRideEnd_Event(Event event, const char[] name, bool dontBroadcast)
 {
-	int client = GetClientOfUserId(event.GetInt("userid"));
-
 	// Check if our beloved Jockey is alive on the very next frame
-	RequestFrame(JockeyRideEnd_NextFrame, GetClientUserId(client));
+	RequestFrame(JockeyRideEnd_NextFrame, event.GetInt("userid"));
 }
 
 void JockeyRideEnd_NextFrame(any userid)
@@ -176,8 +201,20 @@ void JockeyRideEnd_NextFrame(any userid)
 	}
 }
 
-Action delayedJockeySound(Handle timer, any client)
+Action delayedJockeySound(Handle timer, any userid)
 {
+	int client = GetClientOfUserId(userid);
+	if (client <= 0) return Plugin_Stop;
+	if (g_hJockeySoundTimer[client] != timer) return Plugin_Stop;
+
+	// A timer must not outlive its Jockey or emit from a reused client slot.
+	if (!IsClientInGame(client) || GetClientTeam(client) != TEAM_INFECTED
+		|| !IsPlayerAlive(client) || GetEntProp(client, Prop_Send, "m_zombieClass") != ZC_JOCKEY
+		|| GetEntProp(client, Prop_Send, "m_isGhost")) {
+		g_hJockeySoundTimer[client] = null;
+		return Plugin_Stop;
+	}
+
 	int rndPick = GetRandomInt(0, (sizeof(g_sJockeySound) - 1));
 	EmitSoundToAll(g_sJockeySound[rndPick], client, SNDCHAN_VOICE, SNDLEVEL_HELICOPTER);
 
@@ -186,12 +223,13 @@ Action delayedJockeySound(Handle timer, any client)
 
 void ChangeJockeyTimerStatus(int client, bool bEnable)
 {
+	if (client <= 0 || client > MaxClients) return;
 	if (g_hJockeySoundTimer[client] != null) {
 		KillTimer(g_hJockeySoundTimer[client], false);
 		g_hJockeySoundTimer[client] = null;
 	}
 
 	if (bEnable) {
-		g_hJockeySoundTimer[client] = CreateTimer(g_hJockeyVoiceInterval.FloatValue, delayedJockeySound, client, TIMER_REPEAT);
+		g_hJockeySoundTimer[client] = CreateTimer(g_hJockeyVoiceInterval.FloatValue, delayedJockeySound, GetClientUserId(client), TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 	}
 }
