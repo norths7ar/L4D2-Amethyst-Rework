@@ -15,7 +15,6 @@
 * `docs/server-operations.md`: deployment and server operations.
 * `docs/plugin-sources.md`: uncertain SMX provenance and rebuild status.
 * Actual cfgs, SourcePawn, VScript, Stripper, and plugin-load files: runtime behavior.
-* `tools/validate_astredux_integration.ps1`: maintained static validation.
 
 Keep each document in its own lane. AGENTS contains durable Agent maintenance rules, not a second copy of those documents.
 
@@ -47,9 +46,9 @@ Keep each document in its own lane. AGENTS contains durable Agent maintenance ru
 ## Runtime and Validation
 
 * Use the repository's existing tooling; do not introduce unrelated project infrastructure.
-* Primary static validation: `pwsh -File tools/validate_astredux_integration.ps1`.
+* Compile changed SourcePawn plugins; check actual load and exec references when changing configuration.
 * Inspect focused diffs and search for stale references after moves, renames, or API changes.
-* Compilation/static validation is not runtime verification.
+* Compilation and reference checks do not verify deployed binaries or runtime behavior. Report what was actually checked and what remains unverified.
 * For gameplay or lifecycle changes, prefer reproducing and testing locally in the maintainer's WSL2 server environment when practical.
 * Run deployment or remote diagnostics only when explicitly requested.
 
