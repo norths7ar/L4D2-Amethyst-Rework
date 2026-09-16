@@ -8,7 +8,7 @@
 #define PLUGIN_NAME						"Versus Coop Mode"
 #define PLUGIN_AUTHOR					"sorallll"
 #define PLUGIN_DESCRIPTION				""
-#define PLUGIN_VERSION					"1.0.4"
+#define PLUGIN_VERSION					"1.0.5"
 #define PLUGIN_URL						""
 
 #define GAMEDATA						"versus_coop_mode"
@@ -41,6 +41,7 @@ public void OnPluginStart() {
 	InitGameData();
 	CreateConVar("versus_coop_mode_version", PLUGIN_VERSION, "Versus Coop Mode plugin version.", FCVAR_NOTIFY|FCVAR_DONTRECORD);
 	HookUserMessage(GetUserMessageId("VGUIMenu"), umVGUIMenu, true);
+	AddCommandListener(BlockChooseTeam, "chooseteam");
 	HookEvent("round_start",	Event_RoundStart,		EventHookMode_PostNoCopy);
 	HookEvent("map_transition", Event_MapTransition,	EventHookMode_Pre);
 }
@@ -130,10 +131,21 @@ MRESReturn DD_CDirectorVersusMode_RestartVsMode_Post(Address pThis, DHookReturn 
 	return MRES_Ignored;
 }
 
+// Team assignment belongs to player_manager; the Versus team picker has no
+// useful choices in Coop. Keep jointeam available for !join/!spec and restores.
+Action BlockChooseTeam(int client, const char[] command, int argc) {
+	return Plugin_Handled;
+}
+
 Action umVGUIMenu(UserMsg msg_id, BfRead msg, const int[] players, int playersNum, bool reliable, bool init) {
 	static char buffer[26];
 	msg.ReadString(buffer, sizeof buffer, true);
 	if (strcmp(buffer, "fullscreen_vs_scoreboard") == 0)
+		return Plugin_Handled;
+
+	// "team" is the client viewport's PANEL_TEAM name. Block automatic opens
+	// as well as the command above; still allow messages that close the panel.
+	if (strcmp(buffer, "team") == 0 && msg.ReadByte() != 0)
 		return Plugin_Handled;
 
 	return Plugin_Continue;
