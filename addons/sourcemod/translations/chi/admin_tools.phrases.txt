@@ -29,4 +29,134 @@
 	    "#format" "{1:d},{2:s}"
 	    "chi" "控制台清理了 {1} 个匹配 {2} 的 AI 特感。"
 	}
+	"AdminHeal"
+	{
+		"chi" "恢复血量"
+	}
+	"AdminAmmo"
+	{
+		"chi" "补充弹药"
+	}
+	"AdminRespawn"
+	{
+		"chi" "复活玩家"
+	}
+	"AdminTeleport"
+	{
+		"chi" "传送玩家"
+	}
+	"AdminSelectPlayer"
+	{
+		"#format" "{1:s}"
+		"chi" "{1}：选择玩家"
+	}
+	"AdminCheckpoint"
+	{
+		"chi" "全队传送到终点安全屋"
+	}
+	"AdminAllDest"
+	{
+		"chi" "所有生还者 → 选择目的地"
+	}
+	"AdminNoTargets"
+	{
+		"chi" "没有符合条件的玩家"
+	}
+	"AdminNoDest"
+	{
+		"chi" "没有可用的目的地玩家"
+	}
+	"AdminTeamImmune"
+	{
+		"chi" "无法对全队执行传送：存在无权操作的玩家。"
+	}
+	"AdminTargetChanged"
+	{
+		"chi" "玩家已离开或状态已改变，请重新选择。"
+	}
+	"AdminTargetImmune"
+	{
+		"chi" "你无权操作这名玩家。"
+	}
+	"AdminOriginInvalid"
+	{
+		"chi" "原目标已失效，请重新选择。"
+	}
+	"AdminDestInvalid"
+	{
+		"chi" "目的地玩家已离开或死亡，请重新选择。"
+	}
+	"AdminTeleportAllTitle"
+	{
+		"chi" "所有生还者：传送到谁身边？"
+	}
+	"AdminTeleportTitle"
+	{
+		"#format" "{1:N}"
+		"chi" "{1}：传送到谁身边？"
+	}
+	"AdminHealActivity"
+	{
+		"#format" "{1:N}"
+		"chi" "恢复血量：{1}"
+	}
+	"AdminAmmoActivity"
+	{
+		"#format" "{1:N}"
+		"chi" "补充弹药：{1}"
+	}
+	"AdminRespawnActivity"
+	{
+		"#format" "{1:N}"
+		"chi" "复活玩家：{1}"
+	}
+	"AdminTeleportActivity"
+	{
+		"#format" "{1:d},{2:N}"
+		"chi" "已将 {1} 名玩家传送到 {2} 身边。"
+	}
+	"AdminNoclipOn"
+	{
+		"#format" "{1:N}"
+		"chi" "已开启 {1} 的穿墙模式。"
+	}
+	"AdminNoclipOff"
+	{
+		"#format" "{1:N}"
+		"chi" "已关闭 {1} 的穿墙模式。"
+	}
+	"AdminNoclip"
+	{
+		"chi" "穿墙模式"
+	}
+	"AdminNoclipTitle"
+	{
+		"chi" "穿墙模式：选择玩家"
+	}
+	"AdminNoclipRowOn"
+	{
+		"#format" "{1:N}"
+		"chi" "{1}（已开启）"
+	}
+	"AdminNoclipRowOff"
+	{
+		"#format" "{1:N}"
+		"chi" "{1}（已关闭）"
+	}
+	"AdminNoAliveTargets"
+	{
+		"chi" "没有可操作的存活玩家"
+	}
+	"AdminPlayerGone"
+	{
+		"chi" "玩家已离开或死亡，请重新选择。"
+	}
+	"AdminNoclipSyntax"
+	{
+		"chi" "用法：sm_noclip <玩家名|#userid|目标组>"
+	}
+	"AdminNoclipNoMatch"
+	{
+		"chi" "未找到可操作的存活玩家，请检查目标名称和权限。"
+	}
 }

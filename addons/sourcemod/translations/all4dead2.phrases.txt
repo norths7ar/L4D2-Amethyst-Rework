@@ -1,0 +1,311 @@
+"Phrases"
+{
+	"A4DSpawnMenu"
+	{
+		"en" "Spawn menu"
+	}
+	"A4DWeaponsAndItems"
+	{
+		"en" "Weapons and items"
+	}
+	"A4DInfected"
+	{
+		"en" "Infected"
+	}
+	"A4DGuns"
+	{
+		"en" "Guns"
+	}
+	"A4DMeleeWeapons"
+	{
+		"en" "Melee weapons"
+	}
+	"A4DSuppliesAndProps"
+	{
+		"en" "Supplies and props"
+	}
+	"A4DSpecialInfectedAndHorde"
+	{
+		"en" "Special infected and horde"
+	}
+	"A4DUncommonInfected"
+	{
+		"en" "Uncommon infected"
+	}
+	"A4DSpawnSpecialInfected"
+	{
+		"en" "Spawn special infected"
+	}
+	"A4DSpawnUncommonInfected"
+	{
+		"en" "Spawn uncommon infected"
+	}
+	"A4DSpawnItems"
+	{
+		"en" "Spawn items"
+	}
+	"A4DSpawnGuns"
+	{
+		"en" "Spawn guns"
+	}
+	"A4DSpawnMeleeWeapons"
+	{
+		"en" "Spawn melee weapons"
+	}
+	"A4DTank"
+	{
+		"en" "Tank"
+	}
+	"A4DWitch"
+	{
+		"en" "Witch"
+	}
+	"A4DBoomer"
+	{
+		"en" "Boomer"
+	}
+	"A4DHunter"
+	{
+		"en" "Hunter"
+	}
+	"A4DSmoker"
+	{
+		"en" "Smoker"
+	}
+	"A4DSpitter"
+	{
+		"en" "Spitter"
+	}
+	"A4DJockey"
+	{
+		"en" "Jockey"
+	}
+	"A4DCharger"
+	{
+		"en" "Charger"
+	}
+	"A4DHorde"
+	{
+		"en" "Horde"
+	}
+	"A4DRiotPolice"
+	{
+		"en" "Riot police"
+	}
+	"A4DCedaWorker"
+	{
+		"en" "CEDA worker"
+	}
+	"A4DClown"
+	{
+		"en" "Clown"
+	}
+	"A4DMudman"
+	{
+		"en" "Mudman"
+	}
+	"A4DConstructionWorker"
+	{
+		"en" "Construction worker"
+	}
+	"A4DJimmyGibbs"
+	{
+		"en" "Jimmy Gibbs"
+	}
+	"A4DFallenSurvivor"
+	{
+		"en" "Fallen survivor"
+	}
+	"A4DDefibrillator"
+	{
+		"en" "Defibrillator"
+	}
+	"A4DFirstAidKit"
+	{
+		"en" "First aid kit"
+	}
+	"A4DPainPills"
+	{
+		"en" "Pain pills"
+	}
+	"A4DAdrenaline"
+	{
+		"en" "Adrenaline"
+	}
+	"A4DMolotov"
+	{
+		"en" "Molotov"
+	}
+	"A4DPipeBomb"
+	{
+		"en" "Pipe bomb"
+	}
+	"A4DBileJar"
+	{
+		"en" "Bile jar"
+	}
+	"A4DGasCan"
+	{
+		"en" "Gas can"
+	}
+	"A4DPropaneTank"
+	{
+		"en" "Propane tank"
+	}
+	"A4DOxygenTank"
+	{
+		"en" "Oxygen tank"
+	}
+	"A4DAmmoPile"
+	{
+		"en" "Ammo pile"
+	}
+	"A4DIncendiaryAmmoPack"
+	{
+		"en" "Incendiary ammo pack"
+	}
+	"A4DExplosiveAmmoPack"
+	{
+		"en" "Explosive ammo pack"
+	}
+	"A4DLaserSights"
+	{
+		"en" "Laser sights"
+	}
+	"A4DCola"
+	{
+		"en" "Cola"
+	}
+	"A4DGnome"
+	{
+		"en" "Gnome"
+	}
+	"A4DPistol"
+	{
+		"en" "Pistol"
+	}
+	"A4DMagnum"
+	{
+		"en" "Magnum"
+	}
+	"A4DPumpShotgun"
+	{
+		"en" "Pump shotgun"
+	}
+	"A4DChromeShotgun"
+	{
+		"en" "Chrome shotgun"
+	}
+	"A4DAutoShotgun"
+	{
+		"en" "Auto shotgun"
+	}
+	"A4DSpasShotgun"
+	{
+		"en" "SPAS shotgun"
+	}
+	"A4DUzi"
+	{
+		"en" "Uzi"
+	}
+	"A4DSilencedSmg"
+	{
+		"en" "Silenced SMG"
+	}
+	"A4DMp5"
+	{
+		"en" "MP5"
+	}
+	"A4DM16"
+	{
+		"en" "M16"
+	}
+	"A4DAk47"
+	{
+		"en" "AK47"
+	}
+	"A4DScar"
+	{
+		"en" "SCAR"
+	}
+	"A4DHuntingRifle"
+	{
+		"en" "Hunting rifle"
+	}
+	"A4DSg550"
+	{
+		"en" "SG550"
+	}
+	"A4DAwp"
+	{
+		"en" "AWP"
+	}
+	"A4DScout"
+	{
+		"en" "Scout"
+	}
+	"A4DGrenadeLauncher"
+	{
+		"en" "Grenade launcher"
+	}
+	"A4DBaseballBat"
+	{
+		"en" "Baseball bat"
+	}
+	"A4DChainsaw"
+	{
+		"en" "Chainsaw"
+	}
+	"A4DCricketBat"
+	{
+		"en" "Cricket bat"
+	}
+	"A4DCrowbar"
+	{
+		"en" "Crowbar"
+	}
+	"A4DElectricGuitar"
+	{
+		"en" "Electric guitar"
+	}
+	"A4DFireAxe"
+	{
+		"en" "Fire axe"
+	}
+	"A4DFryingPan"
+	{
+		"en" "Frying pan"
+	}
+	"A4DKatana"
+	{
+		"en" "Katana"
+	}
+	"A4DMachete"
+	{
+		"en" "Machete"
+	}
+	"A4DTonfa"
+	{
+		"en" "Tonfa"
+	}
+	"A4DKnife"
+	{
+		"en" "Knife"
+	}
+	"A4DPitchfork"
+	{
+		"en" "Pitchfork"
+	}
+	"A4DShovel"
+	{
+		"en" "Shovel"
+	}
+	"A4DPleaseUseThisFeatureInGame"
+	{
+		"en" "Please use this feature in game."
+	}
+	"A4DUnableToSpawnThisItem"
+	{
+		"en" "Unable to spawn this item."
+	}
+}

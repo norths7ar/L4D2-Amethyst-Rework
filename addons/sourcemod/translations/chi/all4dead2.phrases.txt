@@ -1,0 +1,311 @@
+"Phrases"
+{
+	"A4DSpawnMenu"
+	{
+		"chi" "生成菜单"
+	}
+	"A4DWeaponsAndItems"
+	{
+		"chi" "武器与物品"
+	}
+	"A4DInfected"
+	{
+		"chi" "感染者"
+	}
+	"A4DGuns"
+	{
+		"chi" "枪械"
+	}
+	"A4DMeleeWeapons"
+	{
+		"chi" "近战武器"
+	}
+	"A4DSuppliesAndProps"
+	{
+		"chi" "补给与道具"
+	}
+	"A4DSpecialInfectedAndHorde"
+	{
+		"chi" "特殊感染者与尸潮"
+	}
+	"A4DUncommonInfected"
+	{
+		"chi" "特殊普通感染者"
+	}
+	"A4DSpawnSpecialInfected"
+	{
+		"chi" "生成特殊感染者"
+	}
+	"A4DSpawnUncommonInfected"
+	{
+		"chi" "生成特殊普通感染者"
+	}
+	"A4DSpawnItems"
+	{
+		"chi" "生成物品"
+	}
+	"A4DSpawnGuns"
+	{
+		"chi" "生成枪械"
+	}
+	"A4DSpawnMeleeWeapons"
+	{
+		"chi" "生成近战武器"
+	}
+	"A4DTank"
+	{
+		"chi" "坦克（Tank）"
+	}
+	"A4DWitch"
+	{
+		"chi" "女巫（Witch）"
+	}
+	"A4DBoomer"
+	{
+		"chi" "胖子（Boomer）"
+	}
+	"A4DHunter"
+	{
+		"chi" "猎人（Hunter）"
+	}
+	"A4DSmoker"
+	{
+		"chi" "舌头（Smoker）"
+	}
+	"A4DSpitter"
+	{
+		"chi" "口水（Spitter）"
+	}
+	"A4DJockey"
+	{
+		"chi" "猴子（Jockey）"
+	}
+	"A4DCharger"
+	{
+		"chi" "牛（Charger）"
+	}
+	"A4DHorde"
+	{
+		"chi" "尸潮"
+	}
+	"A4DRiotPolice"
+	{
+		"chi" "防暴警察"
+	}
+	"A4DCedaWorker"
+	{
+		"chi" "CEDA 防护服感染者"
+	}
+	"A4DClown"
+	{
+		"chi" "小丑"
+	}
+	"A4DMudman"
+	{
+		"chi" "泥人"
+	}
+	"A4DConstructionWorker"
+	{
+		"chi" "建筑工人"
+	}
+	"A4DJimmyGibbs"
+	{
+		"chi" "吉米·吉布斯"
+	}
+	"A4DFallenSurvivor"
+	{
+		"chi" "堕落生还者"
+	}
+	"A4DDefibrillator"
+	{
+		"chi" "电击器"
+	}
+	"A4DFirstAidKit"
+	{
+		"chi" "医疗包"
+	}
+	"A4DPainPills"
+	{
+		"chi" "止痛药"
+	}
+	"A4DAdrenaline"
+	{
+		"chi" "肾上腺素"
+	}
+	"A4DMolotov"
+	{
+		"chi" "燃烧瓶"
+	}
+	"A4DPipeBomb"
+	{
+		"chi" "土制炸弹"
+	}
+	"A4DBileJar"
+	{
+		"chi" "胆汁瓶"
+	}
+	"A4DGasCan"
+	{
+		"chi" "汽油桶"
+	}
+	"A4DPropaneTank"
+	{
+		"chi" "煤气罐"
+	}
+	"A4DOxygenTank"
+	{
+		"chi" "氧气瓶"
+	}
+	"A4DAmmoPile"
+	{
+		"chi" "子弹堆"
+	}
+	"A4DIncendiaryAmmoPack"
+	{
+		"chi" "燃烧弹药包"
+	}
+	"A4DExplosiveAmmoPack"
+	{
+		"chi" "高爆弹药包"
+	}
+	"A4DLaserSights"
+	{
+		"chi" "激光瞄准器"
+	}
+	"A4DCola"
+	{
+		"chi" "可乐"
+	}
+	"A4DGnome"
+	{
+		"chi" "侏儒玩偶"
+	}
+	"A4DPistol"
+	{
+		"chi" "小手枪"
+	}
+	"A4DMagnum"
+	{
+		"chi" "马格南"
+	}
+	"A4DPumpShotgun"
+	{
+		"chi" "木喷"
+	}
+	"A4DChromeShotgun"
+	{
+		"chi" "铁喷"
+	}
+	"A4DAutoShotgun"
+	{
+		"chi" "一代连喷"
+	}
+	"A4DSpasShotgun"
+	{
+		"chi" "SPAS连喷"
+	}
+	"A4DUzi"
+	{
+		"chi" "UZI"
+	}
+	"A4DSilencedSmg"
+	{
+		"chi" "MAC-10 SMG"
+	}
+	"A4DMp5"
+	{
+		"chi" "MP5"
+	}
+	"A4DM16"
+	{
+		"chi" "M-16"
+	}
+	"A4DAk47"
+	{
+		"chi" "AK47"
+	}
+	"A4DScar"
+	{
+		"chi" "SCAR"
+	}
+	"A4DHuntingRifle"
+	{
+		"chi" "木狙"
+	}
+	"A4DSg550"
+	{
+		"chi" "SG550"
+	}
+	"A4DAwp"
+	{
+		"chi" "AWP"
+	}
+	"A4DScout"
+	{
+		"chi" "Scout"
+	}
+	"A4DGrenadeLauncher"
+	{
+		"chi" "榴弹发射器"
+	}
+	"A4DBaseballBat"
+	{
+		"chi" "棒球棍"
+	}
+	"A4DChainsaw"
+	{
+		"chi" "电锯"
+	}
+	"A4DCricketBat"
+	{
+		"chi" "板球拍"
+	}
+	"A4DCrowbar"
+	{
+		"chi" "撬棍"
+	}
+	"A4DElectricGuitar"
+	{
+		"chi" "电吉他"
+	}
+	"A4DFireAxe"
+	{
+		"chi" "消防斧"
+	}
+	"A4DFryingPan"
+	{
+		"chi" "平底锅"
+	}
+	"A4DKatana"
+	{
+		"chi" "武士刀"
+	}
+	"A4DMachete"
+	{
+		"chi" "砍刀"
+	}
+	"A4DTonfa"
+	{
+		"chi" "警棍"
+	}
+	"A4DKnife"
+	{
+		"chi" "小刀"
+	}
+	"A4DPitchfork"
+	{
+		"chi" "草叉"
+	}
+	"A4DShovel"
+	{
+		"chi" "铁铲"
+	}
+	"A4DPleaseUseThisFeatureInGame"
+	{
+		"chi" "请在游戏内使用此功能。"
+	}
+	"A4DUnableToSpawnThisItem"
+	{
+		"chi" "无法生成此物品。"
+	}
+}

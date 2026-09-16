@@ -3,6 +3,11 @@
 
 #include <sourcemod>
 #include <sdktools>
+#include <left4dhooks>
+#undef REQUIRE_PLUGIN
+#include <adminmenu>
+
+#include "admin_tools/player_actions.inc"
 
 #define TEAM_INFECTED 3
 
@@ -10,14 +15,15 @@ public Plugin myinfo =
 {
 	name = "Coop admin tools",
 	author = "海洋空氣, norths7ar",
-	description = "Administrator-only emergency controls for Coop",
-	version = "1.0.0"
+	description = "Administrator player operations and emergency controls for Coop",
+	version = "1.1.0"
 };
 
 public void OnPluginStart()
 {
 	LoadTranslations("admin_tools.phrases");
-	RegAdminCmd("sm_fuck", CommandCleanup, ADMFLAG_BAN, "Remove matching AI special infected.");
+	InitPlayerActions();
+	RegAdminCmd("sm_fuck", CommandCleanup, ADMFLAG_BAN, "清理匹配名称的 AI 特感。");
 }
 
 public Action CommandCleanup(int client, int args)

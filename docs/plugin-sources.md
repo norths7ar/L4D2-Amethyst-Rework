@@ -14,7 +14,6 @@
 
 | 插件 | 状态 |
 | --- | --- |
-| `all4dead2.smx` | 有源码，未确认同构建 |
 | `HunterSkeetSound.smx` | 有源码，未确认同构建 |
 | `l4d2_bot_spit_ignite_gascan.smx` | 有源码，未确认同构建 |
 | `l4d2_drop.smx` | 有源码，未确认同构建 |

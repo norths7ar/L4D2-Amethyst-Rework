@@ -29,4 +29,134 @@
 	    "#format" "{1:d},{2:s}"
 	    "en" "Console removed {1} AI infected matching {2}."
 	}
+	"AdminHeal"
+	{
+		"en" "Restore health"
+	}
+	"AdminAmmo"
+	{
+		"en" "Refill ammunition"
+	}
+	"AdminRespawn"
+	{
+		"en" "Respawn player"
+	}
+	"AdminTeleport"
+	{
+		"en" "Teleport player"
+	}
+	"AdminSelectPlayer"
+	{
+		"#format" "{1:s}"
+		"en" "{1}: select a player"
+	}
+	"AdminCheckpoint"
+	{
+		"en" "Teleport team to end saferoom"
+	}
+	"AdminAllDest"
+	{
+		"en" "All survivors -> choose destination"
+	}
+	"AdminNoTargets"
+	{
+		"en" "No eligible players"
+	}
+	"AdminNoDest"
+	{
+		"en" "No destination players available"
+	}
+	"AdminTeamImmune"
+	{
+		"en" "Cannot teleport the team: a player is immune."
+	}
+	"AdminTargetChanged"
+	{
+		"en" "The player left or changed state. Please select again."
+	}
+	"AdminTargetImmune"
+	{
+		"en" "You cannot target this player."
+	}
+	"AdminOriginInvalid"
+	{
+		"en" "The original target is no longer available. Please select again."
+	}
+	"AdminDestInvalid"
+	{
+		"en" "The destination player left or died. Please select again."
+	}
+	"AdminTeleportAllTitle"
+	{
+		"en" "All survivors: teleport to whom?"
+	}
+	"AdminTeleportTitle"
+	{
+		"#format" "{1:N}"
+		"en" "{1}: teleport to whom?"
+	}
+	"AdminHealActivity"
+	{
+		"#format" "{1:N}"
+		"en" "Restored health: {1}"
+	}
+	"AdminAmmoActivity"
+	{
+		"#format" "{1:N}"
+		"en" "Refilled ammunition: {1}"
+	}
+	"AdminRespawnActivity"
+	{
+		"#format" "{1:N}"
+		"en" "Respawned: {1}"
+	}
+	"AdminTeleportActivity"
+	{
+		"#format" "{1:d},{2:N}"
+		"en" "Teleported {1} players to {2}."
+	}
+	"AdminNoclipOn"
+	{
+		"#format" "{1:N}"
+		"en" "Enabled noclip for {1}."
+	}
+	"AdminNoclipOff"
+	{
+		"#format" "{1:N}"
+		"en" "Disabled noclip for {1}."
+	}
+	"AdminNoclip"
+	{
+		"en" "Noclip"
+	}
+	"AdminNoclipTitle"
+	{
+		"en" "Noclip: select a player"
+	}
+	"AdminNoclipRowOn"
+	{
+		"#format" "{1:N}"
+		"en" "{1} (enabled)"
+	}
+	"AdminNoclipRowOff"
+	{
+		"#format" "{1:N}"
+		"en" "{1} (disabled)"
+	}
+	"AdminNoAliveTargets"
+	{
+		"en" "No eligible living players"
+	}
+	"AdminPlayerGone"
+	{
+		"en" "The player left or died. Please select again."
+	}
+	"AdminNoclipSyntax"
+	{
+		"en" "Usage: sm_noclip <name|#userid|target group>"
+	}
+	"AdminNoclipNoMatch"
+	{
+		"en" "No eligible living players found. Check the target name and permissions."
+	}
 }
