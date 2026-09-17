@@ -1,5 +1,45 @@
 "Phrases"
 {
+    "AutoWipeMenu"
+    {
+        "en" "AutoWipe team rescue"
+    }
+    "AutoWipeDamageMenu"
+    {
+        "#format" "{1:d}"
+        "en" "AutoWipe health cost [{1}]"
+    }
+    "VoteEnableAutoWipe"
+    {
+        "en" "Enable AutoWipe team rescue"
+    }
+    "VoteDisableAutoWipe"
+    {
+        "en" "Disable AutoWipe team rescue"
+    }
+    "VoteAutoWipeDamage"
+    {
+        "#format" "{1:d}"
+        "en" "Set AutoWipe health cost to {1}"
+    }
+    "VotePassAutoWipe"
+    {
+        "en" "Changing AutoWipe team rescue..."
+    }
+    "VotePassAutoWipeDamage"
+    {
+        "en" "Changing AutoWipe health cost..."
+    }
+    "InfoAutoWipe"
+    {
+        "#format" "{1:s}"
+        "en" "AutoWipe team rescue: {1}"
+    }
+    "InfoAutoWipeDamage"
+    {
+        "#format" "{1:s}"
+        "en" "AutoWipe health cost: {1}"
+    }
     "InfoHeader"
     {
         "#format" "{1:d},{2:.1f},{3:d}"

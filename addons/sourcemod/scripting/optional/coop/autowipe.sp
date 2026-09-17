@@ -9,7 +9,7 @@
 // This plugin was created because of a Hard12 bug where one or more survivors were not taking damage while pinned
 // by special infected. If the whole team is immobilised, they get a grace period before they are AutoWiped.
 // This component keeps that behavior behind a declarative profile switch.
-#define GRACE_TIME 5.0
+#define GRACE_TIME 2.0
 #define TEAM_SURVIVOR 2
 #define TEAM_INFECTED 3
 #define ZOMBIECLASS_TANK 8
@@ -19,7 +19,7 @@ public Plugin myinfo =
     name = "AutoWipe",
     author = "Breezy, 海洋空氣, norths7ar",
     description = "Automatically revives survivors when the whole team is immobilised.",
-    version = "1.4"
+    version = "1.4.1"
 };
 
 ConVar g_cvEnabled;
@@ -118,7 +118,7 @@ public void OnGameFrame()
         g_hWipeTimer = CreateTimer(1.0, Timer_AutoWipe, _, TIMER_FLAG_NO_MAPCHANGE);
         g_bWipePending = true;
     }
-    // Incapacitated survivors may still be saved, so retain the original grace period.
+    // Allow a short self-rescue window when pins and incapacitations are mixed.
     else if (IsTeamImmobilised())
     {
         g_hWipeTimer = CreateTimer(GRACE_TIME, Timer_AutoWipe, _, TIMER_FLAG_NO_MAPCHANGE);

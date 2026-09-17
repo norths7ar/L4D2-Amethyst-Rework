@@ -1,60 +1,29 @@
 #pragma semicolon 1
-
+#pragma newdecls required
 #include <sourcemod>
 #include <sdktools>
-#include <l4d2_skill_detect>
-
+#include <coop_skill_detect>
 /**
  * 装逼是游戏第一动力。
  * 受落子视频的启发，爆 ht 带嘟嘟音效，实际打起来也非常带感。
- * 这个也没什么好说的。
+ * Historical name retained; Jockey skeets share the same sound.
  */
-
+public Plugin myinfo =
+{
+    name = "HunterSkeetSound",
+    author = "norths7ar",
+    description = "Hunter and Jockey skeet sound from resolved skill events.",
+    version = "2.0.0"
+};
 public void OnMapStart()
 {
-	PrecacheSound("ui/bigreward.wav");
+    PrecacheSound("ui/bigreward.wav");
 }
-
-public void OnSkeet(int survivor, int hunter)
+public void OnSkillKillResolved(int survivor, int victim, CoopSkill skill, int stars,
+    int zombieClass, const char[] weapon, int healthBefore)
 {
-	PlaySkeetSoundToClient(survivor);
-}
-
-public void OnSkeetMelee(int survivor, int hunter)
-{
-	PlaySkeetSoundToClient(survivor);
-}
-
-public void OnSkeetGL(int survivor, int hunter)
-{
-	PlaySkeetSoundToClient(survivor);
-}
-
-public void OnSkeetSniper(int survivor, int hunter)
-{
-	PlaySkeetSoundToClient(survivor);
-}
-
-public void OnSkeetHurt(int survivor, int hunter)
-{
-	PlaySkeetSoundToClient(survivor);
-}
-
-public void OnSkeetMeleeHurt(int survivor, int hunter)
-{
-	PlaySkeetSoundToClient(survivor);
-}
-
-public void OnSkeetSniperHurt(int survivor, int hunter)
-{
-	PlaySkeetSoundToClient(survivor);
-}
-
-stock void PlaySkeetSoundToClient(int client) {
-	if ( !IsClientAndInGame(client) ) return;
-	EmitSoundToClient(client, "ui/bigreward.wav", client);
-}
-
-stock bool IsClientAndInGame(int index) {
-	return ( index > 0 && index <= MaxClients + 1 && IsClientInGame(index) );
+    bool hunter = skill >= Skill_HunterSolo && skill <= Skill_HunterSmg;
+    if (!hunter && skill != Skill_JockeySkeet) return;
+    if (survivor > 0 && survivor <= MaxClients && IsClientInGame(survivor))
+        EmitSoundToClient(survivor, "ui/bigreward.wav", survivor);
 }

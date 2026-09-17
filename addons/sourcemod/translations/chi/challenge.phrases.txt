@@ -1,5 +1,45 @@
 "Phrases"
 {
+    "AutoWipeMenu"
+    {
+        "chi" "AutoWipe 团队救场"
+    }
+    "AutoWipeDamageMenu"
+    {
+        "#format" "{1:d}"
+        "chi" "AutoWipe 扣血惩罚 [{1}]"
+    }
+    "VoteEnableAutoWipe"
+    {
+        "chi" "开启 AutoWipe 团队救场"
+    }
+    "VoteDisableAutoWipe"
+    {
+        "chi" "关闭 AutoWipe 团队救场"
+    }
+    "VoteAutoWipeDamage"
+    {
+        "#format" "{1:d}"
+        "chi" "将 AutoWipe 扣血惩罚设为 {1}"
+    }
+    "VotePassAutoWipe"
+    {
+        "chi" "正在调整 AutoWipe 团队救场……"
+    }
+    "VotePassAutoWipeDamage"
+    {
+        "chi" "正在调整 AutoWipe 扣血惩罚……"
+    }
+    "InfoAutoWipe"
+    {
+        "#format" "{1:s}"
+        "chi" "AutoWipe 团队救场：{1}"
+    }
+    "InfoAutoWipeDamage"
+    {
+        "#format" "{1:s}"
+        "chi" "AutoWipe 扣血惩罚：{1}"
+    }
     "InfoHeader"
     {
         "#format" "{1:d},{2:.1f},{3:d}"

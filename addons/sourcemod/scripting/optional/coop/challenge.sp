@@ -25,6 +25,8 @@ enum
 	Setting_Reset = 14,
 	Setting_SIDamage = 15,
 	Setting_FiniteHordes = 16,
+	Setting_AutoWipe = 17,
+	Setting_AutoWipeDamage = 18,
 	Setting_Count
 };
 
@@ -52,7 +54,7 @@ public Plugin myinfo =
 	name = "Coop Challenge",
 	author = "海洋空氣, norths7ar",
 	description = "Difficulty Controller for Coop.",
-	version = "2.8.1-integration",
+	version = "2.9.0-integration",
 	url = "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
 };
 
@@ -119,9 +121,17 @@ public Action drawPanel(int client, int first_item)
 	FormatEx(buffer, sizeof(buffer), "%T", "TankDamageMenu", client, GetConVarInt(FindConVar("vs_tank_damage")));
 	AddMenuItem(menu, "tank_damage", buffer);
 	FormatEx(buffer, sizeof(buffer), "%T", "SIWavesMenu", client); AddMenuItem(menu, "si", buffer);
-	FormatEx(buffer, sizeof(buffer), "%T", "SIDamageMenu", client, GetConVarInt(hDmgThreshold));
-	AddMenuItem(menu, "si_damage", buffer);
-	FormatEx(buffer, sizeof(buffer), "%T", "RatioDamageMenu", client); AddNamedToggleMenuItem(menu, "ratio_damage", buffer, GetConVarBool(hRatioDamage));
+	// Keep control/recovery rules together before the resource rewards.
+	if (CountHumanSurvivors() == 1 && GetCurrentProfile() == 1) {
+		FormatEx(buffer, sizeof(buffer), "%T", "SIDamageMenu", client, GetConVarInt(hDmgThreshold));
+		AddMenuItem(menu, "si_damage", buffer);
+		FormatEx(buffer, sizeof(buffer), "%T", "RatioDamageMenu", client); AddNamedToggleMenuItem(menu, "ratio_damage", buffer, GetConVarBool(hRatioDamage));
+	} else if (GetCurrentProfile() > 1) {
+		FormatEx(buffer, sizeof(buffer), "%T", "AutoWipeMenu", client);
+		AddNamedToggleMenuItem(menu, "autowipe", buffer, GetConVarBool(FindConVar("autowipe_enable")));
+		FormatEx(buffer, sizeof(buffer), "%T", "AutoWipeDamageMenu", client, GetConVarInt(FindConVar("autowipe_wipe_damage")));
+		AddMenuItem(menu, "autowipe_damage", buffer);
+	}
 	FormatEx(buffer, sizeof(buffer), "%T", "RehealthMenu", client); AddNamedToggleMenuItem(menu, "rehealth", buffer, GetConVarBool(hRehealth));
 	FormatEx(buffer, sizeof(buffer), "%T", "ReammoMenu", client); AddNamedToggleMenuItem(menu, "reammo", buffer, GetConVarBool(hReammo));
 	ConVar mobLimit = FindConVar("l4d2_heq_enabled");
@@ -163,6 +173,12 @@ public int MenuHandler(Handle menu, MenuAction action, int client, int param)
 			}
 			RequestGameplaySetting(client, Setting_RatioDamage, !GetConVarBool(hRatioDamage));
 			drawPanel(client, 0);
+		} else if (StrEqual(item, "autowipe")) {
+			RequestGameplaySetting(client, Setting_AutoWipe, !GetConVarBool(FindConVar("autowipe_enable")));
+			drawPanel(client, 0);
+		} else if (StrEqual(item, "autowipe_damage")) {
+			if (GetCurrentProfile() > 1) Menu_AutoWipeDamage(client);
+			else drawPanel(client, 0);
 		} else if (StrEqual(item, "rehealth")) {
 			if (!IsClientSurvivor(client, true)) {
 				drawPanel(client, 0);
@@ -192,6 +208,42 @@ public int MenuHandler(Handle menu, MenuAction action, int client, int param)
 		delete menu;
 	}
 	return 1;
+}
+
+int g_autoWipeDamages[] = {30, 40, 50, 100};
+
+void Menu_AutoWipeDamage(int client)
+{
+	Menu menu = new Menu(Menu_AutoWipeDamageHandler);
+	char title[96];
+	FormatEx(title, sizeof(title), "%T", "AutoWipeDamageMenu", client, GetConVarInt(FindConVar("autowipe_wipe_damage")));
+	menu.SetTitle(title);
+	menu.ExitBackButton = true;
+	int current = GetConVarInt(FindConVar("autowipe_wipe_damage"));
+	for (int i = 0; i < sizeof(g_autoWipeDamages); i++) {
+		char info[8], label[24];
+		IntToString(i, info, sizeof(info));
+		FormatEx(label, sizeof(label), "%s%d", current == g_autoWipeDamages[i] ? "✔" : "", g_autoWipeDamages[i]);
+		menu.AddItem(info, label);
+	}
+	menu.Display(client, MENU_DISPLAY_TIME);
+}
+
+public int Menu_AutoWipeDamageHandler(Menu menu, MenuAction action, int client, int param)
+{
+	if (action == MenuAction_End) {
+		delete menu;
+	} else if (action == MenuAction_Select) {
+		char info[8];
+		menu.GetItem(param, info, sizeof(info));
+		int index = StringToInt(info);
+		if (index >= 0 && index < sizeof(g_autoWipeDamages))
+			RequestGameplaySetting(client, Setting_AutoWipeDamage, g_autoWipeDamages[index]);
+		if (IsClientAndInGame(client)) drawPanel(client, 0);
+	} else if (action == MenuAction_Cancel && param == MenuCancel_ExitBack && IsClientAndInGame(client)) {
+		drawPanel(client, 0);
+	}
+	return 0;
 }
 
 int g_tankDamages[] = {24, 36, 48, 100};
@@ -247,6 +299,10 @@ public int Menu_TankDmgHandler(Handle menu, MenuAction action, int client, int p
 public void RequestGameplaySetting(int client, int target, int value)
 {
 	if ( !IsClientSurvivor(client, true) ) return;
+	// A displayed menu may outlive a player-count change.
+	if ((target == Setting_AutoWipe || target == Setting_AutoWipeDamage) && GetCurrentProfile() == 1) return;
+	if ((target == Setting_SIDamage || target == Setting_RatioDamage)
+		&& (GetCurrentProfile() != 1 || CountHumanSurvivors() != 1)) return;
 	if (CountHumanSurvivors() == 1) {
 		ApplyGameplaySetting(target, value, true, GetCurrentProfile());
 		return;
@@ -302,6 +358,12 @@ public void RequestGameplaySetting(int client, int target, int value)
 			}
 			case Setting_FiniteHordes: {
 				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteEnableFiniteHordes" : "VoteDisableFiniteHordes", client);
+			}
+			case Setting_AutoWipe: {
+				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteEnableAutoWipe" : "VoteDisableAutoWipe", client);
+			}
+			case Setting_AutoWipeDamage: {
+				FormatEx(sBuffer, sizeof(sBuffer), "%T", "VoteAutoWipeDamage", client, value);
 			}
 		}
 
@@ -370,6 +432,8 @@ public void GameplayVoteResultHandler(Handle vote, int num_votes, int num_client
 		case Setting_Reset: DisplayVotePassPhrase(vote, "VotePassResetAll");
 		case Setting_SIDamage: DisplayVotePassPhrase(vote, "VotePassSIDamage");
 		case Setting_FiniteHordes: DisplayVotePassPhrase(vote, "VotePassFiniteHordes");
+		case Setting_AutoWipe: DisplayVotePassPhrase(vote, "VotePassAutoWipe");
+		case Setting_AutoWipeDamage: DisplayVotePassPhrase(vote, "VotePassAutoWipeDamage");
 	}
 	ApplyGameplaySetting(target, value, false, slot);
 }
@@ -686,6 +750,8 @@ ConVar GetChallengeSetting(int target)
 		case Setting_KillAmmo: return hReammo;
 		case Setting_SIDamage: return hDmgThreshold;
 		case Setting_FiniteHordes: return FindConVar("l4d2_heq_enabled");
+		case Setting_AutoWipe: return FindConVar("autowipe_enable");
+		case Setting_AutoWipeDamage: return FindConVar("autowipe_wipe_damage");
 	}
 	return null;
 }
@@ -760,7 +826,8 @@ void PrintOverrideDetails(int client)
 bool IsBooleanChallengeTarget(int target)
 {
 	return target == Setting_TankBhop || target == Setting_TankRock || target == Setting_ExtraPills || target == Setting_RemoveMapPills
-		|| target == Setting_RatioDamage || target == Setting_KillHealth || target == Setting_KillAmmo || target == Setting_FiniteHordes;
+		|| target == Setting_RatioDamage || target == Setting_KillHealth || target == Setting_KillAmmo || target == Setting_FiniteHordes
+		|| target == Setting_AutoWipe;
 }
 
 void GetChallengePhrase(int target, char[] phrase, int maxlen)
@@ -777,6 +844,8 @@ void GetChallengePhrase(int target, char[] phrase, int maxlen)
 		case Setting_KillAmmo: strcopy(phrase, maxlen, "InfoReammo");
 		case Setting_SIDamage: strcopy(phrase, maxlen, "InfoSIDamage");
 		case Setting_FiniteHordes: strcopy(phrase, maxlen, "InfoMobLimit");
+		case Setting_AutoWipe: strcopy(phrase, maxlen, "InfoAutoWipe");
+		case Setting_AutoWipeDamage: strcopy(phrase, maxlen, "InfoAutoWipeDamage");
 		default: strcopy(phrase, maxlen, "InfoNoOverrides");
 	}
 }

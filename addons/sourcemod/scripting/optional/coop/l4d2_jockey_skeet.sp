@@ -1,0 +1,177 @@
+#pragma semicolon 1
+#pragma newdecls required
+
+#include <sourcemod>
+#include <sdkhooks>
+#include <coop_skill_detect>
+
+#define Z_JOCKEY 5
+#define TEAM_SURVIVOR 2
+#define TEAM_INFECTED 3
+
+ConVar
+	jockey_skeet_enable,
+	z_leap_damage_interrupt,
+	z_jockey_health;
+
+float
+	jockeySkeetDmg,
+	jockeyHealth,
+	damageWindowEnd[MAXPLAYERS + 1],
+	inflictedDamage[MAXPLAYERS + 1][MAXPLAYERS + 1];
+
+bool
+	lateLoad;
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+	lateLoad = late;
+	return APLRes_Success;
+}
+
+public Plugin myinfo =
+{
+	name = "L4D2 Jockey Skeet",
+	author = "Visor, A1m`",
+	description = "Shotgun jockey skeets with dynamic enable and damage settings.",
+	version = "1.6.0",
+	url = "https://github.com/SirPlease/L4D2-Competitive-Rework"
+};
+
+public void OnPluginStart()
+{
+	jockey_skeet_enable = CreateConVar("jockey_skeet_enable", "1", "Enable shotgun jockey skeets.", _, true, 0.0, true, 1.0);
+	z_leap_damage_interrupt = CreateConVar("z_leap_damage_interrupt", "195.0", "Taking this much damage interrupts a leap attempt", _, true, 10.0, true, 325.0);
+	z_jockey_health = FindConVar("z_jockey_health");
+	jockey_skeet_enable.AddChangeHook(OnSettingsChanged);
+	z_leap_damage_interrupt.AddChangeHook(OnSettingsChanged);
+	z_jockey_health.AddChangeHook(OnSettingsChanged);
+	HookEvent("player_spawn", OnPlayerSpawn);
+	OnConfigsExecuted();
+
+	if (lateLoad) {
+		for (int i = 1; i <= MaxClients; i++) {
+			if (IsClientInGame(i)) {
+				OnClientPutInServer(i);
+			}
+		}
+	}
+}
+
+public void OnConfigsExecuted()
+{
+	jockeySkeetDmg = z_leap_damage_interrupt.FloatValue;
+	jockeyHealth = z_jockey_health.FloatValue;
+	for (int i = 1; i <= MaxClients; i++) {
+		ResetDamageCounter(i);
+	}
+}
+
+public void OnSettingsChanged(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+	OnConfigsExecuted();
+}
+
+public void OnPlayerSpawn(Event event, const char[] name, bool dontBroadcast)
+{
+	ResetClientDamage(GetClientOfUserId(event.GetInt("userid")));
+}
+
+public void OnClientPutInServer(int client)
+{
+	ResetClientDamage(client);
+	SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
+}
+
+public void OnClientDisconnect(int client)
+{
+	ResetClientDamage(client);
+	SDKUnhook(client, SDKHook_OnTakeDamage, OnTakeDamage);
+}
+
+Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon,
+							float damageForce[3], float damagePosition[3], int damagecustom)
+{
+	if (!jockey_skeet_enable.BoolValue || !IsJockey(victim) || !IsSurvivor(attacker) || IsFakeClient(attacker) || !IsValidEdict(weapon)) {
+		return Plugin_Continue;
+	}
+
+	if (!HasJockeyTarget(victim) && IsAttachable(victim) && IsShotgun(weapon)) {
+		// Preserve the short pellet window without timers surviving a profile/slot change.
+		float now = GetGameTime();
+		if (now >= damageWindowEnd[victim]) {
+			ResetDamageCounter(victim);
+			damageWindowEnd[victim] = now + 0.1;
+		}
+		inflictedDamage[victim][attacker] += damage;
+		if (inflictedDamage[victim][attacker] >= jockeySkeetDmg) {
+			Skill_ReportJockeySkeet(attacker, victim);
+
+			damage = jockeyHealth;
+			// Existing jockeys retain their spawn health when the population changes.
+			if (damage < float(GetClientHealth(victim))) {
+				damage = float(GetClientHealth(victim));
+			}
+			return Plugin_Changed;
+		}
+	}
+
+	return Plugin_Continue;
+}
+
+void ResetDamageCounter(int jockey)
+{
+	damageWindowEnd[jockey] = 0.0;
+	for (int i = 1; i <= MaxClients; i++) {
+		inflictedDamage[jockey][i] = 0.0;
+	}
+}
+
+void ResetClientDamage(int client)
+{
+	if (client < 1 || client > MaxClients) return;
+	ResetDamageCounter(client);
+	for (int i = 1; i <= MaxClients; i++) {
+		inflictedDamage[i][client] = 0.0;
+	}
+}
+
+bool IsSurvivor(int client)
+{
+	return (client > 0
+		&& client <= MaxClients
+		&& IsClientInGame(client)
+		&& GetClientTeam(client) == TEAM_SURVIVOR);
+}
+
+bool IsJockey(int client)
+{
+	return (client > 0
+		&& client <= MaxClients
+		&& IsClientInGame(client)
+		&& GetClientTeam(client) == TEAM_INFECTED
+		&& GetEntProp(client, Prop_Send, "m_zombieClass") == Z_JOCKEY
+		&& !GetEntProp(client, Prop_Send, "m_isGhost", 1));
+}
+
+bool HasJockeyTarget(int infected)
+{
+	int client = GetEntPropEnt(infected, Prop_Send, "m_jockeyVictim");
+
+	return (IsSurvivor(client) && IsPlayerAlive(client));
+}
+
+// A function conveniently named & implemented after the Jockey's ability of
+// capping Survivors without actually using the ability itself.
+bool IsAttachable(int jockey)
+{
+	return (!(GetEntityFlags(jockey) & FL_ONGROUND));
+}
+
+bool IsShotgun(int weapon)
+{
+	char classname[64];
+	GetEdictClassname(weapon, classname, sizeof(classname));
+	return (StrEqual(classname, "weapon_pumpshotgun") || StrEqual(classname, "weapon_shotgun_chrome")
+		/*|| StrEqual(classname, "weapon_autoshotgun") || StrEqual(classname, "weapon_shotgun_spas")*/); //visor code need?
+}
