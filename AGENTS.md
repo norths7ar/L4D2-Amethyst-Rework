@@ -11,7 +11,7 @@
 
 * `README.md`: project intent, mode positioning, and current AstRedux implementation.
 * `docs/ROADMAP.md`: planned work; `docs/CHANGELOG.md`: completed repository changes and version history.
-* `docs/architecture.md`: configuration layers, runtime ownership, and where to make gameplay/config changes.
+* `docs/architecture.md`: 只记录框架级别的产品设计思路，不负责记录任何具体模式的决策、路径等。
 * `docs/server-operations.md`: deployment and server operations.
 * `docs/plugin-sources.md`: uncertain SMX provenance and rebuild status.
 * Actual cfgs, SourcePawn, VScript, Stripper, and plugin-load files: runtime behavior.
@@ -56,7 +56,7 @@ Keep each document in its own lane. AGENTS contains durable Agent maintenance ru
 
 * When the maintainer asks for research, inspection, comparison, or report-only work, do not edit files or implement fixes.
 * Commit only when explicitly requested or approved by the maintainer; completing work or passing checks does not authorize a commit. Push only when explicitly requested or approved, and deploy only when separately requested.
-* `origin` is the primary GitHub remote and `gitea` is the Gitea backup; when pushing, push the requested branches or tags to both and report any failure; commit-only requests do not authorize pushing.
+* `gitea` is the primary remote and `origin` is the GitHub backup. Local `main` tracks `gitea/main`, and the default push remote is `gitea`. When pushing, push the requested branches or tags to both and report any failure; commit-only requests do not authorize pushing.
 * Preserve unrelated and user-created work; untracked files are not disposable.
 
 * 随代码变更及时更新 `docs/ROADMAP.md` 和 `docs/CHANGELOG.md`：前者记录后续计划，完成事项归入后者的未发布部分；两者记录仓库状态，不作为试玩验收清单。

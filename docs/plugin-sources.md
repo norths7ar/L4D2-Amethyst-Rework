@@ -14,7 +14,6 @@
 
 | 插件 | 状态 |
 | --- | --- |
-| `HunterSkeetSound.smx` | 有源码，未确认同构建 |
 | `l4d2_bot_spit_ignite_gascan.smx` | 有源码，未确认同构建 |
 | `l4d2_drop.smx` | 有源码，未确认同构建 |
 | `l4d2_votetospec.smx` | 有源码，未确认同构建 |
@@ -23,7 +22,6 @@
 | `l4d_reload_fix.smx` | 有源码，未确认同构建 |
 | `musical_jockeys_coop.smx` | 有源码，未确认同构建 |
 | `enhancedsprays.smx` | 缺源码 |
-| `healer_witch.smx` | 有源码，未确认同构建 |
 | `l4d_swimming.smx` | 有源码，未确认同构建 |
 | `l4d2_si_ladder_booster.smx` | 有源码，未确认同构建 |
 | `l4d2_tank_facts_announce.smx` | 有源码，未确认同构建 |
