@@ -61,6 +61,12 @@ sudo l4d2-content-apply
 
 命令按文件大小和修改时间缓存成功校验结果（`/var/cache/l4d2/vpk-campaigns.json`），仅完整校验新增或变化的 VPK；分卷任一变化会重新检查整组。汇总全部战役检查冲突，并要求第三方战役提供 AstRedux 的 Versus 章节定义；随后合并并原子更新 `addons/sourcemod/configs/missioncycle.txt`，再重启一次。02 不直接覆盖云服清单：官图段使用仓库版本；三方图按“仓库顺序及译名、仓库外历史顺序及名字、本次新增地图”排列。新增地图被仓库收录后移到仓库指定位置，不重复出现；删除 VPK 则移除条目。直接内容应用使用相同规则，仓库来源为 `CHECKOUT_ROOT`（默认 `/home/l4d2/integration`）；`!mapvote`、`!nextmap` 使用每个战役的第一关，`!chaptervote` 由 Mission Cache 读取当前战役的全部章节。VPK 损坏或任务定义错误时跳过该包；ID/地图冲突时跳过涉及的战役，列出原因，其余正常战役照常生成清单并重启。失败包不缓存为成功结果，修复后下次重新扫描；旧清单中对应的失败战役也不会保留为可选地图。
 
+## 客户端教学过滤
+
+AstRedux 加载 `optional/coop/instructor_filter_support.smx`，只解除 `scripts/instructor_lessons.txt` 的逐文件一致性要求，保持 `sv_consistency` 和原有白名单配置。客户端可选安装教学过滤 VPK；未安装的玩家继续使用原版教学，无需与其他玩家统一脚本。客户端仍需开启游戏指导，必要时在附加内容加载完成后执行 `gameinstructor_reload_lessons`。
+
+该例外允许这个文件的任意修改，并非仅认可某一份过滤包。Instructor 脚本可以改变提示目标与可见性，因此仅在允许此类客户端自定义的模式加载；对抗模式不加载。卸载插件会恢复当前地图原始校验数据，新地图按当前加载插件重新设置。不要把客户端过滤脚本复制到服务端来要求所有玩家使用相同版本。
+
 ## 重启
 
 有人急着玩、无需等待空服时：
