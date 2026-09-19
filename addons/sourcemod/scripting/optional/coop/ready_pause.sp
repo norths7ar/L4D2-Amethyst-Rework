@@ -16,6 +16,13 @@
 
 bool g_readyPhase;
 bool g_forceStarted;
+bool g_startAreaUnavailable;
+bool g_returnPending[MAXPLAYERS + 1];
+bool g_returnAttempted[MAXPLAYERS + 1];
+bool g_hasStartPosition[MAXPLAYERS + 1];
+float g_startPosition[MAXPLAYERS + 1][3];
+float g_nextStartAreaNotice;
+Handle g_boundaryTimer;
 int g_loadingTimeout[MAXPLAYERS + 1];
 int g_countdownRemaining;
 bool g_godMode;
@@ -70,7 +77,7 @@ public Plugin myinfo =
 	name = "Coop ready and pause",
 	author = "CanadaRox, 海洋空氣, norths7ar",
 	description = "Per-player readiness, loading gate and start/resume countdowns",
-	version = "1.1.1"
+	version = "1.1.2"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -156,6 +163,7 @@ public void OnMapStart()
 	CancelTimer(g_countdownTimer);
 	CancelTimer(g_panelTimer);
 	CancelTimer(g_readyPanelCommandTimer);
+	CancelTimer(g_boundaryTimer);
 	g_footer.Clear();
 	for (int client = 1; client <= MaxClients; client++)
 	{
@@ -180,12 +188,14 @@ public void OnMapEnd()
 	CancelTimer(g_countdownTimer);
 	CancelTimer(g_panelTimer);
 	CancelTimer(g_readyPanelCommandTimer);
+	CancelTimer(g_boundaryTimer);
 	ResetPauseState(true);
 	g_readyPhase = false;
 }
 
 public void OnPluginEnd()
 {
+	CancelTimer(g_boundaryTimer);
 	ToggleVoteCommandListener(false);
 	ReleaseDirector();
 	SetSurvivorsFrozen(false);
@@ -213,6 +223,9 @@ public void OnPauseEnabledChanged(ConVar convar, const char[] oldValue, const ch
 public void OnClientPutInServer(int client)
 {
 	g_frozenByReady[client] = false;
+	g_returnPending[client] = false;
+	g_returnAttempted[client] = false;
+	g_hasStartPosition[client] = false;
 	g_loadingTimeout[client] = 0;
 	g_panelHidden[client] = false;
 	g_playerReady[client] = false;
@@ -238,9 +251,10 @@ public Action L4D_OnFirstSurvivorLeftSafeArea(int client)
 {
 	if (!g_readyPhase) return Plugin_Continue;
 	if (!g_readyEnabled.BoolValue) return Plugin_Continue;
-	CreateTimer(0.1, TimerHoldDirector, _, TIMER_FLAG_NO_MAPCHANGE);
-	ReturnToSaferoom(client);
-	if (client > 0 && IsClientInGame(client)) EmitSoundToClient(client, "ui/beep_error01.wav");
+	// Do not teleport or issue client commands inside the Director detour.
+	// A failed boundary can fire again before the original call has unwound.
+	if (!g_startAreaUnavailable && client > 0 && client <= MaxClients)
+		g_returnPending[client] = true;
 	return Plugin_Handled;
 }
 
@@ -261,6 +275,7 @@ void StartRound()
 	CancelTimer(g_loadingTimer);
 	CancelTimer(g_panelTimer);
 	CancelTimer(g_readyPanelCommandTimer);
+	CancelTimer(g_boundaryTimer);
 	SetSurvivorsFrozen(false);
 	ReleaseDirector();
 	InvokeForward(g_forwardLive);
@@ -282,6 +297,7 @@ public Action EventRoundBoundary(Event event, const char[] name, bool dontBroadc
 	CancelTimer(g_countdownTimer);
 	CancelTimer(g_panelTimer);
 	CancelTimer(g_readyPanelCommandTimer);
+	CancelTimer(g_boundaryTimer);
 	g_readyPhase = false;
 	g_godMode = false;
 	return Plugin_Continue;
@@ -292,6 +308,8 @@ void BeginReadyPhase()
 	// Keep the pre-live lifecycle active even when the loading gate is disabled.
 	// Consumers still receive OnRoundIsLive on the first real saferoom exit.
 	g_readyPhase = true;
+	g_startAreaUnavailable = false;
+	g_nextStartAreaNotice = 0.0;
 	g_forceStarted = false;
 	g_godMode = g_readyEnabled.BoolValue;
 	g_countdownRemaining = 0;
@@ -300,12 +318,16 @@ void BeginReadyPhase()
 	CancelTimer(g_countdownTimer);
 	CancelTimer(g_panelTimer);
 	CancelTimer(g_readyPanelCommandTimer);
+	CancelTimer(g_boundaryTimer);
 	SetSurvivorsFrozen(false);
 	for (int client = 1; client <= MaxClients; client++)
 	{
 		g_loadingTimeout[client] = 0;
 		g_panelHidden[client] = false;
 		g_playerReady[client] = false;
+		g_returnPending[client] = false;
+		g_returnAttempted[client] = false;
+		g_hasStartPosition[client] = false;
 	}
 	if (!g_readyEnabled.BoolValue) { ToggleVoteCommandListener(false); ReleaseDirector(); return; }
 	ToggleVoteCommandListener(true);
@@ -314,6 +336,7 @@ void BeginReadyPhase()
 	InvokeForward(g_forwardInitiatePre);
 	g_footer.Clear();
 	InvokeForward(g_forwardInitiate);
+	g_boundaryTimer = CreateTimer(0.1, TimerReadyBoundary, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 	g_loadingTimer = CreateTimer(1.0, TimerLoading, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 	InitReadyPanel();
 	RenderPanel();
@@ -381,6 +404,18 @@ void SetReadyFrozen(int client, bool frozen)
 	}
 }
 
+public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon)
+{
+	if (!g_readyPhase || !g_readyEnabled.BoolValue || !g_startAreaUnavailable
+		|| !IsClientInGame(client) || GetClientTeam(client) != TEAM_SURVIVORS || !IsPlayerAlive(client)) return Plugin_Continue;
+	// Suppress voluntary movement, not gravity, moving platforms or map teleports.
+	vel[0] = 0.0;
+	vel[1] = 0.0;
+	vel[2] = 0.0;
+	buttons &= ~(IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT | IN_JUMP);
+	return Plugin_Changed;
+}
+
 public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float vel[3], const float angles[3], int weapon, int subtype, int cmdnum, int tickcount, int seed, const int mouse[2])
 {
 	// readyup.sp: activity only controls the panel's [AFK] marker.
@@ -398,7 +433,7 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
 	}
 	// Map intros can undo the initial freeze (see competitive readyup.sp).
 	if (g_countdownTimer != null && IsClientInGame(client) && GetClientTeam(client) == TEAM_SURVIVORS)
-		if (g_readyPhase) SetReadyFrozen(client, true);
+		if (g_readyPhase && !g_startAreaUnavailable) SetReadyFrozen(client, true);
 }
 
 public Action EventPlayerTeam(Event event, const char[] name, bool dontBroadcast)
@@ -461,7 +496,7 @@ void StartCountdown()
 		InvokeForward(g_forwardCountdownPre);
 		// Coop starts where survivors readied up; returning is only needed
 		// for pre-live boundary enforcement or an explicit !return request.
-		SetSurvivorsFrozen(true);
+		if (!g_startAreaUnavailable) SetSurvivorsFrozen(true);
 		InvokeForward(g_forwardCountdown);
 	}
 	if (g_countdownRemaining <= 0) FinishCountdown();
@@ -529,52 +564,102 @@ void CancelCountdown(int client, const char[] reason)
 }
 void ReturnToSaferoom(int client)
 {
-	if (client <= 0 || !IsClientInGame(client)) return;
-	float previous[3], destination[3];
-	GetClientAbsOrigin(client, previous);
-	// Do not replace an already valid start-area position with the engine's
-	// map-dependent warp point (which may intersect custom-map geometry).
-	if (L4D_IsPositionInFirstCheckpoint(previous) && IsReturnPositionClear(client, previous)) return;
-	int flags = GetCommandFlags("warp_to_start_area");
-	SetCommandFlags("warp_to_start_area", flags & ~FCVAR_CHEAT);
-	FakeClientCommand(client, "warp_to_start_area");
-	SetCommandFlags("warp_to_start_area", flags);
-	GetClientAbsOrigin(client, destination);
-	if (!IsReturnPositionClear(client, destination))
+	if (!g_startAreaUnavailable && client > 0 && client <= MaxClients)
+		g_returnPending[client] = true;
+}
+
+bool IsReadySurvivor(int client)
+{
+	return IsClientInGame(client) && GetClientTeam(client) == TEAM_SURVIVORS && IsPlayerAlive(client);
+}
+
+bool IsValidStartPosition(int client, float position[3])
+{
+	return L4D_IsPositionInFirstCheckpoint(position) && IsReturnPositionClear(client, position);
+}
+
+bool FindReadyReturnPosition(int client, float position[3])
+{
+	// Prefer this survivor's observed position; never guess an engine spawn point.
+	if (g_hasStartPosition[client] && IsValidStartPosition(client, g_startPosition[client]))
 	{
-		bool found;
-		float candidate[3];
-		for (float lift = 4.0; lift <= 32.0; lift += 4.0)
+		position = g_startPosition[client];
+		return true;
+	}
+	for (int other = 1; other <= MaxClients; other++)
+	{
+		if (!IsReadySurvivor(other) || !g_hasStartPosition[other]) continue;
+		if (!IsValidStartPosition(client, g_startPosition[other])) continue;
+		position = g_startPosition[other];
+		return true;
+	}
+	return false;
+}
+
+void RestrictReadyMovement()
+{
+	if (g_startAreaUnavailable) return;
+	g_startAreaUnavailable = true;
+	SetSurvivorsFrozen(false);
+	LogMessage("Starting checkpoint unavailable; restricting movement until ready");
+	if (g_countdownRemaining <= 0) PrintToChatAll("%t", "ReadyStartAreaUnavailable");
+	g_nextStartAreaNotice = GetEngineTime() + 30.0;
+}
+
+public Action TimerReadyBoundary(Handle timer)
+{
+	if (!g_readyPhase || !g_readyEnabled.BoolValue)
+	{
+		g_boundaryTimer = null;
+		return Plugin_Stop;
+	}
+	if (g_startAreaUnavailable)
+	{
+		if (g_countdownRemaining > 0) g_nextStartAreaNotice = GetEngineTime() + 30.0;
+		else if (GetEngineTime() >= g_nextStartAreaNotice)
 		{
-			candidate = destination;
-			candidate[2] += lift;
-			if (!IsReturnPositionClear(client, candidate) || !L4D_IsPositionInFirstCheckpoint(candidate)) continue;
-			destination = candidate;
-			found = true;
+			PrintToChatAll("%t", "ReadyStartAreaUnavailable");
+			g_nextStartAreaNotice = GetEngineTime() + 30.0;
+		}
+		return Plugin_Continue;
+	}
+
+	// Observe actual grounded starting positions before resolving any exits.
+	// Airborne/script-controlled intros alone are not evidence of a bad checkpoint.
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (!IsReadySurvivor(client) || !(GetEntityFlags(client) & FL_ONGROUND)) continue;
+		float position[3];
+		GetClientAbsOrigin(client, position);
+		if (!IsValidStartPosition(client, position)) continue;
+		if (!g_hasStartPosition[client]) g_startPosition[client] = position;
+		g_hasStartPosition[client] = true;
+		g_returnPending[client] = false;
+		g_returnAttempted[client] = false;
+	}
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (!g_returnPending[client] || !IsReadySurvivor(client)) continue;
+		// Allow map-controlled placement/falling to finish when no anchor exists.
+		float destination[3];
+		bool found = FindReadyReturnPosition(client, destination);
+		if (!found && (!(GetEntityFlags(client) & FL_ONGROUND) || GetEntityMoveType(client) != MOVETYPE_WALK)) continue;
+		if (!found || g_returnAttempted[client])
+		{
+			RestrictReadyMovement();
 			break;
 		}
-		if (!found)
+		g_returnPending[client] = false;
+		g_returnAttempted[client] = true;
+		float velocity[3];
+		TeleportEntity(client, destination, NULL_VECTOR, velocity);
+		if (IsReadySurvivor(client))
 		{
-			// A valid teammate location is preferable to forcing a bad warp.
-			for (int other = 1; other <= MaxClients; other++)
-			{
-				if (other == client || !IsClientInGame(other) || GetClientTeam(other) != TEAM_SURVIVORS || !IsPlayerAlive(other)) continue;
-				GetClientAbsOrigin(other, candidate);
-				if (!L4D_IsPositionInFirstCheckpoint(candidate) || !IsReturnPositionClear(client, candidate)) continue;
-				destination = candidate;
-				found = true;
-				break;
-			}
-		}
-		if (!found)
-		{
-			destination = previous;
-			LogError("No clear saferoom return position for %N; preserving previous position", client);
+			SetEntPropFloat(client, Prop_Send, "m_flFallVelocity", 0.0);
+			EmitSoundToClient(client, "ui/beep_error01.wav");
 		}
 	}
-	float velocity[3];
-	TeleportEntity(client, destination, NULL_VECTOR, velocity);
-	SetEntPropFloat(client, Prop_Send, "m_flFallVelocity", 0.0);
+	return Plugin_Continue;
 }
 
 bool IsReturnPositionClear(int client, const float position[3])
