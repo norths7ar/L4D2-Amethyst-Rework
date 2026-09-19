@@ -77,7 +77,7 @@ public Plugin myinfo =
 	name = "Coop ready and pause",
 	author = "CanadaRox, 海洋空氣, norths7ar",
 	description = "Per-player readiness, loading gate and start/resume countdowns",
-	version = "1.1.2"
+	version = "1.1.3"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -494,8 +494,20 @@ void StartCountdown()
 	if (g_readyPhase)
 	{
 		InvokeForward(g_forwardCountdownPre);
-		// Coop starts where survivors readied up; returning is only needed
-		// for pre-live boundary enforcement or an explicit !return request.
+		// Return before freezing, using the same observed and checked anchors as
+		// !return / boundary enforcement, never warp_to_start_area spawn guesses.
+		if (!g_startAreaUnavailable)
+		{
+			for (int client = 1; client <= MaxClients; client++)
+			{
+				if (!IsReadySurvivor(client)) continue;
+				if (!MoveToReadyStart(client, false))
+				{
+					RestrictReadyMovement();
+					break;
+				}
+			}
+		}
 		if (!g_startAreaUnavailable) SetSurvivorsFrozen(true);
 		InvokeForward(g_forwardCountdown);
 	}
@@ -634,7 +646,6 @@ public Action TimerReadyBoundary(Handle timer)
 		if (!IsValidStartPosition(client, position)) continue;
 		if (!g_hasStartPosition[client]) g_startPosition[client] = position;
 		g_hasStartPosition[client] = true;
-		g_returnPending[client] = false;
 		g_returnAttempted[client] = false;
 	}
 	for (int client = 1; client <= MaxClients; client++)
@@ -649,17 +660,21 @@ public Action TimerReadyBoundary(Handle timer)
 			RestrictReadyMovement();
 			break;
 		}
-		g_returnPending[client] = false;
-		g_returnAttempted[client] = true;
-		float velocity[3];
-		TeleportEntity(client, destination, NULL_VECTOR, velocity);
-		if (IsReadySurvivor(client))
-		{
-			SetEntPropFloat(client, Prop_Send, "m_flFallVelocity", 0.0);
-			EmitSoundToClient(client, "ui/beep_error01.wav");
-		}
+		MoveToReadyStart(client, true);
 	}
 	return Plugin_Continue;
+}
+
+bool MoveToReadyStart(int client, bool notify)
+{
+	float destination[3], velocity[3];
+	if (!FindReadyReturnPosition(client, destination)) return false;
+	g_returnPending[client] = false;
+	g_returnAttempted[client] = true;
+	TeleportEntity(client, destination, NULL_VECTOR, velocity);
+	SetEntPropFloat(client, Prop_Send, "m_flFallVelocity", 0.0);
+	if (notify) EmitSoundToClient(client, "ui/beep_error01.wav");
+	return true;
 }
 
 bool IsReturnPositionClear(int client, const float position[3])
