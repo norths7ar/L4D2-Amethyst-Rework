@@ -5,28 +5,30 @@
 #include <coop_skill_detect>
 
 // Balance policy is centralized here; only feature switches are exposed to !ast.
-#define SI_BASE_HEALTH 1
-#define LOW_HEALTH_THRESHOLD 30
+#define SI_BASE_HEALTH 2
+#define LOW_HEALTH_THRESHOLD 40
 #define CRITICAL_HEALTH_THRESHOLD 20
-#define LOW_HEALTH_BONUS 1
-#define CRITICAL_HEALTH_BONUS 2
+#define LOW_HEALTH_BONUS 2
+#define CRITICAL_HEALTH_BONUS 3
 #define SI_HEALTH_PER_STAR 1
-#define WITCH_BASE_HEALTH 3
-#define WITCH_HEALTH_PER_STAR 3
+#define WITCH_BASE_HEALTH 5
+#define WITCH_CROWN_HEALTH 8
+#define WITCH_DRAW_HEALTH 15
 #define SMG_AMMO_REWARD 20
 #define SHOTGUN_AMMO_REWARD 4
 #define SNIPER_AMMO_REWARD 3
-ConVar g_HealthEnabled, g_AmmoEnabled, g_Decay;
+ConVar g_HealthEnabled, g_WitchHealthEnabled, g_AmmoEnabled, g_Decay;
 public Plugin myinfo =
 {
     name = "Coop Kill Rewards",
     author = "海洋空氣, norths7ar",
     description = "Settles health and capped reserve ammo from unified skill events.",
-    version = "2.0.0"
+    version = "2.1.0"
 };
 public void OnPluginStart()
 {
     g_HealthEnabled = CreateConVar("kill_rewards_health_enable", "0", "Enable kill healing rewards.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_WitchHealthEnabled = CreateConVar("kill_rewards_witch_health_enable", "1", "Enable Witch healing independently of special infected healing.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_AmmoEnabled = CreateConVar("kill_rewards_ammo_enable", "0", "Enable kill ammo rewards.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_Decay = FindConVar("pain_pills_decay_rate");
 }
@@ -34,10 +36,14 @@ public void OnSkillKillResolved(int survivor, int victim, CoopSkill skill, int s
     int zombieClass, const char[] weapon, int healthBefore)
 {
     if (!CanReceive(survivor) || zombieClass < 1 || zombieClass > 7) return;
-    if (g_HealthEnabled.BoolValue)
+    if (zombieClass == 7 ? g_WitchHealthEnabled.BoolValue : g_HealthEnabled.BoolValue)
     {
         int amount;
-        if (zombieClass == 7) amount = WITCH_BASE_HEALTH + stars * WITCH_HEALTH_PER_STAR;
+        if (zombieClass == 7)
+        {
+            amount = skill == Skill_WitchDraw ? WITCH_DRAW_HEALTH
+                : (skill == Skill_WitchCrown ? WITCH_CROWN_HEALTH : WITCH_BASE_HEALTH);
+        }
         else
         {
             amount = SI_BASE_HEALTH + stars * SI_HEALTH_PER_STAR;

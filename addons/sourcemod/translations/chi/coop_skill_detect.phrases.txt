@@ -293,12 +293,12 @@
     }
     "CoopTeam"
     {
-        "#format" "{1:N},{2:s},{3:d},{4:d},{5:s}"
+        "#format" "{1:N},{2:s},{3:d},{4:d},{5:s},{6:s}"
         "chi" "{olive}{1}{default} 协同空爆了 {olive}{2}{default}，{blue}{4} 枪 / {3} 伤害{default}。协助：{olive}{5}{default}"
     }
     "CoopHunter"
     {
-        "#format" "{1:N},{2:s},{3:d}"
+        "#format" "{1:N},{2:s},{3:d},{4:s}"
         "chi" "{olive}{1}{default} 用 {blue}{3} 枪{default}空爆了 {olive}{2}{default}"
     }
     "CoopFullLevel"
@@ -308,13 +308,13 @@
     }
     "CoopLevel"
     {
-        "#format" "{1:N}"
-        "chi" "{olive}{1}{default} 近战截杀了冲锋中的牛"
+        "#format" "{1:N},{2:d}"
+        "chi" "{olive}{1}{default} {blue}近战击倒{default}了 Charger（{blue}{2} 伤害{default}）"
     }
     "CoopSelf"
     {
         "#format" "{1:N}"
-        "chi" "{olive}{1}{default} 击杀舌头完成了自救"
+        "chi" "{olive}{1}{default} 从 Smoker 的舌头中{blue}成功自救{default} {blue}（击杀自救）{default}"
     }
     "CoopJockey"
     {
@@ -361,5 +361,15 @@
     {
         "#format" "{1:N},{2:s},{3:d}"
         "chi" "{olive}{1}{default} 冲锋枪 {blue}{3} 发{default}空爆了 {olive}{2}{default}"
+    }
+    "CoopGrenade"
+    {
+        "#format" "{1:N},{2:s}"
+        "chi" "{olive}{1}{default} {blue}榴弹空爆{default}了 {olive}{2}{default}。"
+    }
+    "CoopPop"
+    {
+        "#format" "{1:N}"
+        "chi" "{olive}{1}{default} 打爆了一只 Boomer。"
     }
 }

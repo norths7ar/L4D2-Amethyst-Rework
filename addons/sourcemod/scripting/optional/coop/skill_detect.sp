@@ -12,7 +12,7 @@
 #include <sdktools>
 #include <sourcemod>
 
-#define PLUGIN_VERSION "2.0.0"
+#define PLUGIN_VERSION "2.1.0"
 
 #define SHOTGUN_BLAST_TIME	 0.1
 #define POUNCE_CHECK_TIME	 0.1

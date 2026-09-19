@@ -13,7 +13,7 @@ public Plugin myinfo =
     name = "HunterSkeetSound",
     author = "norths7ar",
     description = "Hunter and Jockey skeet sound from resolved skill events.",
-    version = "2.0.0"
+    version = "2.1.0"
 };
 public void OnMapStart()
 {
@@ -22,7 +22,7 @@ public void OnMapStart()
 public void OnSkillKillResolved(int survivor, int victim, CoopSkill skill, int stars,
     int zombieClass, const char[] weapon, int healthBefore)
 {
-    bool hunter = skill >= Skill_HunterSolo && skill <= Skill_HunterSmg;
+    bool hunter = (skill >= Skill_HunterSolo && skill <= Skill_HunterSmg) || skill == Skill_HunterGrenade;
     if (!hunter && skill != Skill_JockeySkeet) return;
     if (survivor > 0 && survivor <= MaxClients && IsClientInGame(survivor))
         EmitSoundToClient(survivor, "ui/bigreward.wav", survivor);

@@ -293,13 +293,13 @@
     }
     "CoopTeam"
     {
-        "#format" "{1:N},{2:s},{3:d},{4:d},{5:s}"
-        "en" "{olive}{1}{default} teamskeeted {olive}{2}{default} for {blue}{3} damage{default} in {blue}{4} shots{default}. Assisted by: {olive}{5}{default}"
+        "#format" "{1:N},{2:s},{3:d},{4:d},{5:s},{6:s}"
+        "en" "{olive}{1}{default} teamskeeted {olive}{2}{default} for {blue}{3} damage{default} in {blue}{4} shot{6}{default}. Assisted by: {olive}{5}{default}"
     }
     "CoopHunter"
     {
-        "#format" "{1:N},{2:s},{3:d}"
-        "en" "{olive}{1}{default} skeeted {olive}{2}{default} in {blue}{3} shot(s){default}"
+        "#format" "{1:N},{2:s},{3:d},{4:s}"
+        "en" "{olive}{1}{default} skeeted {olive}{2}{default} in {blue}{3} shot{4}{default}"
     }
     "CoopFullLevel"
     {
@@ -308,13 +308,13 @@
     }
     "CoopLevel"
     {
-        "#format" "{1:N}"
-        "en" "{olive}{1}{default} melee-leveled a charging Charger"
+        "#format" "{1:N},{2:d}"
+        "en" "{olive}{1}{default} {blue}chip-leveled{default} a charger ({blue}{2} dmg{default})"
     }
     "CoopSelf"
     {
         "#format" "{1:N}"
-        "en" "{olive}{1}{default} killed their Smoker and self-cleared"
+        "en" "{olive}{1}{default} {blue}self-cleared{default} from a Smoker's tongue {blue}by killing it{default}"
     }
     "CoopJockey"
     {
@@ -345,12 +345,12 @@
     "CoopMagnum"
     {
         "#format" "{1:N},{2:s}"
-        "en" "{olive}{2}{default} was {blue}headshot-skeeted with a Magnum{default} by {olive}{1}{default}"
+        "en" "{olive}{2}{default} was {blue}headshotted{default} by {olive}{1}{default} with a Magnum"
     }
     "CoopSniper"
     {
         "#format" "{1:N},{2:s}"
-        "en" "{olive}{2}{default} was {blue}headshot-skeeted with a sniper{default} by {olive}{1}{default}"
+        "en" "{olive}{2}{default} was {blue}headshotted{default} by {olive}{1}{default} with a sniper rifle"
     }
     "CoopShotgun"
     {
@@ -361,5 +361,15 @@
     {
         "#format" "{1:N},{2:s},{3:d}"
         "en" "{olive}{1}{default} skeeted {olive}{2}{default} in {blue}{3} SMG shots{default}"
+    }
+    "CoopGrenade"
+    {
+        "#format" "{1:N},{2:s}"
+        "en" "{olive}{1}{default} {blue}grenade-skeeted{default} {olive}{2}{default}."
+    }
+    "CoopPop"
+    {
+        "#format" "{1:N}"
+        "en" "{olive}{1}{default} popped a boomer."
     }
 }

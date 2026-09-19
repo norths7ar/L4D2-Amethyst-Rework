@@ -6,6 +6,7 @@ int g_SurvivorLife[MAXPLAYERS + 1];
 int g_PendingKill[MAXPLAYERS + 1];
 int g_CandidateActor[MAXPLAYERS + 1];
 CoopSkill g_CandidateSkill[MAXPLAYERS + 1];
+int g_CandidateDamage[MAXPLAYERS + 1];
 
 enum struct SkillKillRecord
 {
@@ -18,6 +19,7 @@ enum struct SkillKillRecord
     CoopSkill skill;
     int shots;
     int damage;
+    int skillDamage;
     float lifetime;
     char weapon[64];
     char victimName[64];
@@ -43,26 +45,41 @@ void SkillSpawn(int client)
     g_PendingKill[client] = -1;
     g_CandidateActor[client] = 0;
     g_CandidateSkill[client] = Skill_None;
+    g_CandidateDamage[client] = 0;
     g_iSpecialVictim[client] = -1;
     HunterReset(client);
 }
 
-int SkillStars(CoopSkill skill)
+int SkillRewardTier(CoopSkill skill, float lifetime = 0.0)
 {
     switch (skill)
     {
-        case Skill_None, Skill_HunterTeam: return 0;
+        case Skill_None, Skill_HunterTeam, Skill_BoomerPop: return 0;
         case Skill_HunterSolo, Skill_WitchCrown: return 1;
         case Skill_ChargerFull: return 3;
+        case Skill_BoomerFast:
+        {
+            if (lifetime <= 0.5) return 3;
+            if (lifetime <= 1.4) return 2;
+            return 1;
+        }
     }
     return 2;
 }
 
-void RecordSkill(int actor, int victim, CoopSkill skill)
+int SkillDisplayStars(CoopSkill skill, float lifetime)
+{
+    // Informational stars do not imply an additional healing reward.
+    if (skill == Skill_HunterTeam || skill == Skill_BoomerPop) return 1;
+    return SkillRewardTier(skill, lifetime);
+}
+
+void RecordSkill(int actor, int victim, CoopSkill skill, int damage = 0)
 {
     if (!IsValidSurvivor(actor) || !IsValidInfected(victim)) return;
     g_CandidateActor[victim] = GetClientUserId(actor);
     g_CandidateSkill[victim] = skill;
+    g_CandidateDamage[victim] = damage;
     // Boomer explosion can arrive after player_death; update the same queued kill.
     int index = g_PendingKill[victim];
     if (index >= 0 && index < g_KillRecords.Length)
@@ -72,7 +89,9 @@ void RecordSkill(int actor, int victim, CoopSkill skill)
         if (!record.resolved && record.actorUser == GetClientUserId(actor))
         {
             record.skill = skill;
-            record.lifetime = GetGameTime() - g_fSpawnTime[victim];
+            record.skillDamage = damage;
+            // Keep the spawn-to-death time captured by SkillDeath. The later
+            // boomer explosion must not move a kill across a speed boundary.
             g_KillRecords.SetArray(index, record);
         }
     }
@@ -115,6 +134,7 @@ void SkillDeath(Event event, const char[] name, bool dontBroadcast)
     record.health = GetClientHealth(actor);
     record.lifetime = GetGameTime() - g_fSpawnTime[victim];
     record.skill = g_CandidateActor[victim] == record.actorUser ? g_CandidateSkill[victim] : Skill_None;
+    record.skillDamage = g_CandidateActor[victim] == record.actorUser ? g_CandidateDamage[victim] : 0;
     event.GetString("weapon", record.weapon, sizeof(record.weapon));
     GetClientName(victim, record.victimName, sizeof(record.victimName));
     record.shots = g_HunterHits[victim][actor];
@@ -157,10 +177,10 @@ void ResolveKill(DataPack pack)
     if (!IsValidSurvivor(actor) || record.actorLife != g_SurvivorLife[actor]) return;
     int victim = GetClientOfUserId(record.victimUser);
     ReportSkillKill(actor, record);
-    PublishKill(actor, victim, record.skill, record.zombieClass, record.weapon, record.health);
+    PublishKill(actor, victim, record.skill, record.zombieClass, record.weapon, record.health, record.lifetime);
 }
 
-void PublishKill(int actor, int victim, CoopSkill skill, int cls, const char[] weapon, int health)
+void PublishKill(int actor, int victim, CoopSkill skill, int cls, const char[] weapon, int health, float lifetime = 0.0)
 {
     if (cls == 7)
     {
@@ -172,7 +192,7 @@ void PublishKill(int actor, int victim, CoopSkill skill, int cls, const char[] w
     Call_PushCell(actor);
     Call_PushCell(victim);
     Call_PushCell(skill);
-    Call_PushCell(SkillStars(skill));
+    Call_PushCell(SkillRewardTier(skill, lifetime));
     Call_PushCell(cls);
     Call_PushString(weapon);
     Call_PushCell(health);
@@ -182,7 +202,7 @@ void PublishKill(int actor, int victim, CoopSkill skill, int cls, const char[] w
 void ReportSkillKill(int actor, SkillKillRecord record)
 {
     if (!g_cvarReport.BoolValue || record.skill == Skill_None) return;
-    int stars = SkillStars(record.skill);
+    int stars = SkillDisplayStars(record.skill, record.lifetime);
     char tag[12];
     switch (stars)
     {
@@ -196,9 +216,9 @@ void ReportSkillKill(int actor, SkillKillRecord record)
         case Skill_HunterTeam:
         {
             if (g_cvarRepSkeet.BoolValue)
-                CPrintToChatAll("%t %t", tag, "CoopTeam", actor, record.victimName, record.damage, record.shots, record.assists);
+                CPrintToChatAll("%t %t", tag, "CoopTeam", actor, record.victimName, record.damage, record.shots, record.assists, record.shots == 1 ? "" : "s");
         }
-        case Skill_HunterSolo, Skill_HunterMelee, Skill_HunterMagnum, Skill_HunterSniper, Skill_HunterShotgun, Skill_HunterSmg:
+        case Skill_HunterSolo, Skill_HunterMelee, Skill_HunterMagnum, Skill_HunterSniper, Skill_HunterShotgun, Skill_HunterSmg, Skill_HunterGrenade:
         {
             if (!g_cvarRepSkeet.BoolValue) return;
             switch (record.skill)
@@ -206,9 +226,10 @@ void ReportSkillKill(int actor, SkillKillRecord record)
                 case Skill_HunterMelee: CPrintToChatAll("%t %t", tag, "CoopMelee", actor, record.victimName);
                 case Skill_HunterMagnum: CPrintToChatAll("%t %t", tag, "CoopMagnum", actor, record.victimName);
                 case Skill_HunterSniper: CPrintToChatAll("%t %t", tag, "CoopSniper", actor, record.victimName);
+                case Skill_HunterGrenade: CPrintToChatAll("%t %t", tag, "CoopGrenade", actor, record.victimName);
                 case Skill_HunterShotgun: CPrintToChatAll("%t %t", tag, "CoopShotgun", actor, record.victimName);
                 case Skill_HunterSmg: CPrintToChatAll("%t %t", tag, "CoopSmg", actor, record.victimName, record.shots);
-                default: CPrintToChatAll("%t %t", tag, "CoopHunter", actor, record.victimName, record.shots);
+                default: CPrintToChatAll("%t %t", tag, "CoopHunter", actor, record.victimName, record.shots, record.shots == 1 ? "" : "s");
             }
         }
         case Skill_ChargerFull:
@@ -217,7 +238,7 @@ void ReportSkillKill(int actor, SkillKillRecord record)
         }
         case Skill_ChargerHurt:
         {
-            if (g_cvarRepHurtLevel.BoolValue) CPrintToChatAll("%t %t", tag, "CoopLevel", actor);
+            if (g_cvarRepHurtLevel.BoolValue) CPrintToChatAll("%t %t", tag, "CoopLevel", actor, record.skillDamage);
         }
         case Skill_SmokerSelf:
         {
@@ -227,6 +248,10 @@ void ReportSkillKill(int actor, SkillKillRecord record)
         case Skill_BoomerFast:
         {
             if (g_cvarRepPop.BoolValue) CPrintToChatAll("%t %t", tag, "CoopBoomer", actor, record.lifetime);
+        }
+        case Skill_BoomerPop:
+        {
+            if (g_cvarRepPop.BoolValue) CPrintToChatAll("%t %t", tag, "CoopPop", actor);
         }
         case Skill_WitchCrown:
         {

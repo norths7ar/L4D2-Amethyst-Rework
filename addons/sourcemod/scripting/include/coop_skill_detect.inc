@@ -19,14 +19,17 @@ enum CoopSkill
     Skill_JockeySkeet,
     Skill_BoomerFast,
     Skill_WitchCrown,
-    Skill_WitchDraw
+    Skill_WitchDraw,
+    // Append new values so existing consumers keep their enum IDs.
+    Skill_HunterGrenade,
+    Skill_BoomerPop
 };
 
 // Called once per survivor-attributed SI/Witch kill, after skill confirmation.
 // survivor/victim are current client indices (victim may be 0 after disconnect,
 // and is always 0 for a Witch). weapon is the death event weapon, without weapon_.
 // healthBefore is the killer's real health at the kill, before any reward.
-// stars describe skill quality, not a hard-coded healing amount (Witch uses x3).
+// stars are the kill reward tier, not necessarily the chat prefix (Witch uses x3).
 forward void OnSkillKillResolved(int survivor, int victim, CoopSkill skill, int stars,
     int zombieClass, const char[] weapon, int healthBefore);
 

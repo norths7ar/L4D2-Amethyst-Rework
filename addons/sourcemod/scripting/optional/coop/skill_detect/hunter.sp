@@ -9,6 +9,7 @@ int g_HunterHits[MAXPLAYERS + 1][MAXPLAYERS + 1];
 int g_HunterLastShot[MAXPLAYERS + 1][MAXPLAYERS + 1];
 int g_HunterShotSerial[MAXPLAYERS + 1];
 int g_HunterAssistUser[MAXPLAYERS + 1][MAXPLAYERS + 1];
+bool g_HunterOnlySmg[MAXPLAYERS + 1][MAXPLAYERS + 1];
 
 void HunterReset(int victim)
 {
@@ -20,6 +21,7 @@ void HunterReset(int victim)
         g_HunterHits[victim][actor] = 0;
         g_HunterLastShot[victim][actor] = -1;
         g_HunterAssistUser[victim][actor] = 0;
+        g_HunterOnlySmg[victim][actor] = true;
     }
 }
 
@@ -58,6 +60,9 @@ void HunterHurt(Handle event, int victim, int actor)
     if (damage <= 0) return;
     g_HunterDamage[victim][actor] += damage;
     g_HunterAssistUser[victim][actor] = GetClientUserId(actor);
+    char weapon[64];
+    GetEventString(event, "weapon", weapon, sizeof(weapon));
+    if (StrContains(weapon, "smg") != 0) g_HunterOnlySmg[victim][actor] = false;
     if (g_HunterLastShot[victim][actor] != g_HunterShotSerial[actor])
     {
         g_HunterHits[victim][actor]++;
@@ -68,13 +73,28 @@ void HunterHurt(Handle event, int victim, int actor)
 void HunterAssistNames(int victim, int actor, char[] names, int maxlen)
 {
     names[0] = '\0';
+    int assisters[MAXPLAYERS + 1], count;
     for (int other = 1; other <= MaxClients; other++)
     {
         if (other == actor || !g_HunterDamage[victim][other]) continue;
+        // Keep the original damage-descending assist order.
+        int index = count++;
+        while (index > 0 && g_HunterDamage[victim][assisters[index - 1]] < g_HunterDamage[victim][other])
+        {
+            assisters[index] = assisters[index - 1];
+            index--;
+        }
+        assisters[index] = other;
+    }
+    for (int i = 0; i < count; i++)
+    {
+        int other = assisters[i];
         int client = GetClientOfUserId(g_HunterAssistUser[victim][other]);
-        char assist[64];
+        char assist[128];
         if (client > 0) GetClientName(client, assist, sizeof(assist));
         else strcopy(assist, sizeof(assist), "disconnected");
+        int shots = g_HunterHits[victim][other];
+        Format(assist, sizeof(assist), "%s (%d/%d shot%s)", assist, g_HunterDamage[victim][other], shots, shots == 1 ? "" : "s");
         if (names[0]) StrCat(names, maxlen, ", ");
         StrCat(names, maxlen, assist);
     }
@@ -90,13 +110,18 @@ void HunterDeath(Handle event, int victim, int actor)
     GetEventString(event, "weapon", weapon, sizeof(weapon));
     int shots = g_HunterHits[victim][actor];
     CoopSkill skill = team ? Skill_HunterTeam : Skill_HunterSolo;
-    if (!team)
+    // Recognize the finishing technique before assists. Earlier chip damage
+    // does not invalidate a melee kill or a sniper/Magnum headshot; these are
+    // not claims that this Hunter received only one hit during its whole life.
+    if (StrEqual(weapon, "melee")) skill = Skill_HunterMelee;
+    else if (GetEventBool(event, "headshot") && StrEqual(weapon, "pistol_magnum")) skill = Skill_HunterMagnum;
+    else if (GetEventBool(event, "headshot") && (StrContains(weapon, "sniper_") == 0 || StrEqual(weapon, "hunting_rifle"))) skill = Skill_HunterSniper;
+    // As in Skill Detect, only direct grenade hits qualify, not splash kills.
+    else if (StrEqual(weapon, "grenade_launcher") && (GetEventInt(event, "type") & (DMG_BLAST | DMG_PLASMA))) skill = Skill_HunterGrenade;
+    else if (!team)
     {
-        if (StrEqual(weapon, "melee") && shots == 1) skill = Skill_HunterMelee;
-        else if (GetEventBool(event, "headshot") && StrEqual(weapon, "pistol_magnum")) skill = Skill_HunterMagnum;
-        else if (GetEventBool(event, "headshot") && (StrContains(weapon, "sniper_") == 0 || StrEqual(weapon, "hunting_rifle"))) skill = Skill_HunterSniper;
-        else if (shots == 1 && (StrEqual(weapon, "pumpshotgun") || StrEqual(weapon, "shotgun_chrome"))) skill = Skill_HunterShotgun;
-        else if (shots > 0 && shots <= 3 && StrContains(weapon, "smg") == 0) skill = Skill_HunterSmg;
+        if (shots == 1 && (StrEqual(weapon, "pumpshotgun") || StrEqual(weapon, "shotgun_chrome"))) skill = Skill_HunterShotgun;
+        else if (shots > 0 && shots <= 3 && g_HunterOnlySmg[victim][actor] && StrContains(weapon, "smg") == 0) skill = Skill_HunterSmg;
     }
     RecordSkill(actor, victim, skill);
     g_HunterPouncing[victim] = false;
