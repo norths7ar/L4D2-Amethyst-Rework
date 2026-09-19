@@ -9,12 +9,14 @@
 
 ## Sources of Truth
 
-* `README.md`: project intent, mode positioning, and current AstRedux implementation.
+* `README.md`: project intent, mode positioning, and common user entry points.
 * `docs/ROADMAP.md`: planned work; `docs/CHANGELOG.md`: completed repository changes and version history.
 * `docs/architecture.md`: 只记录框架级别的产品设计思路，不负责记录任何具体模式的决策、路径等。
 * `docs/server-operations.md`: deployment and server operations.
 * `docs/plugin-sources.md`: uncertain SMX provenance and rebuild status.
 * Actual cfgs, SourcePawn, VScript, Stripper, and plugin-load files: runtime behavior.
+
+Keep routine CHANGELOG entries concise and focused on outcomes; major releases may include fuller explanations. Concrete mode rules belong in configuration and relevant release notes, not README or architecture notes.
 
 Keep each document in its own lane. AGENTS contains durable Agent maintenance rules, not a second copy of those documents.
 
