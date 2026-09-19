@@ -17,7 +17,7 @@ public Plugin myinfo =
 	name = "Coop survivor loadout",
 	author = "海洋空氣, norths7ar",
 	description = "Preserves AstMod survivor inventory lifecycle for Coop",
-	version = "1.0.0"
+	version = "1.1.0"
 };
 
 public void OnPluginStart()
@@ -54,36 +54,8 @@ public void OnRoundIsLive()
 {
 	if (g_liveHandled) return;
 	g_liveHandled = true;
-	ReplaceStartingMedkits();
 	ResetInventory(false);
 	if (g_startPills.BoolValue) GiveStartingPills();
-}
-
-void ReplaceStartingMedkits()
-{
-	// Map pickups belong to the same live transition as carried equipment.
-	// Do not touch held kits or medical supplies elsewhere in the campaign.
-	for (int entity = MaxClients + 1; entity < GetMaxEntities(); entity++)
-	{
-		if (!IsValidEntity(entity)) continue;
-		char classname[64];
-		GetEntityClassname(entity, classname, sizeof(classname));
-		if (!StrEqual(classname, "weapon_first_aid_kit_spawn") && !StrEqual(classname, "weapon_first_aid_kit")) continue;
-		if (HasEntProp(entity, Prop_Send, "m_hOwnerEntity") && GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity") > 0) continue;
-		float origin[3], angles[3];
-		GetEntPropVector(entity, Prop_Send, "m_vecOrigin", origin);
-		if (!L4D_IsPositionInFirstCheckpoint(origin)) continue;
-		GetEntPropVector(entity, Prop_Send, "m_angRotation", angles);
-		int count = HasEntProp(entity, Prop_Data, "m_itemCount") ? GetEntProp(entity, Prop_Data, "m_itemCount") : 1;
-		if (count <= 0) continue;
-		int pills = CreateEntityByName("weapon_pain_pills_spawn");
-		if (pills <= MaxClients) continue;
-		DispatchKeyValueInt(pills, "count", count);
-		TeleportEntity(pills, origin, angles, NULL_VECTOR);
-		if (!DispatchSpawn(pills)) { RemoveEntity(pills); continue; }
-		SetEntityMoveType(pills, MOVETYPE_NONE);
-		RemoveEntity(entity);
-	}
 }
 
 void ResetInventory(bool resetWeapons)
@@ -98,7 +70,7 @@ void ResetInventory(bool resetWeapons)
 		}
 		else
 		{
-			for (int slot = 3; slot < 5; slot++) DeleteInventoryItem(client, slot);
+			for (int slot = 2; slot < 5; slot++) DeleteInventoryItem(client, slot);
 		}
 		ExecuteCheatCommand(client, "give", "health");
 		SetEntityHealth(client, 100);

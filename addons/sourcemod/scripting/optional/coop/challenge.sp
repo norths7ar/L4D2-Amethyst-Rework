@@ -17,8 +17,6 @@ enum
 	Setting_TankDamage = 1,
 	Setting_TankBhop = 2,
 	Setting_TankRock = 3,
-	Setting_ExtraPills = 7,
-	Setting_RemoveMapPills = 8,
 	Setting_RatioDamage = 11,
 	Setting_KillHealth = 12,
 	Setting_KillAmmo = 13,
@@ -54,7 +52,7 @@ public Plugin myinfo =
 	name = "Coop Challenge",
 	author = "海洋空氣, norths7ar",
 	description = "Difficulty Controller for Coop.",
-	version = "2.9.0-integration",
+	version = "2.9.1",
 	url = "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
 };
 
@@ -137,7 +135,6 @@ public Action drawPanel(int client, int first_item)
 	ConVar mobLimit = FindConVar("l4d2_heq_enabled");
 	if (mobLimit != null) { FormatEx(buffer, sizeof(buffer), "%T", "FiniteHordesMenu", client); AddNamedToggleMenuItem(menu, "mob_limit", buffer, mobLimit.BoolValue); }
 	else { FormatEx(buffer, sizeof(buffer), "%T", "FiniteHordesUnavailable", client); AddMenuItem(menu, "mob_limit", buffer, ITEMDRAW_DISABLED); }
-	FormatEx(buffer, sizeof(buffer), "%T", "ExtraPillsMenu", client); AddMenuItem(menu, "pills", buffer);
 	FormatEx(buffer, sizeof(buffer), "%T", "ResetMenu", client); AddMenuItem(menu, "reset", buffer);
 
 	DisplayMenuAtItem(menu, client, first_item, MENU_DISPLAY_TIME);
@@ -198,8 +195,6 @@ public int MenuHandler(Handle menu, MenuAction action, int client, int param)
 			if (mobLimit == null) PrintToChat(client, "\x04[Ast] \x01%t", "FiniteHordesPluginUnavailable");
 			else RequestGameplaySetting(client, Setting_FiniteHordes, !mobLimit.BoolValue);
 			drawPanel(client, 0);
-		} else if (StrEqual(item, "pills")) {
-			Menu_MorePills(client, false);
 		} else if (StrEqual(item, "reset")) {
 			RequestGameplaySetting(client, Setting_Reset, 0);
 			drawPanel(client, 0);
@@ -335,12 +330,6 @@ public void RequestGameplaySetting(int client, int target, int value)
 			case Setting_TankRock: { // Tank 石头
 				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteEnableTankRock" : "VoteDisableTankRock", client);
 			}
-			case Setting_ExtraPills: { // 额外发药
-				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteEnableExtraPills" : "VoteDisableExtraPills", client);
-			}
-			case Setting_RemoveMapPills: { // 删除地图药
-				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteRemoveMapPills" : "VoteKeepMapPills", client);
-			}
 			case Setting_RatioDamage: {
 				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteEnableRatioDamage" : "VoteDisableRatioDamage", client);
 			}
@@ -424,8 +413,6 @@ public void GameplayVoteResultHandler(Handle vote, int num_votes, int num_client
 		case Setting_TankDamage: DisplayVotePassPhrase(vote, "VotePassTankDamage");
 		case Setting_TankBhop: DisplayVotePassPhrase(vote, "VotePassTankBhop");
 		case Setting_TankRock: DisplayVotePassPhrase(vote, "VotePassTankRock");
-		case Setting_ExtraPills: DisplayVotePassPhrase(vote, value ? "VotePassEnableExtraPills" : "VotePassDisableExtraPills");
-		case Setting_RemoveMapPills: DisplayVotePassPhrase(vote, value ? "VotePassRemoveMapPills" : "VotePassKeepMapPills");
 		case Setting_RatioDamage: DisplayVotePassPhrase(vote, "VotePassRatioDamage");
 		case Setting_KillHealth: DisplayVotePassPhrase(vote, "VotePassRehealth");
 		case Setting_KillAmmo: DisplayVotePassPhrase(vote, "VotePassReammo");
@@ -576,55 +563,6 @@ void ClearAllSlotOverrides()
 	}
 }
 
-public Action Menu_MorePills(int client, int args)
-{
-	if (FindConVar("ast_pills_map_kill") == null) {
-		PrintToChat(client, "\x04[Ast] \x01%t", "PillsPluginUnavailable");
-		drawPanel(client, 0);
-		return Plugin_Handled;
-	}
-
-	// 开关，删除地图药
-	Handle menu = CreateMenu(Menu_MorePillsHandler);
-	char buffer[64];
-	FormatEx(buffer, sizeof(buffer), "%T", "ExtraPillsTitle", client);
-	SetMenuTitle(menu, buffer);
-	SetMenuExitBackButton(menu, true);
-
-	FormatEx(buffer, sizeof(buffer), "%T", "AutomaticPills", client);
-	AddToggleMenuItem(menu, buffer, GetConVarBool(FindConVar("ast_pills_enabled")));
-	FormatEx(buffer, sizeof(buffer), "%T", "RemoveMapPills", client);
-	AddToggleMenuItem(menu, buffer, GetConVarBool(FindConVar("ast_pills_map_kill")));
-
-	DisplayMenu(menu, client, MENU_DISPLAY_TIME);
-	return Plugin_Handled;
-}
-
-public int Menu_MorePillsHandler(Handle menu, MenuAction action, int client, int param)
-{
-	if (action == MenuAction_End) {
-		delete menu;
-		return 1;
-	}
-
-	if (action == MenuAction_Select) {
-		switch (param)
-		{
-			case 0: {
-				bool bPillsEnabled = GetConVarBool(FindConVar("ast_pills_enabled"));
-				RequestGameplaySetting(client, Setting_ExtraPills, !bPillsEnabled);
-			}
-			case 1: {
-				bool bPillsMapKill = GetConVarBool(FindConVar("ast_pills_map_kill"));
-				RequestGameplaySetting(client, Setting_RemoveMapPills, !bPillsMapKill);
-			}
-		}
-		drawPanel(client, 7);
-	}
-	else if (action == MenuAction_Cancel) drawPanel(client, 7);
-	return 1;
-}
-
 ///////////////////////////
 //           Event           //
 //////////////////////////
@@ -743,8 +681,6 @@ ConVar GetChallengeSetting(int target)
 		case Setting_TankDamage: return FindConVar("vs_tank_damage");
 		case Setting_TankBhop: return FindConVar("ai_tank_bhop");
 		case Setting_TankRock: return FindConVar("ai_tank_rock");
-		case Setting_ExtraPills: return FindConVar("ast_pills_enabled");
-		case Setting_RemoveMapPills: return FindConVar("ast_pills_map_kill");
 		case Setting_RatioDamage: return hRatioDamage;
 		case Setting_KillHealth: return hRehealth;
 		case Setting_KillAmmo: return hReammo;
@@ -825,7 +761,7 @@ void PrintOverrideDetails(int client)
 
 bool IsBooleanChallengeTarget(int target)
 {
-	return target == Setting_TankBhop || target == Setting_TankRock || target == Setting_ExtraPills || target == Setting_RemoveMapPills
+	return target == Setting_TankBhop || target == Setting_TankRock
 		|| target == Setting_RatioDamage || target == Setting_KillHealth || target == Setting_KillAmmo || target == Setting_FiniteHordes
 		|| target == Setting_AutoWipe;
 }
@@ -837,8 +773,6 @@ void GetChallengePhrase(int target, char[] phrase, int maxlen)
 		case Setting_TankDamage: strcopy(phrase, maxlen, "InfoTankDamage");
 		case Setting_TankBhop: strcopy(phrase, maxlen, "InfoTankBhop");
 		case Setting_TankRock: strcopy(phrase, maxlen, "InfoTankRock");
-		case Setting_ExtraPills: strcopy(phrase, maxlen, "InfoExtraPills");
-		case Setting_RemoveMapPills: strcopy(phrase, maxlen, "InfoMapPills");
 		case Setting_RatioDamage: strcopy(phrase, maxlen, "InfoRatioDamage");
 		case Setting_KillHealth: strcopy(phrase, maxlen, "InfoRehealth");
 		case Setting_KillAmmo: strcopy(phrase, maxlen, "InfoReammo");

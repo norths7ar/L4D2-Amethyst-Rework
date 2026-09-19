@@ -85,17 +85,6 @@
         "#format" "{1:s}"
         "en" "Tank rock: {1}"
     }
-    "InfoExtraPills"
-    {
-        "#format" "{1:s}"
-        "en" "Extra pills: {1}"
-    }
-    "InfoMapPills"
-    {
-        /* Context: This map-pill policy takes effect on the next round. */
-        "#format" "{1:s}"
-        "en" "Map pills: {1}"
-    }
     "InfoRatioDamage"
     {
         /* Context: Ratio damage scales survivor damage with the special infected's current health. */
@@ -221,10 +210,6 @@
     {
         "en" "Finite hordes (plugin unavailable)"
     }
-    "ExtraPillsMenu"
-    {
-        "en" "Extra pills"
-    }
     "ResetMenu"
     {
         "en" "Clear temporary overrides"
@@ -267,24 +252,6 @@
     "VoteDisableTankRock"
     {
         "en" "Disable Tank rock throws"
-    }
-    "VoteEnableExtraPills"
-    {
-        "en" "Enable automatic extra pills"
-    }
-    "VoteDisableExtraPills"
-    {
-        "en" "Disable automatic extra pills"
-    }
-    "VoteRemoveMapPills"
-    {
-        /* Context: This changes whether pills placed by the map are removed, starting next round. */
-        "en" "Remove map pills next round"
-    }
-    "VoteKeepMapPills"
-    {
-        /* Context: This changes whether pills placed by the map are removed, starting next round. */
-        "en" "Keep map pills next round"
     }
     "VoteEnableRatioDamage"
     {
@@ -344,24 +311,6 @@
     {
         "en" "Changing Tank rock throws..."
     }
-    "VotePassEnableExtraPills"
-    {
-        "en" "Enabling automatic extra pills..."
-    }
-    "VotePassDisableExtraPills"
-    {
-        "en" "Disabling automatic extra pills..."
-    }
-    "VotePassRemoveMapPills"
-    {
-        /* Context: The map-pill removal setting takes effect next round. */
-        "en" "Map pills will be removed next round."
-    }
-    "VotePassKeepMapPills"
-    {
-        /* Context: The map-pill removal setting takes effect next round. */
-        "en" "Map pills will be kept next round."
-    }
     "VotePassRatioDamage"
     {
         "en" "Changing ratio SI damage..."
@@ -412,24 +361,6 @@
     {
         /* Context: !reset clears temporary snapshots for every 1P-4P profile and reapplies the current baseline. */
         "en" "All player-count overrides were cleared and the current baseline was restored."
-    }
-    "PillsPluginUnavailable"
-    {
-        "en" "The extra-pills component is not installed."
-    }
-    "ExtraPillsTitle"
-    {
-        "en" "Extra pills"
-    }
-    "AutomaticPills"
-    {
-        /* Context: Gives configured pills automatically; separate from pills already placed by the map. */
-        "en" "Automatic extra pills"
-    }
-    "RemoveMapPills"
-    {
-        /* Context: Removes pills placed by the map; a change takes effect next round. */
-        "en" "Remove map pills next round"
     }
     "SurvivorsOnly"
     {

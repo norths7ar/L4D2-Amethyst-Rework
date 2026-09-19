@@ -17,7 +17,6 @@
 | `l4d2_bot_spit_ignite_gascan.smx` | 有源码，未确认同构建 |
 | `l4d2_drop.smx` | 有源码，未确认同构建 |
 | `l4d2_votetospec.smx` | 有源码，未确认同构建 |
-| `pills_giver.smx` | 有源码，未确认同构建 |
 | `script_reloader.smx` | 有源码，未确认同构建 |
 | `l4d_reload_fix.smx` | 有源码，未确认同构建 |
 | `musical_jockeys_coop.smx` | 有源码，未确认同构建 |

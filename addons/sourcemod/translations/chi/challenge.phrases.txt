@@ -85,17 +85,6 @@
         "#format" "{1:s}"
         "chi" "Tank 石头：{1}"
     }
-    "InfoExtraPills"
-    {
-        "#format" "{1:s}"
-        "chi" "额外发药：{1}"
-    }
-    "InfoMapPills"
-    {
-        /* Context: This map-pill policy takes effect on the next round. */
-        "#format" "{1:s}"
-        "chi" "地图药：{1}"
-    }
     "InfoRatioDamage"
     {
         /* Context: Ratio damage scales survivor damage with the special infected's current health. */
@@ -221,10 +210,6 @@
     {
         "chi" "有限尸潮（插件未就绪）"
     }
-    "ExtraPillsMenu"
-    {
-        "chi" "额外发药设定"
-    }
     "ResetMenu"
     {
         "chi" "清除临时调整"
@@ -267,24 +252,6 @@
     "VoteDisableTankRock"
     {
         "chi" "关闭 Tank 丢石头"
-    }
-    "VoteEnableExtraPills"
-    {
-        "chi" "开启自动额外发药"
-    }
-    "VoteDisableExtraPills"
-    {
-        "chi" "关闭自动额外发药"
-    }
-    "VoteRemoveMapPills"
-    {
-        /* Context: This changes whether pills placed by the map are removed, starting next round. */
-        "chi" "下回合删除地图自带的药"
-    }
-    "VoteKeepMapPills"
-    {
-        /* Context: This changes whether pills placed by the map are removed, starting next round. */
-        "chi" "下回合保留地图自带的药"
     }
     "VoteEnableRatioDamage"
     {
@@ -344,24 +311,6 @@
     {
         "chi" "正在修改 Tank 丢石头……"
     }
-    "VotePassEnableExtraPills"
-    {
-        "chi" "正在开启自动额外发药……"
-    }
-    "VotePassDisableExtraPills"
-    {
-        "chi" "正在关闭自动额外发药……"
-    }
-    "VotePassRemoveMapPills"
-    {
-        /* Context: The map-pill removal setting takes effect next round. */
-        "chi" "已设置为下回合删除地图自带的药。"
-    }
-    "VotePassKeepMapPills"
-    {
-        /* Context: The map-pill removal setting takes effect next round. */
-        "chi" "已设置为下回合保留地图自带的药。"
-    }
     "VotePassRatioDamage"
     {
         "chi" "正在修改比例伤害……"
@@ -412,24 +361,6 @@
     {
         /* Context: !reset clears temporary snapshots for every 1P-4P profile and reapplies the current baseline. */
         "chi" "已清除所有人数档位的临时调整，并恢复默认设定。"
-    }
-    "PillsPluginUnavailable"
-    {
-        "chi" "额外发药插件未安装。"
-    }
-    "ExtraPillsTitle"
-    {
-        "chi" "额外发药设定"
-    }
-    "AutomaticPills"
-    {
-        /* Context: Gives configured pills automatically; separate from pills already placed by the map. */
-        "chi" "自动额外发药"
-    }
-    "RemoveMapPills"
-    {
-        /* Context: Removes pills placed by the map; a change takes effect next round. */
-        "chi" "下回合删除地图自带的药"
     }
     "SurvivorsOnly"
     {

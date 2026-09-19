@@ -541,6 +541,7 @@ static bool
 	Weapon_bRemoveExtraItems = true;
 
 static ConVar
+	Weapon_hEnabled = null,
 	Weapon_hRemoveDirectKits = null,
 	Weapon_hConvar[NUM_OF_WEAPONS] = {null, ...},
 	Weapon_hReplaceTier2 = null,
@@ -575,6 +576,7 @@ void WI_OnMapEnd()
 //====================================================
 static void WI_Convar_Setup()
 {
+	Weapon_hEnabled = CreateConVarEx("enable_weaponhandling", "1", "Enable legacy weapon and medkit processing", _, true, 0.0, true, 1.0);
 	// Opt-in for Coop modes that remove map medkits, including direct item entities.
 	Weapon_hRemoveDirectKits = CreateConVarEx("remove_directkits", "0", "Remove unowned direct medkit entities during the round-start item scan", _, true, 0.0, true, 1.0);
 	Weapon_hConvar[WEAPON_SMG_MP5_INDEX] = CreateConVarEx("replace_cssweapons", "1", "Replace CSS weapons with normal L4D2 weapons", _, true, 0.0, true, 1.0);
@@ -1218,7 +1220,7 @@ static void WI_RoundEnd_Event(Event hEvent, const char[] sEventName, bool bDontB
 
 static Action WI_RoundStartLoop(Handle hTimer)
 {
-	if (!IsPluginEnabled()) {
+	if (!IsPluginEnabled() || !Weapon_hEnabled.BoolValue) {
 		return Plugin_Stop;
 	}
 
@@ -1292,7 +1294,7 @@ static Action WI_RoundStartLoop(Handle hTimer)
 
 static void WI_SpawnerGiveItem_Event(Event hEvent, const char[] sEventName, bool bDontBroadcast)
 {
-	if (!IsPluginEnabled()) {
+	if (!IsPluginEnabled() || !Weapon_hEnabled.BoolValue) {
 		return;
 	}
 
