@@ -22,7 +22,6 @@ enum struct SkillKillRecord
     int skillDamage;
     float lifetime;
     char weapon[64];
-    char victimName[64];
     char assists[256];
 }
 
@@ -65,13 +64,6 @@ int SkillRewardTier(CoopSkill skill, float lifetime = 0.0)
         }
     }
     return 2;
-}
-
-int SkillDisplayStars(CoopSkill skill, float lifetime)
-{
-    // Informational stars do not imply an additional healing reward.
-    if (skill == Skill_HunterTeam || skill == Skill_BoomerPop) return 1;
-    return SkillRewardTier(skill, lifetime);
 }
 
 void RecordSkill(int actor, int victim, CoopSkill skill, int damage = 0)
@@ -136,7 +128,6 @@ void SkillDeath(Event event, const char[] name, bool dontBroadcast)
     record.skill = g_CandidateActor[victim] == record.actorUser ? g_CandidateSkill[victim] : Skill_None;
     record.skillDamage = g_CandidateActor[victim] == record.actorUser ? g_CandidateDamage[victim] : 0;
     event.GetString("weapon", record.weapon, sizeof(record.weapon));
-    GetClientName(victim, record.victimName, sizeof(record.victimName));
     record.shots = g_HunterHits[victim][actor];
     record.damage = g_HunterDamage[victim][actor];
     HunterAssistNames(victim, actor, record.assists, sizeof(record.assists));
@@ -197,69 +188,4 @@ void PublishKill(int actor, int victim, CoopSkill skill, int cls, const char[] w
     Call_PushString(weapon);
     Call_PushCell(health);
     Call_Finish();
-}
-
-void ReportSkillKill(int actor, SkillKillRecord record)
-{
-    if (!g_cvarReport.BoolValue || record.skill == Skill_None) return;
-    int stars = SkillDisplayStars(record.skill, record.lifetime);
-    char tag[12];
-    switch (stars)
-    {
-        case 0: strcopy(tag, sizeof(tag), "Info");
-        case 1: strcopy(tag, sizeof(tag), "Tag+");
-        case 2: strcopy(tag, sizeof(tag), "Tag++");
-        case 3: strcopy(tag, sizeof(tag), "Tag+++");
-    }
-    switch (record.skill)
-    {
-        case Skill_HunterTeam:
-        {
-            if (g_cvarRepSkeet.BoolValue)
-                CPrintToChatAll("%t %t", tag, "CoopTeam", actor, record.victimName, record.damage, record.shots, record.assists, record.shots == 1 ? "" : "s");
-        }
-        case Skill_HunterSolo, Skill_HunterMelee, Skill_HunterMagnum, Skill_HunterSniper, Skill_HunterShotgun, Skill_HunterSmg, Skill_HunterGrenade:
-        {
-            if (!g_cvarRepSkeet.BoolValue) return;
-            switch (record.skill)
-            {
-                case Skill_HunterMelee: CPrintToChatAll("%t %t", tag, "CoopMelee", actor, record.victimName);
-                case Skill_HunterMagnum: CPrintToChatAll("%t %t", tag, "CoopMagnum", actor, record.victimName);
-                case Skill_HunterSniper: CPrintToChatAll("%t %t", tag, "CoopSniper", actor, record.victimName);
-                case Skill_HunterGrenade: CPrintToChatAll("%t %t", tag, "CoopGrenade", actor, record.victimName);
-                case Skill_HunterShotgun: CPrintToChatAll("%t %t", tag, "CoopShotgun", actor, record.victimName);
-                case Skill_HunterSmg: CPrintToChatAll("%t %t", tag, "CoopSmg", actor, record.victimName, record.shots);
-                default: CPrintToChatAll("%t %t", tag, "CoopHunter", actor, record.victimName, record.shots, record.shots == 1 ? "" : "s");
-            }
-        }
-        case Skill_ChargerFull:
-        {
-            if (g_cvarRepLevel.BoolValue) CPrintToChatAll("%t %t", tag, "CoopFullLevel", actor);
-        }
-        case Skill_ChargerHurt:
-        {
-            if (g_cvarRepHurtLevel.BoolValue) CPrintToChatAll("%t %t", tag, "CoopLevel", actor, record.skillDamage);
-        }
-        case Skill_SmokerSelf:
-        {
-            if (g_cvarRepSelfClear.BoolValue) CPrintToChatAll("%t %t", tag, "CoopSelf", actor);
-        }
-        case Skill_JockeySkeet: CPrintToChatAll("%t %t", tag, "CoopJockey", actor);
-        case Skill_BoomerFast:
-        {
-            if (g_cvarRepPop.BoolValue) CPrintToChatAll("%t %t", tag, "CoopBoomer", actor, record.lifetime);
-        }
-        case Skill_BoomerPop:
-        {
-            if (g_cvarRepPop.BoolValue) CPrintToChatAll("%t %t", tag, "CoopPop", actor);
-        }
-        case Skill_WitchCrown:
-        {
-            if (g_cvarRepCrow.BoolValue) CPrintToChatAll("%t %t", tag, "CoopCrown", actor);
-        }
-        case Skill_WitchDraw:
-        {
-            if (g_cvarRepDrawCrow.BoolValue) CPrintToChatAll("%t %t", tag, "CoopDraw", actor);
-        }
-    }
 }

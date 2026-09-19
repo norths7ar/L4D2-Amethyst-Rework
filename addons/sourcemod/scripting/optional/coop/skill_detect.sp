@@ -12,7 +12,7 @@
 #include <sdktools>
 #include <sourcemod>
 
-#define PLUGIN_VERSION "2.1.0"
+#define PLUGIN_VERSION "2.2.0"
 
 #define SHOTGUN_BLAST_TIME	 0.1
 #define POUNCE_CHECK_TIME	 0.1
@@ -219,7 +219,6 @@ ConVar
 	g_cvarRepSelfClear,
 	g_cvarRepSelfClearShove,
 	g_cvarRepRockSkeet,
-	g_cvarRepRockName,
 	g_cvarRepDeadStop,
 	g_cvarRepPop,
 	g_cvarRepShove,
@@ -343,7 +342,7 @@ ConVar
 
 public Plugin myinfo =
 {
-	name		= "Coop Skill Detection",
+	name		= "Skill Detection",
 	author		= "Tabun, Griffin, Philogl, Sir, A1m`, norths7ar",
 	description = "Detects and reports skeets, crowns, levels, highpounces, etc.",
 	version		= PLUGIN_VERSION,
@@ -385,7 +384,7 @@ public APLRes
 
 public void OnPluginStart()
 {
-	LoadTranslation("coop_skill_detect.phrases");
+	LoadTranslation("skill_detect.phrases");
 	SkillEventsStart();
 
 	// hooks
@@ -406,7 +405,6 @@ public void OnPluginStart()
 	g_cvarRepSelfClear		= CreateConVar("sm_skill_report_sc", "1", "Enable self clear reporting.", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_cvarRepSelfClearShove = CreateConVar("sm_skill_report_scs", "1", "Enable self clear Shove reporting.", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_cvarRepRockSkeet		= CreateConVar("sm_skill_report_rockskeet", "1", "Enable rock-skeet reporting.", FCVAR_NONE, true, 0.0, true, 1.0);
-	g_cvarRepRockName		= CreateConVar("sm_skill_report_rockname", "0", "Enable Tank name reporting.", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_cvarRepDeadStop		= CreateConVar("sm_skill_report_deadstop", "0", "Enable deadstop reporting.", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_cvarRepPop			= CreateConVar("sm_skill_report_pop", "1", "Enable pop reporting.", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_cvarRepShove			= CreateConVar("sm_skill_report_shove", "0", "Enable shove reporting.", FCVAR_NONE, true, 0.0, true, 1.0);

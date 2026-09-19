@@ -1,0 +1,243 @@
+"Phrases"
+{
+	// chat prefixes
+	"Tag+"
+	{
+		"en"		"{green}★{default}"
+	}
+	"Tag++"
+	{
+		"en"		"{green}★★{default}"
+	}
+	"Tag+++"
+	{
+		"en"		"{green}★★★{default}"
+	}
+	"Tag++++"
+	{
+		"en"		"{green}★★★★{default}"
+	}
+
+	// hunter skeets
+	"HunterTeamSkeet"
+	{
+		"#format"	"{1:N},{2:d},{3:d},{4:s},{5:s}" // 1:attacker 2:damage 3:shots 4:assists 5:English plural suffix
+		"en"		"{olive}{1}{default} teamskeeted {olive}Hunter{default} for {blue}{2} damage{default} in {blue}{3} shot{5}{default}. Assisted by: {olive}{4}{default}"
+	}
+	"HunterSkeet"
+	{
+		"#format"	"{1:N},{2:d},{3:s}" // 1:attacker 2:shots 3:English plural suffix
+		"en"		"{olive}{1}{default} skeeted {olive}Hunter{default} in {blue}{2} shot{3}{default}"
+	}
+	"HunterMeleeSkeet"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"en"		"{olive}Hunter{default} was {blue}melee-skeeted{default} by {olive}{1}{default}"
+	}
+	"HunterMagnumHeadshot"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"en"		"{olive}Hunter{default} was {blue}headshotted{default} by {olive}{1}{default} with a Magnum"
+	}
+	"HunterSniperHeadshot"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"en"		"{olive}Hunter{default} was {blue}headshotted{default} by {olive}{1}{default} with a sniper rifle"
+	}
+	"HunterShotgunSkeet"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"en"		"{olive}{1}{default} skeeted {olive}Hunter{default} in {blue}1 shotgun blast{default}"
+	}
+	"HunterSmgSkeet"
+	{
+		"#format"	"{1:N},{2:d}" // 1:attacker 2:shots
+		"en"		"{olive}{1}{default} skeeted {olive}Hunter{default} in {blue}{2} SMG shots{default}"
+	}
+	"HunterGrenadeSkeet"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"en"		"{olive}{1}{default} {blue}grenade-skeeted{default} {olive}Hunter{default}."
+	}
+
+	// hunter deadstops
+	"HunterDeadstop"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"en"		"{olive}{1}{default} {blue}deadstopped{default} {olive}a hunter{default}"
+	}
+
+	// jockey skeets
+	"JockeySkeet"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"en"		"{olive}{1}{default} skeeted a Jockey"
+	}
+
+	// charger levels
+	"ChargerFullLevel"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"en"		"{olive}{1}{default} {blue}fully leveled{default} a Charger"
+	}
+	"ChargerHurtLevel"
+	{
+		"#format"	"{1:N},{2:d}" // 1:attacker 2:damage
+		"en"		"{olive}{1}{default} {blue}chip-leveled{default} a charger ({blue}{2} dmg{default})"
+	}
+
+	// boomer pops and shutdowns
+	"BoomerPop"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"en"		"{olive}{1}{default} popped a boomer."
+	}
+	"BoomerShutdown"
+	{
+		"#format"	"{1:N},{2:.1f}" // 1:attacker 2:seconds alive
+		"en"		"{olive}{1}{default} shut down a Boomer in {blue}{2}s{default}"
+	}
+
+	// witch crowns and drawcrowns
+	"WitchCrown"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"en"		"{olive}{1}{default} crowned a Witch"
+	}
+	"WitchDrawCrown"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"en"		"{olive}{1}{default} draw-crowned a Witch"
+	}
+
+	// smoker tongue cuts and self-clears
+	"SmokerTongueCut"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"en"		"{olive}{1}{default} {blue}cut{default} smoker tongue"
+	}
+	"SmokerKillSelfClear"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"en"		"{olive}{1}{default} {blue}self-cleared{default} from a Smoker's tongue {blue}by killing it{default}"
+	}
+	"SmokerShoveSelfClear"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"en"		"{olive}{1}{default} {blue}self-cleared{default} from a smoker tongue {blue}by shoving{default}"
+	}
+
+	// tank rock skeets
+	"TankRockSkeet"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"en"		"{olive}{1}{default} {blue}skeeted{default} a tank rock"
+	}
+
+	// infected shoves and clears
+	"InfectedShove"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"en"		"{olive}{1}{default} {blue}shoved{default} an {olive}SI{default}."
+	}
+	"InfectedClear"
+	{
+		"#format"	"{1:N},{2:N},{3:s},{4:.2f}" // 1:rescuer 2:teammate 3:infected class 4:clear time
+		"en"		"{olive}{1}{default} {blue}insta-cleared{default} {olive}{2}{default} from a {3} ({blue}{4} {default}seconds)"
+	}
+	"InfectedClearTeammate"
+	{
+		"#format"	"{1:N},{2:s},{3:.2f}" // 1:rescuer 2:infected class 3:clear time
+		"en"		"{olive}{1}{default} {blue}insta-cleared{default} {olive}a teammate{default} from a {2} ({blue}{3} {default}seconds)"
+	}
+
+	// highpounces
+	"HunterHighPounce"
+	{
+		"#format"	"{1:N},{2:i},{3:i}" // 1:attacker 2:damage 3:height
+		"en"		"{olive}{1}{default}'s Hunter {red}high-pounced{default} {olive}a survivor{default} ({red}{2}{default} dmg, height: {red}{3}{default})"
+	}
+	"HunterHighPounceAI"
+	{
+		"#format"	"{1:i},{2:i}" // 1:damage 2:height
+		"en"		"A {olive}hunter{default} {red}high-pounced{default} {olive}a survivor{default} ({red}{1}{default} dmg, height: {red}{2}{default})"
+	}
+	"JockeyHighPounce"
+	{
+		"#format"	"{1:N},{2:i}" // 1:attacker 2:height
+		"en"		"{olive}{1}{default}'s Jockey {red}high-pounced{default} {olive}a survivor{default} ({red}height{default}: {red}{2}{default})"
+	}
+	"JockeyHighPounceAI"
+	{
+		"#format"	"{1:i}" // 1:height
+		"en"		"A {olive}jockey{default} {red}high-pounced{default} {olive}a survivor{default} ({red}height{default}: {red}{1}{default})"
+	}
+
+	// deathcharges
+	"ChargerDeathCharge"
+	{
+		"#format"	"{1:N},{2:t},{3:i}" // 1:attacker 2:"Empty"/"Bowling" 3:height
+		"en"		"{olive}{1}{default}'s Charger {red}death-charged{default} {olive}a survivor{default} {2}({red}height{default}: {red}{3}{default})"
+	}
+	"ChargerDeathChargeAI"
+	{
+		"#format"	"{1:t},{2:i}" // 1:"Empty"/"Bowling" 2:height
+		"en"		"A {olive}charger{default} {red}death-charged{default} {olive}a survivor{default} {1}({red}height{default}: {red}{2}{default})"
+	}
+	"Bowling"
+	{
+		"en"		"by bowling"
+	}
+
+	// bunnyhops
+	"BunnyHop"
+	{
+		"#format"	"{1:i},{2:t},{3:.1f}" // 1:streak 2:"PluralCount"/"Empty" 3:top speed
+		"en"		"{olive}You{default} got {blue}{1} bunnyhop{2}{default} in a row ({blue}top speed{default}: {olive}{3}{default})"
+	}
+	"PluralCount"
+	{
+		"en"		"s"
+	}
+	"Empty"
+	{
+		"en"		""
+	}
+
+	// car alarms
+	"AlarmHit"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"en"		"{olive}{1}{default} triggered an alarm with a hit."
+	}
+	"AlarmTouch"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"en"		"{olive}{1}{default} touched an alarmed car."
+	}
+	"AlarmExplosion"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"en"		"{olive}{1}{default} triggered an alarm with an explosion."
+	}
+	"AlarmTriggered"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"en"		"{olive}{1}{default} triggered an alarm."
+	}
+	"AlarmBoomerKill"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"en"		"{olive}{1}{default} triggered an alarm by shooting a {olive}boomer{default}."
+	}
+	"AlarmInfectedPlayer"
+	{
+		"#format"	"{1:N},{2:s}" // 1:infected player 2:infected class
+		"en"		"{olive}{1}{default}'s {2} made a survivor trigger an alarm."
+	}
+	"AlarmInfectedAI"
+	{
+		"#format"	"{1:s}" // 1:infected class
+		"en"		"A {olive}{1}{default} made a survivor trigger an alarm."
+	}
+}

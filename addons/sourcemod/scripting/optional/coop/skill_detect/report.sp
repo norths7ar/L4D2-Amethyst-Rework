@@ -3,6 +3,79 @@
 #endif
 #define _skill_detect_report_included
 
+// Kill classification and reward tiers come from events.sp; chat presentation lives here.
+int SkillDisplayStars(CoopSkill skill, float lifetime)
+{
+    // Informational stars do not imply an additional healing reward.
+    if (skill == Skill_HunterTeam || skill == Skill_BoomerPop) return 1;
+    return SkillRewardTier(skill, lifetime);
+}
+
+void ReportSkillKill(int actor, SkillKillRecord record)
+{
+    if (!g_cvarReport.BoolValue || record.skill == Skill_None) return;
+    int stars = SkillDisplayStars(record.skill, record.lifetime);
+    char tag[12];
+    switch (stars)
+    {
+        case 1: strcopy(tag, sizeof(tag), "Tag+");
+        case 2: strcopy(tag, sizeof(tag), "Tag++");
+        case 3: strcopy(tag, sizeof(tag), "Tag+++");
+    }
+    switch (record.skill)
+    {
+        case Skill_HunterTeam:
+        {
+            if (g_cvarRepSkeet.BoolValue)
+                CPrintToChatAll("%t %t", tag, "HunterTeamSkeet", actor, record.damage, record.shots, record.assists, record.shots == 1 ? "" : "s");
+        }
+        case Skill_HunterSolo, Skill_HunterMelee, Skill_HunterMagnum, Skill_HunterSniper, Skill_HunterShotgun, Skill_HunterSmg, Skill_HunterGrenade:
+        {
+            if (!g_cvarRepSkeet.BoolValue) return;
+            switch (record.skill)
+            {
+                case Skill_HunterMelee: CPrintToChatAll("%t %t", tag, "HunterMeleeSkeet", actor);
+                case Skill_HunterMagnum: CPrintToChatAll("%t %t", tag, "HunterMagnumHeadshot", actor);
+                case Skill_HunterSniper: CPrintToChatAll("%t %t", tag, "HunterSniperHeadshot", actor);
+                case Skill_HunterGrenade: CPrintToChatAll("%t %t", tag, "HunterGrenadeSkeet", actor);
+                case Skill_HunterShotgun: CPrintToChatAll("%t %t", tag, "HunterShotgunSkeet", actor);
+                case Skill_HunterSmg: CPrintToChatAll("%t %t", tag, "HunterSmgSkeet", actor, record.shots);
+                default: CPrintToChatAll("%t %t", tag, "HunterSkeet", actor, record.shots, record.shots == 1 ? "" : "s");
+            }
+        }
+        case Skill_ChargerFull:
+        {
+            if (g_cvarRepLevel.BoolValue) CPrintToChatAll("%t %t", tag, "ChargerFullLevel", actor);
+        }
+        case Skill_ChargerHurt:
+        {
+            if (g_cvarRepHurtLevel.BoolValue) CPrintToChatAll("%t %t", tag, "ChargerHurtLevel", actor, record.skillDamage);
+        }
+        case Skill_SmokerSelf:
+        {
+            if (g_cvarRepSelfClear.BoolValue) CPrintToChatAll("%t %t", tag, "SmokerKillSelfClear", actor);
+        }
+        case Skill_JockeySkeet: CPrintToChatAll("%t %t", tag, "JockeySkeet", actor);
+        case Skill_BoomerFast:
+        {
+            if (g_cvarRepPop.BoolValue) CPrintToChatAll("%t %t", tag, "BoomerShutdown", actor, record.lifetime);
+        }
+        case Skill_BoomerPop:
+        {
+            if (g_cvarRepPop.BoolValue) CPrintToChatAll("%t %t", tag, "BoomerPop", actor);
+        }
+        case Skill_WitchCrown:
+        {
+            if (g_cvarRepCrow.BoolValue) CPrintToChatAll("%t %t", tag, "WitchCrown", actor);
+        }
+        case Skill_WitchDraw:
+        {
+            if (g_cvarRepDrawCrow.BoolValue) CPrintToChatAll("%t %t", tag, "WitchDrawCrown", actor);
+        }
+    }
+}
+
+
 // boomer pop
 stock void HandlePop(int attacker, int victim, int shoveCount, float timeAlive)
 {
@@ -53,10 +126,8 @@ stock void HandleDeadstop(int attacker, int victim)
 	// report?
 	if (g_cvarReport.BoolValue && g_cvarRepDeadStop.BoolValue)
 	{
-		if (IsValidClientInGame(attacker) && IsValidClientInGame(victim) && !IsFakeClient(victim))
-			CPrintToChatAll("%t %t", "Tag+", "Deadstopped", attacker, victim);
-		else if (IsValidClientInGame(attacker))
-			CPrintToChatAll("%t %t", "Tag+", "DeadstoppedBot", attacker);
+		if (IsValidClientInGame(attacker))
+			CPrintToChatAll("%t %t", "Tag+", "HunterDeadstop", attacker);
 	}
 
 	Call_StartForward(g_hForwardHunterDeadstop);
@@ -70,10 +141,8 @@ stock void HandleShove(int attacker, int victim, int zombieClass)
 	// report?
 	if (g_cvarReport.BoolValue && g_cvarRepShove.BoolValue)
 	{
-		if (IsValidClientInGame(attacker) && IsValidClientInGame(victim) && !IsFakeClient(victim))
-			CPrintToChatAll("%t %t", "Tag+", "Shoved", attacker, victim);
-		else if (IsValidClientInGame(attacker))
-			CPrintToChatAll("%t %t", "Tag+", "ShovedBot", attacker);
+		if (IsValidClientInGame(attacker))
+			CPrintToChatAll("%t %t", "Tag+", "InfectedShove", attacker);
 	}
 
 	Call_StartForward(g_hForwardSIShove);
@@ -86,8 +155,6 @@ stock void HandleShove(int attacker, int victim, int zombieClass)
 // crown
 void HandleCrown(int attacker, int damage)
 {
-
-
 	Call_StartForward(g_hForwardCrown);
 	Call_PushCell(attacker);
 	Call_PushCell(damage);
@@ -96,8 +163,6 @@ void HandleCrown(int attacker, int damage)
 // drawcrown
 void HandleDrawCrown(int attacker, int damage, int chipdamage)
 {
-
-
 	Call_StartForward(g_hForwardDrawCrown);
 	Call_PushCell(attacker);
 	Call_PushCell(damage);
@@ -111,10 +176,8 @@ void HandleTongueCut(int attacker, int victim)
 	// report?
 	if (g_cvarReport.BoolValue && g_cvarRepTongueCut.BoolValue)
 	{
-		if (IsValidClientInGame(attacker) && IsValidClientInGame(victim) && !IsFakeClient(victim))
-			CPrintToChatAll("%t %t", "Tag+++", "CutTongue", attacker, victim);
-		else if (IsValidClientInGame(attacker))
-			CPrintToChatAll("%t %t", "Tag+++", "CutTongueBot", attacker);
+		if (IsValidClientInGame(attacker))
+			CPrintToChatAll("%t %t", "Tag+++", "SmokerTongueCut", attacker);
 	}
 
 	// call forward
@@ -128,12 +191,10 @@ void HandleSmokerSelfClear(int attacker, int victim, bool withShove = false)
 {
     if (!withShove) RecordSkill(attacker, victim, Skill_SmokerSelf);
 	// report?
-	if (withShove && g_cvarReport.BoolValue && g_cvarRepSelfClear.BoolValue && (!withShove || g_cvarRepSelfClearShove.BoolValue))
+	if (withShove && g_cvarReport.BoolValue && g_cvarRepSelfClear.BoolValue && g_cvarRepSelfClearShove.BoolValue)
 	{
-		if (IsValidClientInGame(attacker) && IsValidClientInGame(victim) && !IsFakeClient(victim))
-			CPrintToChatAll("%t %t", "Tag++", "SelfClearedTongue", attacker, victim, (withShove) ? "Shoving" : "Empty");
-		else if (IsValidClientInGame(attacker))
-			CPrintToChatAll("%t %t", "Tag++", "SelfClearedTongueBot", attacker, (withShove) ? "Shoving" : "Empty");
+		if (IsValidClientInGame(attacker))
+			CPrintToChatAll("%t %t", "Tag++", "SmokerShoveSelfClear", attacker);
 	}
 
 	// call forward
@@ -160,10 +221,7 @@ void HandleRockSkeeted(int attacker, int victim)
 		if (!IsValidClientInGame(attacker))
 			return;
 
-		if (g_cvarRepRockName.BoolValue && IsValidClientInGame(victim) && !IsFakeClient(victim))
-			CPrintToChatAll("%t %t", "Tag+", "SkeetedRock", attacker, victim);
-		else
-			CPrintToChatAll("%t %t", "Tag+", "SkeetedRockBot", attacker);
+		CPrintToChatAll("%t %t", "Tag+", "TankRockSkeet", attacker);
 	}
 
 	Call_StartForward(g_hForwardRockSkeeted);
@@ -179,9 +237,9 @@ stock void HandleHunterDP(int attacker, int victim, int actualDamage, float calc
 	if (g_cvarReport.BoolValue && g_cvarRepHunterDP.BoolValue && height >= g_cvarHunterDPThresh.FloatValue && !playerIncapped)
 	{
 		if (IsValidClientInGame(attacker) && IsValidClientInGame(victim) && !IsFakeClient(attacker))
-			CPrintToChatAll("%t %t", "Tag++", "HunterHP", attacker, victim, RoundFloat(calculatedDamage), RoundFloat(height));
+			CPrintToChatAll("%t %t", "Tag++", "HunterHighPounce", attacker, RoundFloat(calculatedDamage), RoundFloat(height));
 		else if (IsValidClientInGame(victim))
-			CPrintToChatAll("%t %t", "Tag++", "HunterHPBot", victim, RoundFloat(calculatedDamage), RoundFloat(height));
+			CPrintToChatAll("%t %t", "Tag++", "HunterHighPounceAI", RoundFloat(calculatedDamage), RoundFloat(height));
 	}
 
 	Call_StartForward(g_hForwardHunterDP);
@@ -200,9 +258,9 @@ stock void HandleJockeyDP(int attacker, int victim, float height)
 	if (g_cvarReport.BoolValue && g_cvarRepJockeyDP.BoolValue && height >= g_cvarJockeyDPThresh.FloatValue)
 	{
 		if (IsValidClientInGame(attacker) && IsValidClientInGame(victim) && !IsFakeClient(attacker))
-			CPrintToChatAll("%t %t", "Tag+++", "JockeyHP", attacker, victim, RoundFloat(height));
+			CPrintToChatAll("%t %t", "Tag+++", "JockeyHighPounce", attacker, RoundFloat(height));
 		else if (IsValidClientInGame(victim))
-			CPrintToChatAll("%t %t", "Tag+++", "JockeyHPBot", victim, RoundFloat(height));
+			CPrintToChatAll("%t %t", "Tag+++", "JockeyHighPounceAI", RoundFloat(height));
 	}
 
 	Call_StartForward(g_hForwardJockeyDP);
@@ -220,9 +278,9 @@ stock void HandleDeathCharge(int attacker, int victim, float height, float dista
 	if (g_cvarReport.BoolValue && g_cvarRepDeathCharge.BoolValue && height >= g_cvarDeathChargeHeight.FloatValue)
 	{
 		if (IsValidClientInGame(attacker) && IsValidClientInGame(victim) && !IsFakeClient(attacker))
-			CPrintToChatAll("%t %t", "Tag++++", "DeathCharged", attacker, victim, (bCarried) ? "Empty" : "Bowling", RoundFloat(height));
+			CPrintToChatAll("%t %t", "Tag++++", "ChargerDeathCharge", attacker, (bCarried) ? "Empty" : "Bowling", RoundFloat(height));
 		else if (IsValidClientInGame(victim))
-			CPrintToChatAll("%t %t", "Tag++++", "DeathChargedBot", victim, (bCarried) ? "Empty" : "Bowling", RoundFloat(height));
+			CPrintToChatAll("%t %t", "Tag++++", "ChargerDeathChargeAI", (bCarried) ? "Empty" : "Bowling", RoundFloat(height));
 	}
 
 	Call_StartForward(g_hForwardDeathCharge);
@@ -254,19 +312,12 @@ stock void HandleClear(int attacker, int victim, int pinVictim, int zombieClass,
 
 		if (fClearTime != -1.0 && fClearTime <= fMinTime)
 		{
-			if (IsValidClientInGame(attacker) && IsValidClientInGame(victim) && !IsFakeClient(victim))
+			if (IsValidClientInGame(attacker))
 			{
 				if (IsValidClientInGame(pinVictim))
-					CPrintToChatAll("%t %t", "Tag+", "SIClear", attacker, pinVictim, victim, g_csSIClassName[zombieClass], fClearTime);
+					CPrintToChatAll("%t %t", "Tag+", "InfectedClear", attacker, pinVictim, g_csSIClassName[zombieClass], fClearTime);
 				else
-					CPrintToChatAll("%t %t", "Tag+", "SIClearTeammate", attacker, victim, g_csSIClassName[zombieClass], fClearTime);
-			}
-			else if (IsValidClientInGame(attacker))
-			{
-				if (IsValidClientInGame(pinVictim))
-					CPrintToChatAll("%t %t", "Tag+", "SIClearBot", attacker, pinVictim, g_csSIClassName[zombieClass], fClearTime);
-				else
-					CPrintToChatAll("%t %t", "Tag+", "SIClearTeammateBot", attacker, g_csSIClassName[zombieClass], fClearTime);
+					CPrintToChatAll("%t %t", "Tag+", "InfectedClearTeammate", attacker, g_csSIClassName[zombieClass], fClearTime);
 			}
 		}
 	}
@@ -310,43 +361,29 @@ stock void HandleCarAlarmTriggered(int survivor, int infected, int reason)
 	if (g_cvarRepCarAlarm.BoolValue && IsValidClientInGame(survivor) && !IsFakeClient(survivor))
 	{
 		if (reason == CALARM_HIT)
-			CPrintToChatAll("%t %t", "Tag+", "CalarmHit", survivor);
+			CPrintToChatAll("%t %t", "Tag+", "AlarmHit", survivor);
 		else if (reason == CALARM_TOUCHED)
 		{
 			// if a survivor touches an alarmed car, it might be due to a special infected...
 			if (IsValidInfected(infected))
 			{
+				int zombieClass = GetEntProp(infected, Prop_Send, "m_zombieClass");
 				if (!IsFakeClient(infected))
-					CPrintToChatAll("%t %t", "Tag+", "CalarmTouched", infected, survivor);
+					CPrintToChatAll("%t %t", "Tag+", "AlarmInfectedPlayer", infected, g_csSIClassName[zombieClass]);
 				else
-				{
-					switch (GetEntProp(infected, Prop_Send, "m_zombieClass"))
-					{
-						case ZC_SMOKER:
-							CPrintToChatAll("%t %t", "Tag+", "CalarmTouchedHunter", survivor);
-						case ZC_JOCKEY:
-							CPrintToChatAll("%t %t", "Tag+", "CalarmTouchedJockey", survivor);
-						case ZC_CHARGER:
-							CPrintToChatAll("%t %t", "Tag+", "CalarmTouchedCharger", survivor);
-						default:
-							CPrintToChatAll("%t %t", "Tag+", "CalarmTouchedInfected", survivor);
-					}
-				}
+					CPrintToChatAll("%t %t", "Tag+", "AlarmInfectedAI", g_csSIClassName[zombieClass]);
 			}
 			else
-				CPrintToChatAll("%t %t", "Tag+", "CalarmTouchedBot", survivor);
+				CPrintToChatAll("%t %t", "Tag+", "AlarmTouch", survivor);
 		}
 		else if (reason == CALARM_EXPLOSION)
-			CPrintToChatAll("%t %t", "Tag+", "CalarmExplosion", survivor);
+			CPrintToChatAll("%t %t", "Tag+", "AlarmExplosion", survivor);
 		else if (reason == CALARM_BOOMER)
 		{
-			if (IsValidInfected(infected) && !IsFakeClient(infected))
-				CPrintToChatAll("%t %t", "Tag+", "CalarmBoomer", survivor, infected);
-			else
-				CPrintToChatAll("%t %t", "Tag+", "CalarmBoomerBot", survivor);
+			CPrintToChatAll("%t %t", "Tag+", "AlarmBoomerKill", survivor);
 		}
 		else
-			CPrintToChatAll("%t %t", "Tag+", "Calarm", survivor);
+			CPrintToChatAll("%t %t", "Tag+", "AlarmTriggered", survivor);
 	}
 
 	Call_StartForward(g_hForwardAlarmTriggered);

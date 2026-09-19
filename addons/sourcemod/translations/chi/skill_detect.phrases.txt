@@ -1,0 +1,243 @@
+"Phrases"
+{
+	// chat prefixes
+	"Tag+"
+	{
+		"chi"		"{green}★{default}"
+	}
+	"Tag++"
+	{
+		"chi"		"{green}★★{default}"
+	}
+	"Tag+++"
+	{
+		"chi"		"{green}★★★{default}"
+	}
+	"Tag++++"
+	{
+		"chi"		"{green}★★★★{default}"
+	}
+
+	// hunter skeets
+	"HunterTeamSkeet"
+	{
+		"#format"	"{1:N},{2:d},{3:d},{4:s},{5:s}" // 1:attacker 2:damage 3:shots 4:assists 5:English plural suffix
+		"chi"		"{olive}{1}{default} 协同空爆了 {olive}Hunter{default}，{blue}{3} 枪 / {2} 伤害{default}。协助：{olive}{4}{default}"
+	}
+	"HunterSkeet"
+	{
+		"#format"	"{1:N},{2:d},{3:s}" // 1:attacker 2:shots 3:English plural suffix
+		"chi"		"{olive}{1}{default} 用 {blue}{2} 枪{default}空爆了 {olive}Hunter{default}"
+	}
+	"HunterMeleeSkeet"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"chi"		"{olive}{1}{default} 近战空爆了 {olive}Hunter{default}"
+	}
+	"HunterMagnumHeadshot"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"chi"		"{olive}{1}{default} 马格南爆头空爆了 {olive}Hunter{default}"
+	}
+	"HunterSniperHeadshot"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"chi"		"{olive}{1}{default} 狙击爆头空爆了 {olive}Hunter{default}"
+	}
+	"HunterShotgunSkeet"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"chi"		"{olive}{1}{default} 单喷一枪空爆了 {olive}Hunter{default}"
+	}
+	"HunterSmgSkeet"
+	{
+		"#format"	"{1:N},{2:d}" // 1:attacker 2:shots
+		"chi"		"{olive}{1}{default} 冲锋枪 {blue}{2} 发{default}空爆了 {olive}Hunter{default}"
+	}
+	"HunterGrenadeSkeet"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"chi"		"{olive}{1}{default} {blue}榴弹空爆{default}了 {olive}Hunter{default}。"
+	}
+
+	// hunter deadstops
+	"HunterDeadstop"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"chi"		"{olive}{1}{default} {blue}推停{default}了一只 {olive}Hunter{default}"
+	}
+
+	// jockey skeets
+	"JockeySkeet"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"chi"		"{olive}{1}{default} 空爆了 Jockey"
+	}
+
+	// charger levels
+	"ChargerFullLevel"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"chi"		"{olive}{1}{default} 近战{blue}满血秒杀{default}了冲锋中的牛"
+	}
+	"ChargerHurtLevel"
+	{
+		"#format"	"{1:N},{2:d}" // 1:attacker 2:damage
+		"chi"		"{olive}{1}{default} {blue}近战击杀{default}了 Charger（{blue}{2} 伤害{default}）"
+	}
+
+	// boomer pops and shutdowns
+	"BoomerPop"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"chi"		"{olive}{1}{default} 打爆了一只 Boomer。"
+	}
+	"BoomerShutdown"
+	{
+		"#format"	"{1:N},{2:.1f}" // 1:attacker 2:seconds alive
+		"chi"		"{olive}{1}{default} 在 {blue}{2} 秒{default}内击杀胖子，且未波及任何生还"
+	}
+
+	// witch crowns and drawcrowns
+	"WitchCrown"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"chi"		"{olive}{1}{default} 秒杀了 Witch"
+	}
+	"WitchDrawCrown"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"chi"		"{olive}{1}{default} 引秒了 Witch"
+	}
+
+	// smoker tongue cuts and self-clears
+	"SmokerTongueCut"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"chi"		"{olive}{1}{default} {blue}砍断{default}了 Smoker 的舌头"
+	}
+	"SmokerKillSelfClear"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"chi"		"{olive}{1}{default} 面对 Smoker 的舌头{blue}成功自救{default} {blue}（击杀自救）{default}"
+	}
+	"SmokerShoveSelfClear"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"chi"		"{olive}{1}{default} 面对 Smoker {blue}成功自救{default} {blue}（推开自救）{default}"
+	}
+
+	// tank rock skeets
+	"TankRockSkeet"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"chi"		"{olive}{1}{default} {blue}打碎{default}了 Tank 的石头"
+	}
+
+	// infected shoves and clears
+	"InfectedShove"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"chi"		"{olive}{1}{default} {blue}推开{default}了一只{olive}特感{default}。"
+	}
+	"InfectedClear"
+	{
+		"#format"	"{1:N},{2:N},{3:s},{4:.2f}" // 1:rescuer 2:teammate 3:infected class 4:clear time
+		"chi"		"{olive}{1}{default} {blue}秒救{default}了被 {3} 控制的 {olive}{2}{default}（{blue}{4} {default}秒）"
+	}
+	"InfectedClearTeammate"
+	{
+		"#format"	"{1:N},{2:s},{3:.2f}" // 1:rescuer 2:infected class 3:clear time
+		"chi"		"{olive}{1}{default} {blue}秒救{default}了被 {2} 控制的{olive}队友{default}（{blue}{3} {default}秒）"
+	}
+
+	// highpounces
+	"HunterHighPounce"
+	{
+		"#format"	"{1:N},{2:i},{3:i}" // 1:attacker 2:damage 3:height
+		"chi"		"{olive}{1}{default} 的 Hunter {red}高扑{default}了 {olive}生还者{default}（{red}{2}{default} 伤害，高度：{red}{3}{default}）"
+	}
+	"HunterHighPounceAI"
+	{
+		"#format"	"{1:i},{2:i}" // 1:damage 2:height
+		"chi"		"一只 {olive}Hunter{default} {red}高扑{default}了 {olive}生还者{default}（{red}{1}{default} 伤害，高度：{red}{2}{default}）"
+	}
+	"JockeyHighPounce"
+	{
+		"#format"	"{1:N},{2:i}" // 1:attacker 2:height
+		"chi"		"{olive}{1}{default} 的 Jockey {red}高扑{default}了 {olive}生还者{default}（{red}高度{default}：{red}{2}{default}）"
+	}
+	"JockeyHighPounceAI"
+	{
+		"#format"	"{1:i}" // 1:height
+		"chi"		"一只 {olive}Jockey{default} {red}高扑{default}了 {olive}生还者{default}（{red}高度{default}：{red}{1}{default}）"
+	}
+
+	// deathcharges
+	"ChargerDeathCharge"
+	{
+		"#format"	"{1:N},{2:t},{3:i}" // 1:attacker 2:"Empty"/"Bowling" 3:height
+		"chi"		"{olive}{1}{default} 的 Charger {red}秒杀{default}了 {olive}生还者{default} {2}（{red}高度{default}：{red}{3}{default}）"
+	}
+	"ChargerDeathChargeAI"
+	{
+		"#format"	"{1:t},{2:i}" // 1:"Empty"/"Bowling" 2:height
+		"chi"		"一只 {olive}Charger{default} {red}秒杀{default}了 {olive}生还者{default} {1}（{red}高度{default}：{red}{2}{default}）"
+	}
+	"Bowling"
+	{
+		"chi"		"（一撞多）"
+	}
+
+	// bunnyhops
+	"BunnyHop"
+	{
+		"#format"	"{1:i},{2:t},{3:.1f}" // 1:streak 2:"PluralCount"/"Empty" 3:top speed
+		"chi"		"{olive}你{default}连续完成了 {blue}{1} 次连跳{2}{default}（{blue}最高速度{default}：{olive}{3}{default}）"
+	}
+	"PluralCount"
+	{
+		"chi"		""
+	}
+	"Empty"
+	{
+		"chi"		""
+	}
+
+	// car alarms
+	"AlarmHit"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"chi"		"{olive}{1}{default} 触发了警报。"
+	}
+	"AlarmTouch"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"chi"		"{olive}{1}{default} 通过碰撞而触发了警报。"
+	}
+	"AlarmExplosion"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"chi"		"{olive}{1}{default} 通过爆炸触发了警报。"
+	}
+	"AlarmTriggered"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"chi"		"{olive}{1}{default} 触发了警报。"
+	}
+	"AlarmBoomerKill"
+	{
+		"#format"	"{1:N}" // 1:attacker
+		"chi"		"{olive}{1}{default} 射击 {olive}Boomer{default} 触发了警报。"
+	}
+	"AlarmInfectedPlayer"
+	{
+		"#format"	"{1:N},{2:s}" // 1:infected player 2:infected class
+		"chi"		"{olive}{1}{default} 的 {2} 使生还者触发了警报。"
+	}
+	"AlarmInfectedAI"
+	{
+		"#format"	"{1:s}" // 1:infected class
+		"chi"		"一只 {olive}{1}{default} 使生还者触发了警报。"
+	}
+}
