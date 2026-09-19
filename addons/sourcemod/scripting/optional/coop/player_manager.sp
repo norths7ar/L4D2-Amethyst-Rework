@@ -18,6 +18,7 @@ ConVar g_allowBotSurvivors;
 ConVar g_slayBotTime;
 
 bool g_roundLive;
+bool g_lateLoad;
 Handle g_cleanupTimer;
 bool g_transitionCaptured;
 int g_generation;
@@ -41,11 +42,12 @@ public Plugin myinfo =
 	name = "Coop player manager",
 	author = "海洋空氣, norths7ar",
 	description = "Coop join, spectator, bot-slot and player-team lifecycle",
-	version = "1.2.0"
+	version = "1.2.1"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
 {
+	g_lateLoad = late;
 	CreateNative("Coop_GetHumanSurvivorCount", Native_GetHumanSurvivorCount);
 	CreateNative("Coop_GetTotalSurvivorCount", Native_GetTotalSurvivorCount);
 	CreateNative("Coop_IsHumanSurvivor", Native_IsHumanSurvivor);
@@ -172,7 +174,8 @@ public Action L4D_OnEnterGhostStatePre(int client)
 public void OnMapStart()
 {
 	g_generation++;
-	g_roundLive = false;
+	g_roundLive = g_lateLoad && L4D_HasAnySurvivorLeftSafeArea();
+	g_lateLoad = false;
 	CancelBotCleanup();
 	g_transitionCaptured = false;
 	// Loading the destination map must not consume the player's return window.
@@ -547,6 +550,7 @@ void RememberRole(int client, int targetGeneration)
 		g_reservationCharacter[index] = GetEntProp(client, Prop_Send, "m_survivorCharacter");
 		g_reservationSet[index] = L4D2_GetSurvivorSetMod();
 		GetClientModel(client, g_reservationModel[index], sizeof(g_reservationModel[]));
+		if (IsInfectedModel(g_reservationModel[index])) g_reservationModel[index][0] = '\0';
 	}
 }
 
@@ -686,7 +690,13 @@ bool CharacterReservationApplies(int reservation)
 {
 	// A map changing survivor sets owns that change; do not force old voices/models into it.
 	return ValidReservation(reservation) && g_reservationRole[reservation] == RESERVATION_SURVIVOR
-		&& g_reservationModel[reservation][0] && g_reservationSet[reservation] == L4D2_GetSurvivorSetMod();
+		&& g_reservationModel[reservation][0] && !IsInfectedModel(g_reservationModel[reservation])
+		&& g_reservationSet[reservation] == L4D2_GetSurvivorSetMod();
+}
+
+bool IsInfectedModel(const char[] model)
+{
+	return StrContains(model, "models/infected/", false) == 0;
 }
 
 void RestoreReservedCharacter(int client, int reservation)
@@ -729,6 +739,7 @@ void RestoreReservedCharacter(int client, int reservation)
 	{
 		char oldModel[PLATFORM_MAX_PATH];
 		GetClientModel(client, oldModel, sizeof(oldModel));
+		if (IsInfectedModel(oldModel)) return;
 		SetEntProp(matchingBot, Prop_Send, "m_survivorCharacter", GetEntProp(client, Prop_Send, "m_survivorCharacter"));
 		SetEntityModel(matchingBot, oldModel);
 	}
@@ -765,6 +776,9 @@ public void EventCharacterTransfer(Event event, const char[] name, bool dontBroa
 	// Anne character_manager preserves both fields across engine ownership transfers.
 	char model[PLATFORM_MAX_PATH];
 	GetClientModel(source, model, sizeof(model));
+	// Replacement events run after engine ownership changes. The outgoing
+	// entity can already carry an infected model; never copy that to a survivor.
+	if (IsInfectedModel(model)) return;
 	SetEntProp(destination, Prop_Send, "m_survivorCharacter", GetEntProp(source, Prop_Send, "m_survivorCharacter"));
 	SetEntityModel(destination, model);
 	if (toPlayer) CreateTimer(0.2, TimerRestoreCharacter, GetClientUserId(player), TIMER_FLAG_NO_MAPCHANGE);
