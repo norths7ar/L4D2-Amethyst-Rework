@@ -96,12 +96,13 @@ bool HasTopSupport(int tank, const float point[3]) {
 }
 
 bool TryObstacleJump(int tank, int target, const float position[3], const float targetPos[3], int &buttons, float vel[3]) {
-    if (!g_obstacleJump.BoolValue || !InFront(tank, targetPos, 0.85)) return false;
-    float direction[3]; MakeVectorFromPoints(position, targetPos, direction); direction[2] = 0.0;
-    if (NormalizeVector(direction, direction) < 60.0) return false;
+    if (!g_obstacleJump.BoolValue || !InFront(tank, targetPos, 0.5)) return false;
+    float toward[3]; MakeVectorFromPoints(position, targetPos, toward); toward[2] = 0.0;
+    float targetDistance = NormalizeVector(toward, toward);
+    if (targetDistance < 24.0) return false;
     float mins[3], maxs[3], ahead[3];
     GetEntPropVector(tank, Prop_Send, "m_vecMins", mins); GetEntPropVector(tank, Prop_Send, "m_vecMaxs", maxs);
-    for (int axis = 0; axis < 3; axis++) ahead[axis] = position[axis] + direction[axis] * 80.0;
+    for (int axis = 0; axis < 3; axis++) ahead[axis] = position[axis] + toward[axis] * 80.0;
     ahead[2] += 2.0;
     // An actual obstacle must obstruct pursuit; do not hop onto arbitrary nearby scenery.
     if (HullClear(tank, position, ahead, mins, maxs)) return false;
@@ -109,46 +110,55 @@ bool TryObstacleJump(int tank, int target, const float position[3], const float 
     if (gravityScale == 0.0) gravityScale = 1.0;
     float gravity = FindConVar("sv_gravity").FloatValue * gravityScale;
     if (gravity <= 0.0) return false;
-    for (int step = 0; step < 4; step++) {
-        float distance = 50.0 + float(step) * 25.0;
-        float sample[3], landing[3];
-        for (int axis = 0; axis < 3; axis++) sample[axis] = position[axis] + direction[axis] * distance;
-        sample[2] = position[2] + 82.0;
-        if (!FindTop(tank, sample, position[2] + 18.0, landing)) continue;
-        float rise = landing[2] - position[2];
-        if (rise < 20.0 || rise > 80.0 || !HasTopSupport(tank, landing)) continue;
-        landing[2] += 2.0;
-        if (!HullClear(tank, landing, landing, mins, maxs)) continue;
-        if (GetVectorDistance(landing, targetPos) >= GetVectorDistance(position, targetPos)) continue;
-        // Ballistic jump ending on the descending side, 24 units above the top at apex.
-        float vertical = SquareRoot(2.0 * gravity * (rise + 26.0));
-        float time = (vertical + SquareRoot(vertical * vertical - 2.0 * gravity * (rise + 2.0))) / gravity;
-        float speed = distance / time;
-        if (speed > 300.0) continue;
-        float previous[3], point[3], launch[3];
-        for (int axis = 0; axis < 3; axis++) previous[axis] = position[axis];
-        previous[2] += 2.0;
-        bool clear = true;
-        for (int segment = 1; segment <= 12; segment++) {
-            float t = time * float(segment) / 12.0;
-            point[0] = position[0] + direction[0] * speed * t;
-            point[1] = position[1] + direction[1] * speed * t;
-            point[2] = position[2] + vertical * t - 0.5 * gravity * t * t;
-            if (!HullClear(tank, previous, point, mins, maxs)) { clear = false; break; }
-            for (int axis = 0; axis < 3; axis++) previous[axis] = point[axis];
+    // Try forward first, then reachable side steps around seat backs. Collision and
+    // support geometry, not campaign NAV quality, decide whether an arc is safe.
+    float offsets[5] = {0.0, 30.0, -30.0, 60.0, -60.0};
+    for (int candidate = 0; candidate < sizeof(offsets); candidate++) {
+        float yaw = ArcTangent2(toward[1], toward[0]) + DegToRad(offsets[candidate]);
+        float direction[3]; direction[0] = Cosine(yaw); direction[1] = Sine(yaw);
+        for (int step = 0; step < 5; step++) {
+            float distance = 50.0 + float(step) * 25.0;
+            float sample[3], landing[3];
+            for (int axis = 0; axis < 3; axis++) sample[axis] = position[axis] + direction[axis] * distance;
+            sample[2] = position[2] + 82.0;
+            if (!FindTop(tank, sample, position[2] + 18.0, landing)) continue;
+            float rise = landing[2] - position[2];
+            if (rise < 20.0 || rise > 80.0 || !HasTopSupport(tank, landing)) continue;
+            landing[2] += 2.0;
+            if (!HullClear(tank, landing, landing, mins, maxs)) continue;
+            float remaining[3]; MakeVectorFromPoints(landing, targetPos, remaining); remaining[2] = 0.0;
+            // A seat can be an intermediate step even before the raised table is reachable.
+            if (GetVectorLength(remaining) >= targetDistance) continue;
+            // Ballistic jump ending on the descending side, 24 units above the top at apex.
+            float vertical = SquareRoot(2.0 * gravity * (rise + 26.0));
+            float time = (vertical + SquareRoot(vertical * vertical - 2.0 * gravity * (rise + 2.0))) / gravity;
+            float speed = distance / time;
+            if (speed > 300.0) continue;
+            float previous[3], point[3], launch[3];
+            for (int axis = 0; axis < 3; axis++) previous[axis] = position[axis];
+            previous[2] += 2.0;
+            bool clear = true;
+            for (int segment = 1; segment <= 12; segment++) {
+                float t = time * float(segment) / 12.0;
+                point[0] = position[0] + direction[0] * speed * t;
+                point[1] = position[1] + direction[1] * speed * t;
+                point[2] = position[2] + vertical * t - 0.5 * gravity * t * t;
+                if (!HullClear(tank, previous, point, mins, maxs)) { clear = false; break; }
+                for (int axis = 0; axis < 3; axis++) previous[axis] = point[axis];
+            }
+            if (!clear) continue;
+            launch[0] = direction[0] * speed; launch[1] = direction[1] * speed; launch[2] = vertical;
+            // Physical launch, not a position teleport or a mid-animation cancellation.
+            SetEntPropEnt(tank, Prop_Send, "m_hGroundEntity", -1);
+            SetEntityFlags(tank, GetEntityFlags(tank) & ~FL_ONGROUND);
+            TeleportEntity(tank, NULL_VECTOR, NULL_VECTOR, launch);
+            buttons &= ~(IN_JUMP | IN_DUCK);
+            vel[0] = vel[1] = 0.0;
+            g_jumpUntil[tank] = GetGameTime() + time + 1.5;
+            g_jumpTarget[tank] = GetClientUserId(target);
+            for (int axis = 0; axis < 3; axis++) g_jumpLanding[tank][axis] = landing[axis];
+            return true;
         }
-        if (!clear) continue;
-        launch[0] = direction[0] * speed; launch[1] = direction[1] * speed; launch[2] = vertical;
-        // Physical launch, not a position teleport or a mid-animation cancellation.
-        SetEntPropEnt(tank, Prop_Send, "m_hGroundEntity", -1);
-        SetEntityFlags(tank, GetEntityFlags(tank) & ~FL_ONGROUND);
-        TeleportEntity(tank, NULL_VECTOR, NULL_VECTOR, launch);
-        buttons &= ~(IN_JUMP | IN_DUCK);
-        vel[0] = vel[1] = 0.0;
-        g_jumpUntil[tank] = GetGameTime() + time + 0.8;
-        g_jumpTarget[tank] = GetClientUserId(target);
-        for (int axis = 0; axis < 3; axis++) g_jumpLanding[tank][axis] = landing[axis];
-        return true;
     }
     return false;
 }
@@ -168,9 +178,24 @@ bool ContinueObstacleJump(int tank, int target, int &buttons, float vel[3]) {
     if (FloatAbs(position[2] - g_jumpLanding[tank][2]) > 10.0 || !HasTopSupport(tank, position)) {
         g_jumpUntil[tank] = 0.0; return false;
     }
+    // A higher target needs another reachable step; a distant target should not
+    // leave the Tank waiting on a table. Re-enter the normal opportunity scan.
+    if (targetPos[2] > position[2] + 18.0 || GetVectorDistance(position, targetPos) > 180.0) {
+        g_jumpUntil[tank] = 0.0;
+        return false;
+    }
     // Briefly evaluate from the top instead of instantly following a side-switch down.
     // Keep Valve's aim and attack; only permit horizontal movement onto supported top.
     MakeVectorFromPoints(position, targetPos, direction); direction[2] = 0.0;
+    // Check the actual navigation command too: the NAV may request a sideways
+    // detour off the seat even when the straight line toward the target is supported.
+    if (FloatAbs(vel[0]) + FloatAbs(vel[1]) > 1.0) {
+        float facing[3], forwardVector[3], right[3];
+        GetClientEyeAngles(tank, facing); facing[0] = 0.0;
+        GetAngleVectors(facing, forwardVector, right, NULL_VECTOR);
+        direction[0] = forwardVector[0] * vel[0] + right[0] * vel[1];
+        direction[1] = forwardVector[1] * vel[0] + right[1] * vel[1];
+    }
     NormalizeVector(direction, direction);
     for (int axis = 0; axis < 3; axis++) next[axis] = position[axis] + direction[axis] * 24.0;
     GetEntPropVector(tank, Prop_Send, "m_vecMins", mins); GetEntPropVector(tank, Prop_Send, "m_vecMaxs", maxs);

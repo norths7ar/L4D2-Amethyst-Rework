@@ -10,10 +10,11 @@
 public Plugin myinfo = {
     name = "AI Tank", author = "Breezy, norths7ar",
     description = "AI Tank movement, throws and opportunistic obstacle interaction",
-    version = "1.0.0"
+    version = "1.1.0"
 };
 
 ConVar g_enable, hCvarTankBhop, hCvarTankRock, hCvarTankBhopStopDistance;
+ConVar g_bhopMaxSpeed;
 ConVar hCvarTankThrowMinDistance, hCvarTankThrowMaxDistance;
 ConVar g_climbEnable, g_lowRate, g_highRate, g_obstacleJump, g_hittables;
 int g_targetUserId[MAXPLAYERS + 1];
@@ -29,8 +30,9 @@ public void OnPluginStart() {
     g_enable = CreateConVar("ai_tank_enable", "1", "Enable AI Tank behavior", _, true, 0.0, true, 1.0);
     hCvarTankBhop = CreateConVar("ai_tank_bhop", "1", "Enable AI Tank bhopping");
     hCvarTankRock = CreateConVar("ai_tank_rock", "1", "Allow AI Tank rock throws");
-    hCvarTankBhopStopDistance = CreateConVar("ai_tank_bhop_stop_distance", "135", "Stop adding hops inside target distance", _, true, 0.0);
-    hCvarTankThrowMinDistance = CreateConVar("ai_tank_throw_min_distance", "300", "Minimum range for starting a rock throw", _, true, 0.0);
+    hCvarTankBhopStopDistance = CreateConVar("ai_tank_bhop_stop_distance", "85", "Stop adding hops inside target distance when closing on the victim", _, true, 0.0);
+    g_bhopMaxSpeed = CreateConVar("ai_tank_bhop_max_speed", "360", "Maximum horizontal bhop speed", _, true, 210.0);
+    hCvarTankThrowMinDistance = CreateConVar("ai_tank_throw_min_distance", "500", "Minimum range for starting a rock throw", _, true, 0.0);
     hCvarTankThrowMaxDistance = CreateConVar("ai_tank_throw_max_distance", "800", "Maximum throw-start range; 0 means unlimited", _, true, 0.0);
     g_climbEnable = CreateConVar("tank_climb_enable", "1", "Accelerate native AI Tank obstacle traversal", _, true, 0.0, true, 1.0);
     g_lowRate = CreateConVar("tank_climb_low_rate", "2.5", "Low obstacle animation rate", _, true, 1.0, true, 10.0);
@@ -148,11 +150,6 @@ public Action OnPlayerRunCmd(int tank, int &buttons, int &impulse, float vel[3],
     GetClientAbsOrigin(tank, position); GetClientAbsOrigin(target, targetPos);
     float distance = GetVectorDistance(position, targetPos);
     if (ContinueObstacleJump(tank, target, buttons, vel)) return Plugin_Changed;
-    // A nearby actual victim keeps the engine's melee behavior, without changing its aim.
-    if (distance < hCvarTankBhopStopDistance.FloatValue && VisiblePoint(tank, target, targetPos)) {
-        buttons &= ~(IN_JUMP | IN_DUCK);
-        return Plugin_Changed;
-    }
     if (GetEntityFlags(tank) & FL_ONGROUND) {
         float now = GetGameTime();
         if (now >= g_nextOpportunity[tank] && !(buttons & IN_ATTACK)) {
@@ -160,24 +157,62 @@ public Action OnPlayerRunCmd(int tank, int &buttons, int &impulse, float vel[3],
             if (TryHittable(tank, target, targetPos, buttons)) return Plugin_Changed;
             if (TryObstacleJump(tank, target, position, targetPos, buttons, vel)) return Plugin_Changed;
         }
-        if (buttons & IN_ATTACK) return Plugin_Changed;
     }
     if (!hCvarTankBhop.BoolValue) return Plugin_Changed;
     GetEntPropVector(tank, Prop_Data, "m_vecVelocity", velocity);
+    bool braking = BrakeChase(tank, target, position, targetPos, distance, velocity);
+    if (braking) {
+        buttons &= ~(IN_JUMP | IN_DUCK);
+        return Plugin_Changed;
+    }
+    if ((GetEntityFlags(tank) & FL_ONGROUND) && (buttons & IN_ATTACK)) return Plugin_Changed;
     float speed = SquareRoot(velocity[0] * velocity[0] + velocity[1] * velocity[1]);
     if (!GetEntProp(tank, Prop_Send, "m_hasVisibleThreats") || speed <= 210.0) return Plugin_Changed;
     if (GetEntityFlags(tank) & FL_ONGROUND) {
         // TGMaster/Chanz jump approach, retaining Ast's 60-unit impulse.
         float heading[3], forwardVector[3]; GetClientEyeAngles(tank, heading);
+        heading[0] = 0.0;
         if (buttons & IN_BACK) heading[1] += 180.0;
         if (buttons & IN_MOVELEFT) heading[1] += 90.0;
         if (buttons & IN_MOVERIGHT) heading[1] -= 90.0;
         GetAngleVectors(heading, forwardVector, NULL_VECTOR, NULL_VECTOR);
-        for (int axis = 0; axis < 3; axis++) velocity[axis] += forwardVector[axis] * 60.0;
+        for (int axis = 0; axis < 2; axis++) velocity[axis] += forwardVector[axis] * 60.0;
+        LimitHorizontalSpeed(velocity, g_bhopMaxSpeed.FloatValue);
         buttons |= IN_DUCK | IN_JUMP;
         TeleportEntity(tank, NULL_VECTOR, NULL_VECTOR, velocity);
     }
     return Plugin_Changed;
+}
+
+void LimitHorizontalSpeed(float velocity[3], float maximum) {
+    float speed = SquareRoot(velocity[0] * velocity[0] + velocity[1] * velocity[1]);
+    if (speed <= maximum || speed <= 0.0) return;
+    velocity[0] *= maximum / speed;
+    velocity[1] *= maximum / speed;
+}
+
+bool BrakeChase(int tank, int target, const float position[3], const float targetPos[3], float distance, float velocity[3]) {
+    float toward[3], targetVelocity[3];
+    MakeVectorFromPoints(position, targetPos, toward); toward[2] = 0.0;
+    float horizontal = NormalizeVector(toward, toward);
+    GetEntPropVector(target, Prop_Data, "m_vecVelocity", targetVelocity);
+    float speed = SquareRoot(velocity[0] * velocity[0] + velocity[1] * velocity[1]);
+    float approach = velocity[0] * toward[0] + velocity[1] * toward[1];
+    float fleeing = targetVelocity[0] * toward[0] + targetVelocity[1] * toward[1];
+    bool near = distance < hCvarTankBhopStopDistance.FloatValue
+        && approach - fleeing > 15.0 && VisiblePoint(tank, target, targetPos);
+    // Bleed sideways/backwards momentum on landing; let Valve steer and choose attacks.
+    bool turning = horizontal > 1.0 && speed > 210.0 && approach / speed < 0.55
+        && (GetEntityFlags(tank) & FL_ONGROUND);
+    float cap = g_bhopMaxSpeed.FloatValue;
+    if (near || turning) {
+        float runSpeed = GetEntPropFloat(tank, Prop_Send, "m_flMaxspeed");
+        if (runSpeed <= 0.0) runSpeed = 210.0;
+        if (cap > runSpeed) cap = runSpeed;
+    }
+    LimitHorizontalSpeed(velocity, cap);
+    if (speed > cap) TeleportEntity(tank, NULL_VECTOR, NULL_VECTOR, velocity);
+    return near || turning;
 }
 
 int Tank_GetRockTarget(int tank) {
