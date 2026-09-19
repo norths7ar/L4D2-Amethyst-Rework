@@ -34,7 +34,7 @@ public Plugin myinfo =
 	name = "AI: Hard SI",
 	author = "Breezy",
 	description = "Improves the AI behaviour of special infected",
-	version = "1.3-integration",
+	version = "1.4.0",
 	url = "github.com/breezyplease"
 };
 
@@ -224,16 +224,17 @@ public Action L4D2_OnChooseVictim(int specialInfected, int &curTarget)
 	}
 	else if (zombieClass == L4D2Infected_Charger)
 	{
-		if (!IsSurvivor(curTarget) || !IsPinned(curTarget)) return Plugin_Continue;
-		int alternative = Charger_GetNearbyUnpinnedTarget(specialInfected, curTarget);
-		// When charge is unavailable ("no cooldown") or nobody else is close,
-		// retain Valve's claw target. A ready Charger instead evaluates its
-		// nearby unpinned alternative, including when low health urges a charge.
-		if (alternative > 0 && Charger_IsAbilityReady(specialInfected))
+		int chosen = curTarget;
+		// Keep the existing pinned-target policy, but record the final victim for
+		// movement, distance gating and charge aiming to share the same target.
+		if ((!IsSurvivor(curTarget) || !IsPlayerAlive(curTarget) || IsPinned(curTarget))
+			&& Charger_IsAbilityReady(specialInfected))
 		{
-			curTarget = alternative;
-			return Plugin_Changed;
+			int alternative = Charger_GetNearbyUnpinnedTarget(specialInfected, curTarget);
+			if (alternative > 0) chosen = alternative;
 		}
+		g_chargerTargetUserId[specialInfected] = IsSurvivor(chosen) && IsPlayerAlive(chosen) ? GetClientUserId(chosen) : 0;
+		if (chosen != curTarget) { curTarget = chosen; return Plugin_Changed; }
 	}
 
 	return Plugin_Continue;

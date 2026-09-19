@@ -6,7 +6,8 @@
 Handle hCvarChargeProximity;
 Handle hCvarAimOffsetSensitivityCharger;
 Handle hCvarHealthThresholdCharger;
-int bShouldCharge[MAXPLAYERS]; // manual tracking of charge cooldown
+int g_chargerTargetUserId[MAXPLAYERS + 1];
+int bShouldCharge[MAXPLAYERS + 1]; // manual tracking of charge cooldown
 
 public void Charger_OnModuleStart() {
 	// Charge proximity
@@ -33,34 +34,37 @@ public void Charger_OnModuleEnd() {
 // Initialise spawned chargers
 public Action Charger_OnSpawn(int botCharger) {
 	bShouldCharge[botCharger] = false;
+	g_chargerTargetUserId[botCharger] = 0;
 	return Plugin_Handled;
 }
 
 public Action Charger_OnPlayerRunCmd(int charger, int& buttons, int& impulse, float vel[3], float angles[3], int& weapon) {
-	// prevent charge until survivors are within the defined proximity
+	// Use the victim selected by the AI, not whichever player happens to cross
+	// its crosshair while turning. Leave navigation/attacks alone during abilities.
+	if (GetEntPropEnt(charger, Prop_Send, "m_carryVictim") > 0
+		|| GetEntPropEnt(charger, Prop_Send, "m_pummelVictim") > 0
+		|| L4D_IsPlayerStaggering(charger)) return Plugin_Continue;
+	int ability = GetEntPropEnt(charger, Prop_Send, "m_customAbility");
+	if (ability > MaxClients && IsValidEntity(ability)
+		&& GetEntProp(ability, Prop_Send, "m_isCharging")) return Plugin_Continue;
+	int target = GetClientOfUserId(g_chargerTargetUserId[charger]);
+	if (!IsSurvivor(target) || !IsPlayerAlive(target)) return Plugin_Continue;
 	float chargerPos[3];
 	GetClientAbsOrigin(charger, chargerPos);
-	int target = GetClientAimTarget(charger);	
-	int iSurvivorProximity = GetSurvivorProximity(chargerPos, target); // invalid(=-1) target will cause GetSurvivorProximity() to return distance to closest survivor
+	int distance = GetSurvivorProximity(chargerPos, target);
 	int chargerHealth = GetEntProp(charger, Prop_Send, "m_iHealth");
-	//new String:sweapon[32];
-	//if (!target) return Plugin_Handled;
-	//GetClientWeapon(target, sweapon, sizeof(sweapon));
-	//PrintToChatAll("Charger 的目标正在使用的武器：%s", sweapon);
-	if( (chargerHealth > GetConVarInt(hCvarHealthThresholdCharger) && iSurvivorProximity > GetConVarInt(hCvarChargeProximity)) ) {
-		if( !bShouldCharge[charger] ) { 				
-			BlockCharge(charger);
-			return Plugin_Changed;
-		}
+	if (chargerHealth > GetConVarInt(hCvarHealthThresholdCharger) && distance > GetConVarInt(hCvarChargeProximity)) {
+		if (!bShouldCharge[charger]) BlockCharge(charger);
 	} else {
 		bShouldCharge[charger] = true;
 	}
-	return Plugin_Continue;
+	return Charger_CorrectApproach(charger, target, buttons, vel, angles) ? Plugin_Changed : Plugin_Continue;
 }
 
 void BlockCharge(int charger) {
 	int chargeEntity = GetEntPropEnt(charger, Prop_Send, "m_customAbility");
-	if (chargeEntity > 0) {  // charger entity persists for a short while after death; check ability entity is valid
+	if (chargeEntity > MaxClients && IsValidEntity(chargeEntity)
+		&& GetEntPropFloat(chargeEntity, Prop_Send, "m_timestamp") <= GetGameTime() + 0.1) {  // charger entity persists for a short while after death; check ability entity is valid
 		SetEntPropFloat(chargeEntity, Prop_Send, "m_timestamp", GetGameTime() + 0.1); // keep extending end of cooldown period
 	} 			
 }
@@ -68,10 +72,17 @@ void BlockCharge(int charger) {
 void Charger_OnCharge(int charger) {
 	// Share the same eligible-target policy with OnChooseVictim. Do not undo
 	// its choice by turning the charge back into a pinned survivor.
-	int aimTarget = GetClientAimTarget(charger);
+	int aimTarget = GetClientOfUserId(g_chargerTargetUserId[charger]);
 	if (!Charger_IsFreeTarget(aimTarget)
-		|| IsTargetWatchingAttacker(charger, GetConVarInt(hCvarAimOffsetSensitivityCharger))) {
-		int alternative = Charger_GetNearbyUnpinnedTarget(charger, aimTarget);
+		|| GetPlayerAimOffset(aimTarget, charger) <= GetConVarFloat(hCvarAimOffsetSensitivityCharger)) {
+		// Do not turn a close attack into a dash at someone farther away/behind.
+		float position[3]; GetClientAbsOrigin(charger, position);
+		float limit = GetConVarFloat(hCvarChargeProximity);
+		if (Charger_IsFreeTarget(aimTarget)) {
+			float distance = float(GetSurvivorProximity(position, aimTarget));
+			if (distance < limit) limit = distance;
+		}
+		int alternative = Charger_GetNearbyUnpinnedTarget(charger, aimTarget, limit, true);
 		if (alternative > 0) aimTarget = alternative;
 	}
 	if (Charger_IsFreeTarget(aimTarget) && Charger_HasChargeLine(charger, aimTarget))
@@ -91,7 +102,7 @@ bool Charger_IsAbilityReady(int charger)
 		&& GetEntPropFloat(ability, Prop_Send, "m_timestamp") <= GetGameTime();
 }
 
-int Charger_GetNearbyUnpinnedTarget(int charger, int excluded)
+int Charger_GetNearbyUnpinnedTarget(int charger, int excluded, float maximum = 0.0, bool forwardOnly = false)
 {
 	float chargerPos[3], survivorPos[3];
 	GetClientAbsOrigin(charger, chargerPos);
@@ -104,6 +115,7 @@ int Charger_GetNearbyUnpinnedTarget(int charger, int excluded)
 		bestDistance = cvChargeSpeed.FloatValue * cvChargeDuration.FloatValue;
 	}
 
+	if (maximum > 0.0 && maximum < bestDistance) bestDistance = maximum;
 	for (int survivor = 1; survivor <= MaxClients; survivor++)
 	{
 		if (survivor == excluded || !Charger_IsFreeTarget(survivor))
@@ -111,6 +123,7 @@ int Charger_GetNearbyUnpinnedTarget(int charger, int excluded)
 			continue;
 		}
 		GetClientAbsOrigin(survivor, survivorPos);
+		if (forwardOnly && GetPlayerAimOffset(charger, survivor) > 90.0) continue;
 		float distance = GetVectorDistance(chargerPos, survivorPos);
 		if (distance <= bestDistance && Charger_HasChargeLine(charger, survivor))
 		{
@@ -128,6 +141,7 @@ bool Charger_HasChargeLine(int charger, int survivor)
 	float maxs[3] = {16.0, 16.0, 71.0};
 	GetClientAbsOrigin(charger, start);
 	GetClientAbsOrigin(survivor, end);
+	if (FloatAbs(end[2] - start[2]) > 48.0) return false;
 	start[2] += 1.0;
 	end[2] += 1.0;
 	Handle trace = TR_TraceHullFilterEx(start, end, mins, maxs, MASK_PLAYERSOLID, Charger_TraceFilter, charger);
@@ -155,4 +169,47 @@ void ChargePrediction(int charger, int survivor) {
 	MakeVectorFromPoints( chargerPos, survivorPos, attackDirection );
 	GetVectorAngles(attackDirection, attackAngle);	
 	TeleportEntity(charger, NULL_VECTOR, attackAngle, NULL_VECTOR); 
+}
+
+// Anne's approach module also separates direct approaches from navigation.
+// Only correct a backwards command on a short, level, supported, clear route.
+// No forced charge, jump, turn, or interference with the engine's obstacle detours.
+bool Charger_CorrectApproach(int charger, int target, int &buttons, float vel[3], const float angles[3]) {
+	if (!Charger_IsFreeTarget(target) || !(GetEntityFlags(charger) & FL_ONGROUND)
+		|| GetEntityMoveType(charger) != MOVETYPE_WALK || GetEntProp(charger, Prop_Data, "m_nWaterLevel") > 1) return false;
+	float position[3], end[3], direction[3];
+	GetClientAbsOrigin(charger, position); GetClientAbsOrigin(target, end);
+	MakeVectorFromPoints(position, end, direction);
+	float distance = GetVectorLength(direction);
+	if (distance < 70.0 || distance > GetConVarFloat(hCvarChargeProximity)
+		|| FloatAbs(direction[2]) > 18.0 || !Charger_HasChargeLine(charger, target)) return false;
+	direction[2] = 0.0; NormalizeVector(direction, direction);
+	float facing[3], forwardVector[3], right[3], movement[3];
+	facing = angles; facing[0] = 0.0;
+	GetAngleVectors(facing, forwardVector, right, NULL_VECTOR);
+	for (int axis = 0; axis < 2; axis++) movement[axis] = forwardVector[axis] * vel[0] + right[axis] * vel[1];
+	float speed = GetVectorLength(movement);
+	if (speed < 1.0 || GetVectorDotProduct(movement, direction) >= 0.0) return false;
+	for (float offset = 32.0; offset < distance; offset += 32.0) {
+		float top[3], bottom[3];
+		for (int axis = 0; axis < 3; axis++) top[axis] = position[axis] + direction[axis] * offset;
+		top[2] += 18.0; bottom = top; bottom[2] -= 36.0;
+		Handle trace = TR_TraceRayFilterEx(top, bottom, MASK_PLAYERSOLID, RayType_EndPoint, Charger_GroundFilter);
+		float normal[3]; TR_GetPlaneNormal(trace, normal);
+		bool supported = TR_DidHit(trace) && !TR_StartSolid(trace) && normal[2] >= 0.7;
+		delete trace;
+		if (!supported) return false;
+	}
+	vel[0] = GetVectorDotProduct(direction, forwardVector) * speed;
+	vel[1] = GetVectorDotProduct(direction, right) * speed;
+	buttons &= ~(IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT);
+	if (vel[0] > 0.0) buttons |= IN_FORWARD;
+	else if (vel[0] < 0.0) buttons |= IN_BACK;
+	if (vel[1] > 0.0) buttons |= IN_MOVERIGHT;
+	else if (vel[1] < 0.0) buttons |= IN_MOVELEFT;
+	return true;
+}
+
+public bool Charger_GroundFilter(int entity, int contentsMask) {
+	return entity < 1 || entity > MaxClients;
 }

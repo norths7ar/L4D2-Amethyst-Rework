@@ -10,7 +10,7 @@
 public Plugin myinfo = {
     name = "AI Tank", author = "Breezy, norths7ar",
     description = "AI Tank movement, throws and opportunistic obstacle interaction",
-    version = "1.1.0"
+    version = "1.2.0"
 };
 
 ConVar g_enable, hCvarTankBhop, hCvarTankRock, hCvarTankBhopStopDistance;
@@ -25,8 +25,10 @@ float g_jumpUntil[MAXPLAYERS + 1], g_jumpLanding[MAXPLAYERS + 1][3];
 int g_jumpTarget[MAXPLAYERS + 1];
 
 #include "ai_tank/movement.sp"
+#include "ai_tank/combat.sp"
 
 public void OnPluginStart() {
+    SetupTankCombat();
     g_enable = CreateConVar("ai_tank_enable", "1", "Enable AI Tank behavior", _, true, 0.0, true, 1.0);
     hCvarTankBhop = CreateConVar("ai_tank_bhop", "1", "Enable AI Tank bhopping");
     hCvarTankRock = CreateConVar("ai_tank_rock", "1", "Allow AI Tank rock throws");
@@ -49,6 +51,7 @@ public void OnPluginStart() {
 public void OnClientPutInServer(int client) {
     ResetTank(client);
     SDKHook(client, SDKHook_PostThinkPost, OnPostThink);
+    SDKHook(client, SDKHook_OnTakeDamagePost, OnTankClawDamage);
 }
 public void OnClientDisconnect(int client) { ResetTank(client); }
 public void OnMapStart() {
@@ -66,6 +69,9 @@ public void OnSpawn(Event event, const char[] name, bool dontBroadcast) {
 }
 void ResetTank(int client) {
     g_targetUserId[client] = 0;
+    g_nextTargetChange[client] = 0.0;
+    g_swingRider[client] = 0;
+    g_riderHit[client] = false;
     g_boosted[client] = false;
     g_jumpUntil[client] = 0.0;
     g_nextOpportunity[client] = 0.0;
@@ -84,10 +90,19 @@ public void OnPluginEnd() {
         if (IsClientInGame(client)) RestoreRate(client);
 }
 
-// Observe Valve's selected victim; never force a victim or turn toward a rear attacker.
+// Keep Valve's long-range navigation; prefer a clear, substantially closer
+// opportunity (or a rider) instead of remaining committed to a distant victim.
 public Action L4D2_OnChooseVictim(int tank, int &target) {
-    if (IsAITank(tank)) g_targetUserId[tank] = IsSurvivor(target) ? GetClientUserId(target) : 0;
-    return Plugin_Continue;
+    if (!IsAITank(tank) || !g_enable.BoolValue) return Plugin_Continue;
+    int chosen = target;
+    int sequence = GetEntProp(tank, Prop_Send, "m_nSequence");
+    if (GetEntityMoveType(tank) == MOVETYPE_WALK && !(sequence >= 16 && sequence <= 23)
+        && !(sequence >= 48 && sequence <= 51)) chosen = Tank_ChooseNearbyTarget(tank, target);
+    g_targetUserId[tank] = IsSurvivor(chosen) ? GetClientUserId(chosen) : 0;
+    if (chosen == target) return Plugin_Continue;
+    g_jumpUntil[tank] = 0.0;
+    target = chosen;
+    return Plugin_Changed;
 }
 bool IsAITank(int client) {
     return client > 0 && client <= MaxClients && IsClientInGame(client)
@@ -128,6 +143,12 @@ public Action OnPlayerRunCmd(int tank, int &buttons, int &impulse, float vel[3],
     if (!g_enable.BoolValue || !IsAITank(tank)) return Plugin_Continue;
     int sequence = GetEntProp(tank, Prop_Send, "m_nSequence");
     bool throwing = sequence >= 48 && sequence <= 51;
+    if (!throwing && !(sequence >= 16 && sequence <= 23)
+        && GetEntityMoveType(tank) == MOVETYPE_WALK && !L4D_IsPlayerStaggering(tank)
+        && Tank_AimAtRider(tank, buttons, angles)) {
+        g_jumpUntil[tank] = 0.0;
+        return Plugin_Changed;
+    }
     if (!hCvarTankRock.BoolValue) buttons &= ~IN_ATTACK2;
     if (!throwing && (buttons & IN_ATTACK2)) {
         int rockTarget = Tank_GetRockTarget(tank);
