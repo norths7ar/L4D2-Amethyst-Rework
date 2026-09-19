@@ -18,6 +18,7 @@ AstMod (Amethyst) 为 海洋空气 开发的药役模式。Ast作为模式统一
 - [服务器运维](docs/server-operations.md)
 - [更新日志](docs/CHANGELOG.md)
 - [开发计划](docs/ROADMAP.md)
+- [AstRedux 设计决策](docs/astredux-design.md)
 
 ## 来源与致谢
 
