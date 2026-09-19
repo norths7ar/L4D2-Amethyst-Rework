@@ -29,6 +29,9 @@ int g_reservationExpires[MAX_RESERVATIONS];
 int g_reservationGeneration[MAX_RESERVATIONS];
 bool g_reservationClaimed[MAX_RESERVATIONS];
 char g_reservationName[MAX_RESERVATIONS][MAX_NAME_LENGTH];
+int g_reservationCharacter[MAX_RESERVATIONS];
+int g_reservationSet[MAX_RESERVATIONS];
+char g_reservationModel[MAX_RESERVATIONS][PLATFORM_MAX_PATH];
 bool g_wantsSpectator[MAXPLAYERS + 1];
 char g_loadedSteamId[MAXPLAYERS + 1][32];
 StringMap g_reservations;
@@ -38,7 +41,7 @@ public Plugin myinfo =
 	name = "Coop player manager",
 	author = "海洋空氣, norths7ar",
 	description = "Coop join, spectator, bot-slot and player-team lifecycle",
-	version = "1.1.0"
+	version = "1.2.0"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -81,6 +84,9 @@ public void OnPluginStart()
 	HookEvent("map_transition", EventMapTransition, EventHookMode_Post);
 	HookEvent("player_team", EventPlayerTeam, EventHookMode_Post);
 	HookEvent("player_disconnect", EventPlayerDisconnect, EventHookMode_Pre);
+	HookEvent("player_spawn", EventCharacterSpawn);
+	HookEvent("bot_player_replace", EventCharacterTransfer);
+	HookEvent("player_bot_replace", EventCharacterTransfer);
 	for (int client = 1; client <= MaxClients; client++)
 		if (IsHumanClient(client)) CreateTimer(0.2, TimerCheckHumanTeam, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
 }
@@ -391,7 +397,7 @@ public Action TimerMoveToSurvivors(Handle timer, DataPack pack)
 	}
 	if (attempt >= 10) return Plugin_Stop;
 	if (!g_roundLive && GetTotalSurvivors() < g_maxSurvivors.IntValue) SpawnSurvivorBot();
-	int bot = FindSurvivorBot();
+	int bot = FindSurvivorBot(reservation);
 	if (bot > 0)
 	{
 		char botName[64];
@@ -423,6 +429,7 @@ void ClaimReservation(int client)
 	if (!ValidReservation(reservation)) return;
 	if (g_reservationRole[reservation] == RESERVATION_SURVIVOR)
 	{
+		RestoreReservedCharacter(client, reservation);
 		if (!g_reservationClaimed[reservation]) PrintToChat(client, "%t", "SeatRestored");
 		// Retain the identity until live/expiry so a later slow loader cannot
 		// displace somebody whose original seat was already restored.
@@ -534,6 +541,13 @@ void RememberRole(int client, int targetGeneration)
 	g_reservationExpires[index] = GetTime() + RoundToNearest(RESERVATION_TTL);
 	g_reservationGeneration[index] = targetGeneration;
 	g_reservationClaimed[index] = false;
+	g_reservationModel[index][0] = '\0';
+	if (GetClientTeam(client) == TEAM_SURVIVORS)
+	{
+		g_reservationCharacter[index] = GetEntProp(client, Prop_Send, "m_survivorCharacter");
+		g_reservationSet[index] = L4D2_GetSurvivorSetMod();
+		GetClientModel(client, g_reservationModel[index], sizeof(g_reservationModel[]));
+	}
 }
 
 int FindReservation(int client)
@@ -583,6 +597,7 @@ void ClearReservation(int index)
 	if (g_reservationSteam[index][0]) g_reservations.Remove(g_reservationSteam[index]);
 	g_reservationSteam[index][0] = '\0';
 	g_reservationRole[index] = 0;
+	g_reservationModel[index][0] = '\0';
 	g_reservationExpires[index] = 0;
 	g_reservationGeneration[index] = 0;
 	g_reservationClaimed[index] = false;
@@ -648,11 +663,111 @@ void MakeRoomForReturningSurvivor(int returning)
 	}
 }
 
-int FindSurvivorBot()
+int FindSurvivorBot(int reservation = -1)
 {
+	int fallback;
 	for (int client = 1; client <= MaxClients; client++)
-		if (IsClientInGame(client) && IsFakeClient(client) && !IsClientInKickQueue(client) && GetClientTeam(client) == TEAM_SURVIVORS && L4D_GetIdlePlayerOfBot(client) <= 0) return client;
-	return 0;
+	{
+		if (!IsAvailableSurvivorBot(client)) continue;
+		if (!fallback) fallback = client;
+		if (CharacterReservationApplies(reservation)
+			&& GetEntProp(client, Prop_Send, "m_survivorCharacter") == g_reservationCharacter[reservation]) return client;
+	}
+	return fallback;
+}
+
+bool IsAvailableSurvivorBot(int client)
+{
+	return IsClientInGame(client) && IsFakeClient(client) && !IsClientInKickQueue(client)
+		&& GetClientTeam(client) == TEAM_SURVIVORS && L4D_GetIdlePlayerOfBot(client) <= 0;
+}
+
+bool CharacterReservationApplies(int reservation)
+{
+	// A map changing survivor sets owns that change; do not force old voices/models into it.
+	return ValidReservation(reservation) && g_reservationRole[reservation] == RESERVATION_SURVIVOR
+		&& g_reservationModel[reservation][0] && g_reservationSet[reservation] == L4D2_GetSurvivorSetMod();
+}
+
+void RestoreReservedCharacter(int client, int reservation)
+{
+	if (!IsHumanSurvivor(client) || !CharacterReservationApplies(reservation) || g_transitionCaptured) return;
+	// Validate the complete ownership chain before writing. Returning humans may
+	// have been auto-assigned each other's characters; restore their own records
+	// together rather than treating that permutation as a permanent conflict.
+	int clients[MAXPLAYERS + 1], records[MAXPLAYERS + 1], count;
+	bool visited[MAXPLAYERS + 1];
+	int current = client;
+	int matchingBot;
+	while (current > 0 && !visited[current])
+	{
+		int record = FindReservation(current);
+		if (!IsHumanSurvivor(current) || !CharacterReservationApplies(record)) return;
+		int character = g_reservationCharacter[record];
+		for (int i = 0; i < count; i++)
+			if (g_reservationCharacter[records[i]] == character) return;
+		visited[current] = true;
+		clients[count] = current;
+		records[count++] = record;
+		int occupant;
+		for (int other = 1; other <= MaxClients; other++)
+		{
+			if (other == current || !IsClientInGame(other)) continue;
+			int team = GetClientTeam(other);
+			if (team != TEAM_SURVIVORS && team != 4) continue;
+			if (GetEntProp(other, Prop_Send, "m_survivorCharacter") != character) continue;
+			// Never move scripted NPCs, idle-owned bots, or unreserved humans.
+			if (team == 4 || occupant) return;
+			if (!IsAvailableSurvivorBot(other) && !IsHumanSurvivor(other)) return;
+			occupant = other;
+		}
+		if (occupant && IsAvailableSurvivorBot(occupant)) { matchingBot = occupant; current = 0; break; }
+		current = occupant;
+	}
+	if (current > 0 && visited[current] && current != client) return;
+	if (matchingBot)
+	{
+		char oldModel[PLATFORM_MAX_PATH];
+		GetClientModel(client, oldModel, sizeof(oldModel));
+		SetEntProp(matchingBot, Prop_Send, "m_survivorCharacter", GetEntProp(client, Prop_Send, "m_survivorCharacter"));
+		SetEntityModel(matchingBot, oldModel);
+	}
+	for (int i = 0; i < count; i++)
+	{
+		int record = records[i];
+		PrecacheModel(g_reservationModel[record], true);
+		SetEntProp(clients[i], Prop_Send, "m_survivorCharacter", g_reservationCharacter[record]);
+		SetEntityModel(clients[i], g_reservationModel[record]);
+	}
+}
+
+public void EventCharacterSpawn(Event event, const char[] name, bool dontBroadcast)
+{
+	CreateTimer(0.2, TimerRestoreCharacter, event.GetInt("userid"), TIMER_FLAG_NO_MAPCHANGE);
+}
+
+public Action TimerRestoreCharacter(Handle timer, int userid)
+{
+	int client = GetClientOfUserId(userid);
+	if (IsHumanSurvivor(client)) RestoreReservedCharacter(client, FindReservation(client));
+	return Plugin_Stop;
+}
+
+public void EventCharacterTransfer(Event event, const char[] name, bool dontBroadcast)
+{
+	int player = GetClientOfUserId(event.GetInt("player"));
+	int bot = GetClientOfUserId(event.GetInt("bot"));
+	if (player <= 0 || bot <= 0 || !IsClientInGame(player) || !IsClientInGame(bot)) return;
+	bool toPlayer = StrEqual(name, "bot_player_replace");
+	int source = toPlayer ? bot : player;
+	int destination = toPlayer ? player : bot;
+	if (GetClientTeam(destination) != TEAM_SURVIVORS) return;
+	// Anne character_manager preserves both fields across engine ownership transfers.
+	char model[PLATFORM_MAX_PATH];
+	GetClientModel(source, model, sizeof(model));
+	SetEntProp(destination, Prop_Send, "m_survivorCharacter", GetEntProp(source, Prop_Send, "m_survivorCharacter"));
+	SetEntityModel(destination, model);
+	if (toPlayer) CreateTimer(0.2, TimerRestoreCharacter, GetClientUserId(player), TIMER_FLAG_NO_MAPCHANGE);
 }
 
 void KickSurvivorBots()
