@@ -7,6 +7,7 @@
 #undef REQUIRE_PLUGIN
 #include <profile_controller>
 #include <wave_spawner>
+#include <resource_rules>
 
 #define MENU_DISPLAY_TIME		15
 
@@ -25,6 +26,9 @@ enum
 	Setting_FiniteHordes = 16,
 	Setting_AutoWipe = 17,
 	Setting_AutoWipeDamage = 18,
+	Setting_AllowGrenade = 19,
+	Setting_AllowFire = 20,
+	Setting_AllowExplosive = 21,
 	Setting_Count
 };
 
@@ -52,7 +56,7 @@ public Plugin myinfo =
 	name = "Coop Challenge",
 	author = "海洋空氣, norths7ar",
 	description = "Difficulty Controller for Coop.",
-	version = "2.9.1",
+	version = "2.10.0",
 	url = "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
 };
 
@@ -95,6 +99,7 @@ public Action Command_Info(int client, int args)
 	{
 		PrintGameplayStatus(client);
 		PrintOverrideDetails(client);
+		PrintResourceExceptions(client);
 	}
 	return Plugin_Handled;
 }
@@ -135,6 +140,7 @@ public Action drawPanel(int client, int first_item)
 	ConVar mobLimit = FindConVar("l4d2_heq_enabled");
 	if (mobLimit != null) { FormatEx(buffer, sizeof(buffer), "%T", "FiniteHordesMenu", client); AddNamedToggleMenuItem(menu, "mob_limit", buffer, mobLimit.BoolValue); }
 	else { FormatEx(buffer, sizeof(buffer), "%T", "FiniteHordesUnavailable", client); AddMenuItem(menu, "mob_limit", buffer, ITEMDRAW_DISABLED); }
+	FormatEx(buffer, sizeof(buffer), "%T", "ResourceMenu", client); AddMenuItem(menu, "resources", buffer);
 	FormatEx(buffer, sizeof(buffer), "%T", "ResetMenu", client); AddMenuItem(menu, "reset", buffer);
 
 	DisplayMenuAtItem(menu, client, first_item, MENU_DISPLAY_TIME);
@@ -195,6 +201,8 @@ public int MenuHandler(Handle menu, MenuAction action, int client, int param)
 			if (mobLimit == null) PrintToChat(client, "\x04[Ast] \x01%t", "FiniteHordesPluginUnavailable");
 			else RequestGameplaySetting(client, Setting_FiniteHordes, !mobLimit.BoolValue);
 			drawPanel(client, 0);
+		} else if (StrEqual(item, "resources")) {
+			Menu_Resources(client);
 		} else if (StrEqual(item, "reset")) {
 			RequestGameplaySetting(client, Setting_Reset, 0);
 			drawPanel(client, 0);
@@ -316,7 +324,7 @@ public void RequestGameplaySetting(int client, int target, int value)
 			iPlayers[iNumPlayers++] = i;
 		}
 
-		char sBuffer[64];
+		char sBuffer[256];
 		g_hVote = CreateBuiltinVote(VoteHandler, BuiltinVoteType_Custom_YesNo, BuiltinVoteAction_Cancel | BuiltinVoteAction_VoteEnd | BuiltinVoteAction_End);
 		g_iVoteInitiator = client;
 
@@ -356,6 +364,12 @@ public void RequestGameplaySetting(int client, int target, int value)
 			}
 		}
 
+		if (IsResourceSetting(target))
+		{
+			char label[96];
+			GetResourceLabel(target, client, label, sizeof(label));
+			FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteAllowResource" : "VoteBlockResource", client, label);
+		}
 		SetBuiltinVoteResultCallback(g_hVote, GameplayVoteResultHandler);
 		SetBuiltinVoteArgument(g_hVote, sBuffer);
 		SetBuiltinVoteInitiator(g_hVote, client);
@@ -366,6 +380,13 @@ public void RequestGameplaySetting(int client, int target, int value)
 
 void ApplyGameplaySetting(int target, int value, bool announce, int slot)
 {
+	if (IsResourceSetting(target))
+	{
+		if (!LibraryExists("resource_rules")) return;
+		ResourceRules_SetAllowed(view_as<ResourceGroup>(target - Setting_AllowGrenade), value != 0);
+		if (announce) PrintToChatAll("\x04[Ast] \x01%t", "ResourceSettingApplied");
+		return;
+	}
 	if (slot < 1 || slot > 4) slot = GetCurrentProfile();
 	if (slot < 1 || slot > 4 || target < 1 || target >= Setting_Count) return;
 	if (target == Setting_Reset) {
@@ -422,6 +443,7 @@ public void GameplayVoteResultHandler(Handle vote, int num_votes, int num_client
 		case Setting_AutoWipe: DisplayVotePassPhrase(vote, "VotePassAutoWipe");
 		case Setting_AutoWipeDamage: DisplayVotePassPhrase(vote, "VotePassAutoWipeDamage");
 	}
+	if (IsResourceSetting(target)) DisplayVotePassPhrase(vote, "ResourceSettingApplied");
 	ApplyGameplaySetting(target, value, false, slot);
 }
 
@@ -563,6 +585,46 @@ void ClearAllSlotOverrides()
 	}
 }
 
+bool IsResourceSetting(int target)
+{
+	return target >= Setting_AllowGrenade && target <= Setting_AllowExplosive;
+}
+
+void GetResourceLabel(int target, int client, char[] label, int maxlen)
+{
+	static char phrases[][] = {"ResourceGrenade", "ResourceFire", "ResourceExplosive"};
+	FormatEx(label, maxlen, "%T", phrases[target - Setting_AllowGrenade], client);
+}
+
+void Menu_Resources(int client)
+{
+	if (!LibraryExists("resource_rules")) return;
+	Menu menu = new Menu(Menu_ResourcesHandler);
+	char buffer[128];
+	FormatEx(buffer, sizeof(buffer), "%T", "ResourceTitle", client);
+	menu.SetTitle(buffer);
+	menu.ExitBackButton = true;
+	for (int target = Setting_AllowGrenade; target <= Setting_AllowExplosive; target++)
+	{
+		GetResourceLabel(target, client, buffer, sizeof(buffer));
+		AddToggleMenuItem(menu, buffer, ResourceRules_IsAllowed(view_as<ResourceGroup>(target - Setting_AllowGrenade)));
+	}
+	menu.Display(client, MENU_DISPLAY_TIME);
+}
+
+public int Menu_ResourcesHandler(Menu menu, MenuAction action, int client, int param)
+{
+	if (action == MenuAction_End) delete menu;
+	else if (action == MenuAction_Select && param >= 0 && param < view_as<int>(ResourceGroup_Count))
+	{
+		if (LibraryExists("resource_rules"))
+			RequestGameplaySetting(client, Setting_AllowGrenade + param, !ResourceRules_IsAllowed(view_as<ResourceGroup>(param)));
+		drawPanel(client, 0);
+	}
+	else if (action == MenuAction_Cancel && param == MenuCancel_ExitBack) drawPanel(client, 0);
+	return 0;
+}
+
 ///////////////////////////
 //           Event           //
 //////////////////////////
@@ -618,7 +680,7 @@ public int GetDifficulty() {
 
 void AddToggleMenuItem(Handle menu, const char[] label, bool enabled)
 {
-    char sBuffer[32];
+    char sBuffer[128];
     Format(sBuffer, sizeof(sBuffer), "%s%s", enabled ? "✔" : "", label);
     AddMenuItem(menu, "", sBuffer);
 }
@@ -846,4 +908,16 @@ public void OnClientDisconnect(int client)
 
 stock bool isSurvivor(int client) {
 	return IsClientAndInGame(client) && GetClientTeam(client) == TEAM_SURVIVORS;
+}
+
+void PrintResourceExceptions(int client)
+{
+	if (!LibraryExists("resource_rules")) return;
+	for (int target = Setting_AllowGrenade; target <= Setting_AllowExplosive; target++)
+	{
+		if (!ResourceRules_IsAllowed(view_as<ResourceGroup>(target - Setting_AllowGrenade))) continue;
+		char label[96];
+		GetResourceLabel(target, client, label, sizeof(label));
+		PrintToChat(client, "\x04[Ast] \x01%t", "ResourceAllowedInfo", label);
+	}
 }

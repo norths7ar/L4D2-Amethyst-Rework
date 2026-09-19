@@ -5,7 +5,7 @@
 #include <builtinvotes>
 #include <imatchext>
 
-#define PLUGIN_VERSION "2.1.0"
+#define PLUGIN_VERSION "2.2.0"
 #define MISSION_CYCLE_PATH "configs/missioncycle.txt"
 #define MAX_MAP_NAME 128
 #define MAP_CHANGE_DELAY 3.0
@@ -50,12 +50,15 @@ bool g_hadHumanPlayers;
 
 char g_changeVoteMap[MAX_MAP_NAME];
 char g_changeVoteName[MAX_MAP_NAME];
+bool g_changeVoteNewCampaign;
+GlobalForward g_newCampaign;
 char g_nextMapVote[MAXPLAYERS + 1][MAX_MAP_NAME];
 bool g_nextMapMenuShown[MAXPLAYERS + 1];
 bool g_finaleChangeScheduled;
 
 public void OnPluginStart()
 {
+	g_newCampaign = new GlobalForward("CampaignSwitcher_OnNewCampaign", ET_Ignore);
 	LoadTranslations("imatchext.phrases");
 	LoadTranslations("campaign_switcher.phrases");
 
@@ -221,6 +224,7 @@ public Action Timer_ChangeToEmptyServerMap(Handle timer)
 		return Plugin_Stop;
 	}
 
+	NotifyNewCampaign();
 	char matchMode[MAX_MAP_NAME];
 	g_emptyMatchMode.GetString(matchMode, sizeof(matchMode));
 	if (IsSafeCommandToken(matchMode) && IsSafeCommandToken(firstChapter) && CommandExists("sm_forcechangematch"))
@@ -509,7 +513,7 @@ public int MapSelectionHandler(Menu menu, MenuAction action, int client, int ite
 
 		char displayName[MAX_MAP_NAME];
 		g_mapDisplayNames.GetString(mapIndex, displayName, sizeof(displayName));
-		StartImmediateChangeVote(client, firstChapter, displayName);
+		StartImmediateChangeVote(client, firstChapter, displayName, true);
 	}
 	else if (action == MenuAction_End)
 	{
@@ -595,7 +599,7 @@ public int ChapterSelectionHandler(Menu menu, MenuAction action, int client, int
 	return 0;
 }
 
-bool StartImmediateChangeVote(int client, const char[] mapName, const char[] displayName)
+bool StartImmediateChangeVote(int client, const char[] mapName, const char[] displayName, bool newCampaign = false)
 {
 	if (!CheckVoteAccess(client))
 		return false;
@@ -617,6 +621,7 @@ bool StartImmediateChangeVote(int client, const char[] mapName, const char[] dis
 		BuiltinVoteAction_Select | BuiltinVoteAction_Cancel | BuiltinVoteAction_End
 	);
 
+	g_changeVoteNewCampaign = newCampaign;
 	strcopy(g_changeVoteMap, sizeof(g_changeVoteMap), mapName);
 	strcopy(g_changeVoteName, sizeof(g_changeVoteName), displayName);
 	SetBuiltinVoteArgument(vote, g_changeVoteName);
@@ -689,7 +694,7 @@ public int ImmediateVoteResult(
 	if (numVotes > 0 && float(yesVotes) / float(numVotes) >= g_votePassPercent.FloatValue)
 	{
 		DisplayBuiltinVotePass2(vote, TRANSLATION_L4D_VOTE_CHANGECAMPAIGN_PASSED, g_changeVoteName);
-		ScheduleMapChange(g_changeVoteMap, g_changeVoteName, MAP_CHANGE_DELAY);
+		ScheduleMapChange(g_changeVoteMap, g_changeVoteName, MAP_CHANGE_DELAY, g_changeVoteNewCampaign);
 	}
 	else
 	{
@@ -1014,12 +1019,13 @@ void AnnounceNextMapVoteStatus(int target = 0)
 	if (names[0]) PrintToChat(target, "\x04[%t] \x01%t", "NextMapTag", "NextMapCandidates", names);
 }
 
-void ScheduleMapChange(const char[] mapName, const char[] displayName, float delay)
+void ScheduleMapChange(const char[] mapName, const char[] displayName, float delay, bool newCampaign = true)
 {
 	DataPack pack;
 	CreateDataTimer(delay, Timer_ChangeMap, pack, TIMER_FLAG_NO_MAPCHANGE);
 	pack.WriteString(mapName);
 	pack.WriteString(displayName);
+	pack.WriteCell(newCampaign);
 }
 
 public Action Timer_ChangeMap(Handle timer, DataPack pack)
@@ -1029,6 +1035,7 @@ public Action Timer_ChangeMap(Handle timer, DataPack pack)
 	char displayName[MAX_MAP_NAME];
 	pack.ReadString(mapName, sizeof(mapName));
 	pack.ReadString(displayName, sizeof(displayName));
+	bool newCampaign = pack.ReadCell() != 0;
 
 	if (!IsMapValid(mapName))
 	{
@@ -1038,6 +1045,7 @@ public Action Timer_ChangeMap(Handle timer, DataPack pack)
 	}
 
 	PrintToChatAll("\x04[%t] \x01%t", "CampaignTag", "ChangingMap", displayName);
+	if (newCampaign) NotifyNewCampaign();
 	ForceChangeLevel(mapName, "Campaign Switcher vote");
 	return Plugin_Stop;
 }
@@ -1080,4 +1088,10 @@ int CountConnectedHumans()
 			count++;
 	}
 	return count;
+}
+
+void NotifyNewCampaign()
+{
+	Call_StartForward(g_newCampaign);
+	Call_Finish();
 }

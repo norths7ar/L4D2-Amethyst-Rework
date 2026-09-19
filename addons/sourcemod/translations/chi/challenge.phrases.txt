@@ -378,4 +378,43 @@
         "#format" "{1:s}"
         "chi" "{1}。!ast 查看或重置。"
     }
+    "ResourceMenu"
+    {
+        "chi" "地图兼容"
+    }
+    "ResourceTitle"
+    {
+        "chi" "本地图临时允许的资源（跨章节保留）"
+    }
+    "ResourceGrenade"
+    {
+        "chi" "榴弹发射器"
+    }
+    "ResourceFire"
+    {
+        "chi" "燃烧类道具：油桶、烟花"
+    }
+    "ResourceExplosive"
+    {
+        "chi" "爆炸类道具：煤气罐、氧气瓶"
+    }
+    "VoteAllowResource"
+    {
+        "#format" "{1:s}"
+        "chi" "本地图允许：{1}？"
+    }
+    "VoteBlockResource"
+    {
+        "#format" "{1:s}"
+        "chi" "本地图禁止：{1}？"
+    }
+    "ResourceSettingApplied"
+    {
+        "chi" "地图资源设置已修改。"
+    }
+    "ResourceAllowedInfo"
+    {
+        "#format" "{1:s}"
+        "chi" "本地图已允许：{1}"
+    }
 }

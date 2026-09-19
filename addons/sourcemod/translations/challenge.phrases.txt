@@ -378,4 +378,43 @@
         "#format" "{1:s}"
         "en" "{1}. !ast: view or reset."
     }
+    "ResourceMenu"
+    {
+        "en" "Map compatibility"
+    }
+    "ResourceTitle"
+    {
+        "en" "Resources allowed for this campaign"
+    }
+    "ResourceGrenade"
+    {
+        "en" "Grenade launcher"
+    }
+    "ResourceFire"
+    {
+        "en" "Fire props: gas cans, fireworks"
+    }
+    "ResourceExplosive"
+    {
+        "en" "Explosive props: propane, oxygen"
+    }
+    "VoteAllowResource"
+    {
+        "#format" "{1:s}"
+        "en" "Allow {1} for this campaign?"
+    }
+    "VoteBlockResource"
+    {
+        "#format" "{1:s}"
+        "en" "Block {1} for this campaign?"
+    }
+    "ResourceSettingApplied"
+    {
+        "en" "Campaign resource setting updated."
+    }
+    "ResourceAllowedInfo"
+    {
+        "#format" "{1:s}"
+        "en" "Allowed for this campaign: {1}"
+    }
 }
