@@ -21,6 +21,24 @@
 		"item"		"sm_freezebomb"
 	}
 
+	"PlayerAssistance"
+	{
+		"item" "a4d_health_menu"
+		"item" "a4d_ammo_menu"
+		"item" "a4d_respawn_menu"
+		"item" "a4d_teleport_menu"
+		"item" "sm_noclip"
+	}
+
+	"All4Dead Commands"
+	{
+		"item" "a4d_guns_menu"
+		"item" "a4d_melee_menu"
+		"item" "a4d_items_menu"
+		"item" "a4d_special_menu"
+		"item" "a4d_uncommon_menu"
+	}
+
 	"ServerCommands"
 	{
 		"item"		"sm_map"

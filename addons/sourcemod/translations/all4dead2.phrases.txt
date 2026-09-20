@@ -4,14 +4,6 @@
 	{
 		"en" "Spawn menu"
 	}
-	"A4DWeaponsAndItems"
-	{
-		"en" "Weapons and items"
-	}
-	"A4DInfected"
-	{
-		"en" "Infected"
-	}
 	"A4DGuns"
 	{
 		"en" "Guns"

@@ -1,5 +1,9 @@
 "Phrases"
 {
+	"AdminPlayerAssistance"
+	{
+		"chi" "玩家辅助"
+	}
 	"AdminCleanupSyntax"
 	{
 	    "chi" "用法：!fuck <特感名称|all>。"

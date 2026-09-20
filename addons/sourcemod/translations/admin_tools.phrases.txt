@@ -1,5 +1,9 @@
 "Phrases"
 {
+	"AdminPlayerAssistance"
+	{
+		"en" "Player assistance"
+	}
 	"AdminCleanupSyntax"
 	{
 	    "en" "Usage: !fuck <special infected name|all>."

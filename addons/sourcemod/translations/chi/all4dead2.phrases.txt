@@ -4,14 +4,6 @@
 	{
 		"chi" "生成菜单"
 	}
-	"A4DWeaponsAndItems"
-	{
-		"chi" "武器与物品"
-	}
-	"A4DInfected"
-	{
-		"chi" "感染者"
-	}
 	"A4DGuns"
 	{
 		"chi" "枪械"

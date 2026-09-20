@@ -28,11 +28,18 @@ public void OnAdminMenuReady(Handle topmenu)
 	TopMenu menu = TopMenu.FromHandle(topmenu);
 	if (menu == null || menu == hTopMenu) return;
 	hTopMenu = menu;
-	TopMenuObject category = menu.FindCategory(ADMINMENU_PLAYERCOMMANDS);
+	TopMenuObject category = menu.AddCategory("PlayerAssistance", PlayerAssistanceCategory);
 	if (category == INVALID_TOPMENUOBJECT) return;
 	menu.AddItem("sm_noclip", AdminMenu_NoClip, category, "sm_noclip", ADMFLAG_SLAY | ADMFLAG_CHEATS);
 	for (int i = 0; i < sizeof(g_playerActionIds); i++)
 		menu.AddItem(g_playerActionIds[i], PlayerActionTopMenu, category, g_playerActionIds[i], ADMFLAG_CHEATS);
+}
+
+public void PlayerAssistanceCategory(TopMenu menu, TopMenuAction action, TopMenuObject objectId,
+	int client, char[] buffer, int maxlength)
+{
+	if (action == TopMenuAction_DisplayTitle || action == TopMenuAction_DisplayOption)
+		Format(buffer, maxlength, "%T", "AdminPlayerAssistance", client);
 }
 
 public void PlayerActionTopMenu(TopMenu menu, TopMenuAction action, TopMenuObject objectId,

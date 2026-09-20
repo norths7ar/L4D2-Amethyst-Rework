@@ -24,7 +24,7 @@ Copyright 2009 James Richardson
 // Define constants
 #define PLUGIN_NAME					"All4Dead"
 #define PLUGIN_TAG					"[A4D] "
-#define PLUGIN_VERSION			"2.1.0"
+#define PLUGIN_VERSION			"2.2.0"
 #define MENU_DISPLAY_TIME		MENU_TIME_FOREVER
 
 // Include necessary files
@@ -39,7 +39,13 @@ Copyright 2009 James Richardson
 // Menu handlers
 new Handle:top_menu;
 new Handle:admin_menu;
-new TopMenuObject:equipment_menu;
+new TopMenuObject:generation_menus[5];
+new const String:generation_ids[][] = {
+	"a4d_guns_menu", "a4d_melee_menu", "a4d_items_menu", "a4d_special_menu", "a4d_uncommon_menu"
+};
+new const String:generation_labels[][] = {
+	"A4DGuns", "A4DMeleeWeapons", "A4DSuppliesAndProps", "A4DSpecialInfectedAndHorde", "A4DUncommonInfected"
+};
 
 // Other stuff
 new bool:currently_spawning = false;
@@ -82,8 +88,9 @@ public OnAdminMenuReady(Handle:menu) {
 		return;
 	admin_menu = menu;
 	new TopMenuObject:category = AddToTopMenu(admin_menu, "All4Dead Commands", TopMenuObject_Category, Menu_CategoryHandler, INVALID_TOPMENUOBJECT);
-	equipment_menu = AddToTopMenu(admin_menu, "a4d_equipment_menu", TopMenuObject_Item, Menu_TopItemHandler, category, "a4d_equipment_menu", ADMFLAG_CHEATS);
-	AddToTopMenu(admin_menu, "a4d_infected_menu", TopMenuObject_Item, Menu_TopItemHandler, category, "a4d_infected_menu", ADMFLAG_CHEATS);
+	for (new i = 0; i < sizeof(generation_menus); i++)
+		generation_menus[i] = AddToTopMenu(admin_menu, generation_ids[i], TopMenuObject_Item,
+			Menu_TopItemHandler, category, i < 3 ? "a4d_equipment_menu" : "a4d_infected_menu", ADMFLAG_CHEATS);
 }
 
 public OnLibraryRemoved(const String:name[]) {
@@ -112,47 +119,26 @@ public Menu_CategoryHandler(Handle:topmenu, TopMenuAction:action, TopMenuObject:
 }
 
 public Menu_TopItemHandler(Handle:topmenu, TopMenuAction:action, TopMenuObject:object_id, client, String:buffer[], maxlength) {
-	new group = object_id == equipment_menu ? 0 : 1;
-	if (action == TopMenuAction_DisplayOption)
-		Format(buffer, maxlength, "%T", group == 0 ? "A4DWeaponsAndItems" : "A4DInfected", client);
-	else if (action == TopMenuAction_SelectOption)
-		ShowGenerationGroup(client, group);
+	for (new i = 0; i < sizeof(generation_menus); i++) {
+		if (object_id != generation_menus[i]) continue;
+		if (action == TopMenuAction_DisplayOption)
+			Format(buffer, maxlength, "%T", generation_labels[i], client);
+		else if (action == TopMenuAction_SelectOption && CanGenerate(client, i < 3 ? 0 : 1)) {
+			switch (i) {
+				case 0: Menu_CreateWeaponMenu(client, 0);
+				case 1: Menu_CreateMeleeWeaponMenu(client, 0);
+				case 2: Menu_CreateItemMenu(client, 0);
+				case 3: Menu_CreateSpecialInfectedMenu(client, 0);
+				case 4: Menu_CreateUInfectedMenu(client, 0);
+			}
+		}
+		return;
+	}
 }
 
 bool:CanGenerate(client, group) {
 	return client > 0 && client <= MaxClients && IsClientInGame(client)
 		&& CheckCommandAccess(client, group == 0 ? "a4d_equipment_menu" : "a4d_infected_menu", ADMFLAG_CHEATS);
-}
-
-ShowGenerationGroup(client, group) {
-	if (!CanGenerate(client, group)) return;
-	new Handle:menu = CreateMenu(GenerationGroupHandler);
-	SetMenuTitle(menu, "%T", group == 0 ? "A4DWeaponsAndItems" : "A4DInfected", client);
-	SetMenuExitBackButton(menu, true);
-	if (group == 0) {
-		AddGenerationMenuItem(menu, client, "weapons", "A4DGuns");
-		AddGenerationMenuItem(menu, client, "melee", "A4DMeleeWeapons");
-		AddGenerationMenuItem(menu, client, "items", "A4DSuppliesAndProps");
-	} else {
-		AddGenerationMenuItem(menu, client, "special", "A4DSpecialInfectedAndHorde");
-		AddGenerationMenuItem(menu, client, "uncommon", "A4DUncommonInfected");
-	}
-	DisplayMenu(menu, client, MENU_DISPLAY_TIME);
-}
-
-public GenerationGroupHandler(Handle:menu, MenuAction:action, client, item) {
-	if (action == MenuAction_End) CloseHandle(menu);
-	else if (action == MenuAction_Cancel && item == MenuCancel_ExitBack && admin_menu != INVALID_HANDLE)
-		DisplayTopMenu(admin_menu, client, TopMenuPosition_LastCategory);
-	else if (action == MenuAction_Select) {
-		new String:info[16];
-		GetMenuItem(menu, item, info, sizeof(info));
-		if (StrEqual(info, "weapons")) Menu_CreateWeaponMenu(client, 0);
-		else if (StrEqual(info, "melee")) Menu_CreateMeleeWeaponMenu(client, 0);
-		else if (StrEqual(info, "items")) Menu_CreateItemMenu(client, 0);
-		else if (StrEqual(info, "special")) Menu_CreateSpecialInfectedMenu(client, 0);
-		else if (StrEqual(info, "uncommon")) Menu_CreateUInfectedMenu(client, 0);
-	}
 }
 
 /// Creates the infected spawning menu when it is selected from the top menu and displays it to the client.
@@ -208,7 +194,7 @@ public Menu_SpawnSInfectedHandler(Handle:menu, MenuAction:action, cindex, itempo
 	// If someone presses 'back' (8), return to main All4Dead menu */
 	else if (action == MenuAction_Cancel)
 		if (itempos == MenuCancel_ExitBack && admin_menu != INVALID_HANDLE)
-			ShowGenerationGroup(cindex, 1);
+			DisplayTopMenu(admin_menu, cindex, TopMenuPosition_LastCategory);
 }
 
 /// Creates the infected spawning menu when it is selected from the top menu and displays it to the client.
@@ -258,7 +244,7 @@ public Menu_SpawnUInfectedHandler(Handle:menu, MenuAction:action, cindex, itempo
 	// If someone presses 'back' (8), return to main All4Dead menu */
 	else if (action == MenuAction_Cancel)
 		if (itempos == MenuCancel_ExitBack && admin_menu != INVALID_HANDLE)
-			ShowGenerationGroup(cindex, 1);
+			DisplayTopMenu(admin_menu, cindex, TopMenuPosition_LastCategory);
 }
 
 /**
@@ -328,22 +314,22 @@ public Action:Menu_CreateItemMenu(client, args) {
 	SetMenuTitle(menu, "%T", "A4DSpawnItems", client);
 	SetMenuExitBackButton(menu, true);
 	SetMenuExitButton(menu, true);
-	AddGenerationMenuItem(menu, client, "sd", "A4DDefibrillator");
-	AddGenerationMenuItem(menu, client, "sm", "A4DFirstAidKit");
-	AddGenerationMenuItem(menu, client, "sp", "A4DPainPills");
-	AddGenerationMenuItem(menu, client, "sa", "A4DAdrenaline");
-	AddGenerationMenuItem(menu, client, "sv", "A4DMolotov");
-	AddGenerationMenuItem(menu, client, "sb", "A4DPipeBomb");
-	AddGenerationMenuItem(menu, client, "sb", "A4DBileJar");
-	AddGenerationMenuItem(menu, client, "sg", "A4DGasCan");
-	AddGenerationMenuItem(menu, client, "st", "A4DPropaneTank");
-	AddGenerationMenuItem(menu, client, "so", "A4DOxygenTank");
-	AddGenerationMenuItem(menu, client, "sa", "A4DAmmoPile");
-	AddGenerationMenuItem(menu, client, "si", "A4DIncendiaryAmmoPack");
-	AddGenerationMenuItem(menu, client, "se", "A4DExplosiveAmmoPack");
-	AddGenerationMenuItem(menu, client, "lp", "A4DLaserSights");
-	AddGenerationMenuItem(menu, client, "cl", "A4DCola");
-	AddGenerationMenuItem(menu, client, "gn", "A4DGnome");
+	AddGenerationMenuItem(menu, client, "2", "A4DPainPills");
+	AddGenerationMenuItem(menu, client, "10", "A4DAmmoPile");
+	AddGenerationMenuItem(menu, client, "1", "A4DFirstAidKit");
+	AddGenerationMenuItem(menu, client, "0", "A4DDefibrillator");
+	AddGenerationMenuItem(menu, client, "3", "A4DAdrenaline");
+	AddGenerationMenuItem(menu, client, "4", "A4DMolotov");
+	AddGenerationMenuItem(menu, client, "5", "A4DPipeBomb");
+	AddGenerationMenuItem(menu, client, "6", "A4DBileJar");
+	AddGenerationMenuItem(menu, client, "7", "A4DGasCan");
+	AddGenerationMenuItem(menu, client, "8", "A4DPropaneTank");
+	AddGenerationMenuItem(menu, client, "9", "A4DOxygenTank");
+	AddGenerationMenuItem(menu, client, "11", "A4DIncendiaryAmmoPack");
+	AddGenerationMenuItem(menu, client, "12", "A4DExplosiveAmmoPack");
+	AddGenerationMenuItem(menu, client, "13", "A4DLaserSights");
+	AddGenerationMenuItem(menu, client, "14", "A4DCola");
+	AddGenerationMenuItem(menu, client, "15", "A4DGnome");
 	DisplayMenuAtItem(menu, client, args, MENU_DISPLAY_TIME);
 	return Plugin_Handled;
 }
@@ -351,7 +337,9 @@ public Action:Menu_CreateItemMenu(client, args) {
 public Menu_SpawnItemsHandler(Handle:menu, MenuAction:action, cindex, itempos) {
 	if (action == MenuAction_Select) {
 		if (!CanGenerate(cindex, 0)) return;
-		switch (itempos) {
+		new String:selection[12];
+		GetMenuItem(menu, itempos, selection, sizeof(selection));
+		switch (StringToInt(selection)) {
 			case 0: {
 				Do_SpawnItem(cindex, "defibrillator");
 			} case 1: {
@@ -399,7 +387,7 @@ public Menu_SpawnItemsHandler(Handle:menu, MenuAction:action, cindex, itempos) {
 		CloseHandle(menu);
 	} else if (action == MenuAction_Cancel) {
 		if (itempos == MenuCancel_ExitBack && admin_menu != INVALID_HANDLE)
-			ShowGenerationGroup(cindex, 0);
+			DisplayTopMenu(admin_menu, cindex, TopMenuPosition_LastCategory);
 	}
 }
 
@@ -451,23 +439,23 @@ public Action:Menu_CreateWeaponMenu(client, args) {
 	SetMenuTitle(menu, "%T", "A4DSpawnGuns", client);
 	SetMenuExitBackButton(menu, true);
 	SetMenuExitButton(menu, true);
-	AddGenerationMenuItem(menu, client, "sp", "A4DPistol");
-	AddGenerationMenuItem(menu, client, "sg", "A4DMagnum");
-	AddGenerationMenuItem(menu, client, "ss", "A4DPumpShotgun");
-	AddGenerationMenuItem(menu, client, "sc", "A4DChromeShotgun");
-	AddGenerationMenuItem(menu, client, "sa", "A4DAutoShotgun");
-	AddGenerationMenuItem(menu, client, "s0", "A4DSpasShotgun");
-	AddGenerationMenuItem(menu, client, "sm", "A4DUzi");
-	AddGenerationMenuItem(menu, client, "s3", "A4DSilencedSmg");
-	AddGenerationMenuItem(menu, client, "m5", "A4DMp5");
-	AddGenerationMenuItem(menu, client, "sr", "A4DM16");
-	AddGenerationMenuItem(menu, client, "s1", "A4DAk47");
-	AddGenerationMenuItem(menu, client, "s2", "A4DScar");
-	AddGenerationMenuItem(menu, client, "sh", "A4DHuntingRifle");
-	AddGenerationMenuItem(menu, client, "s4", "A4DSg550");
-	AddGenerationMenuItem(menu, client, "aw", "A4DAwp");
-	AddGenerationMenuItem(menu, client, "s6", "A4DScout");
-	AddGenerationMenuItem(menu, client, "s5", "A4DGrenadeLauncher");
+	AddGenerationMenuItem(menu, client, "6", "A4DUzi");
+	AddGenerationMenuItem(menu, client, "7", "A4DSilencedSmg");
+	AddGenerationMenuItem(menu, client, "2", "A4DPumpShotgun");
+	AddGenerationMenuItem(menu, client, "3", "A4DChromeShotgun");
+	AddGenerationMenuItem(menu, client, "15", "A4DScout");
+	AddGenerationMenuItem(menu, client, "0", "A4DPistol");
+	AddGenerationMenuItem(menu, client, "1", "A4DMagnum");
+	AddGenerationMenuItem(menu, client, "4", "A4DAutoShotgun");
+	AddGenerationMenuItem(menu, client, "5", "A4DSpasShotgun");
+	AddGenerationMenuItem(menu, client, "8", "A4DMp5");
+	AddGenerationMenuItem(menu, client, "9", "A4DM16");
+	AddGenerationMenuItem(menu, client, "10", "A4DAk47");
+	AddGenerationMenuItem(menu, client, "11", "A4DScar");
+	AddGenerationMenuItem(menu, client, "12", "A4DHuntingRifle");
+	AddGenerationMenuItem(menu, client, "13", "A4DSg550");
+	AddGenerationMenuItem(menu, client, "14", "A4DAwp");
+	AddGenerationMenuItem(menu, client, "16", "A4DGrenadeLauncher");
 	DisplayMenuAtItem(menu, client, args, MENU_DISPLAY_TIME);
 	return Plugin_Handled;
 }
@@ -475,7 +463,9 @@ public Action:Menu_CreateWeaponMenu(client, args) {
 public Menu_SpawnWeaponHandler(Handle:menu, MenuAction:action, cindex, itempos) {
 	if (action == MenuAction_Select) {
 		if (!CanGenerate(cindex, 0)) return;
-		switch (itempos) {
+		new String:selection[12];
+		GetMenuItem(menu, itempos, selection, sizeof(selection));
+		switch (StringToInt(selection)) {
 			case 0: {
 				Do_SpawnItem(cindex, "pistol");
 			} case 1: {
@@ -518,7 +508,7 @@ public Menu_SpawnWeaponHandler(Handle:menu, MenuAction:action, cindex, itempos) 
 	/* If someone presses 'back' (8), return to main All4Dead menu */
 	else if (action == MenuAction_Cancel)
 		if (itempos == MenuCancel_ExitBack && admin_menu != INVALID_HANDLE)
-			ShowGenerationGroup(cindex, 0);
+			DisplayTopMenu(admin_menu, cindex, TopMenuPosition_LastCategory);
 }
 
 /// Creates the melee weapon spawning menu when it is selected from the top menu and displays it to the client.
@@ -582,7 +572,7 @@ public Menu_SpawnMeleeWeaponHandler(Handle:menu, MenuAction:action, cindex, item
 	/* If someone presses 'back' (8), return to main All4Dead menu */
 	else if (action == MenuAction_Cancel)
 		if (itempos == MenuCancel_ExitBack && admin_menu != INVALID_HANDLE)
-			ShowGenerationGroup(cindex, 0);
+			DisplayTopMenu(admin_menu, cindex, TopMenuPosition_LastCategory);
 }
 
 /// Strip and execute a client command. This 'fakes' a client calling a specfied command. Can be used to call cheat-protected commands.
