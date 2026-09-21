@@ -16,7 +16,7 @@ public Plugin myinfo =
 	name = "Coop admin tools",
 	author = "海洋空氣, norths7ar",
 	description = "Administrator player operations and emergency controls for Coop",
-	version = "1.2.0"
+	version = "1.2.1"
 };
 
 public void OnPluginStart()

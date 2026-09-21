@@ -3,8 +3,6 @@
 
 TopMenu hTopMenu;
 
-#include "noclip.inc"
-
 static const char g_playerActionIds[][] = {
 	"a4d_health_menu", "a4d_ammo_menu", "a4d_respawn_menu", "a4d_teleport_menu"
 };
@@ -14,7 +12,6 @@ static const char g_playerActionLabels[][] = {
 
 void InitPlayerActions()
 {
-	RegAdminCmd("sm_noclip", Command_NoClip, ADMFLAG_SLAY | ADMFLAG_CHEATS, "sm_noclip <#userid|name>");
 	if (LibraryExists("adminmenu")) OnAdminMenuReady(GetAdminTopMenu());
 }
 
@@ -28,9 +25,10 @@ public void OnAdminMenuReady(Handle topmenu)
 	TopMenu menu = TopMenu.FromHandle(topmenu);
 	if (menu == null || menu == hTopMenu) return;
 	hTopMenu = menu;
-	TopMenuObject category = menu.AddCategory("PlayerAssistance", PlayerAssistanceCategory);
+	TopMenuObject category = FindTopMenuCategory(menu, "PlayerAssistance");
+	if (category == INVALID_TOPMENUOBJECT)
+		category = menu.AddCategory("PlayerAssistance", PlayerAssistanceCategory);
 	if (category == INVALID_TOPMENUOBJECT) return;
-	menu.AddItem("sm_noclip", AdminMenu_NoClip, category, "sm_noclip", ADMFLAG_SLAY | ADMFLAG_CHEATS);
 	for (int i = 0; i < sizeof(g_playerActionIds); i++)
 		menu.AddItem(g_playerActionIds[i], PlayerActionTopMenu, category, g_playerActionIds[i], ADMFLAG_CHEATS);
 }

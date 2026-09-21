@@ -1,3 +1,53 @@
+#pragma semicolon 1
+#pragma newdecls required
+
+#include <sourcemod>
+#include <sdktools>
+#undef REQUIRE_PLUGIN
+#include <adminmenu>
+
+TopMenu hTopMenu;
+
+public Plugin myinfo =
+{
+	name = "Noclip",
+	author = "AlliedModders LLC, norths7ar",
+	description = "Administrator noclip command and player assistance menu for all modes",
+	version = "1.0.0"
+};
+
+public void OnPluginStart()
+{
+	LoadTranslations("admin_tools.phrases");
+	RegAdminCmd("sm_noclip", Command_NoClip, ADMFLAG_SLAY | ADMFLAG_CHEATS, "sm_noclip <#userid|name>");
+	if (LibraryExists("adminmenu")) OnAdminMenuReady(GetAdminTopMenu());
+}
+
+public void OnLibraryRemoved(const char[] name)
+{
+	if (StrEqual(name, "adminmenu")) hTopMenu = null;
+}
+
+public void OnAdminMenuReady(Handle topmenu)
+{
+	if (topmenu == null) return;
+	TopMenu menu = TopMenu.FromHandle(topmenu);
+	if (menu == null || menu == hTopMenu) return;
+	hTopMenu = menu;
+	TopMenuObject category = FindTopMenuCategory(menu, "PlayerAssistance");
+	if (category == INVALID_TOPMENUOBJECT)
+		category = menu.AddCategory("PlayerAssistance", PlayerAssistanceCategory);
+	if (category == INVALID_TOPMENUOBJECT) return;
+	menu.AddItem("sm_noclip", AdminMenu_NoClip, category, "sm_noclip", ADMFLAG_SLAY | ADMFLAG_CHEATS);
+}
+
+public void PlayerAssistanceCategory(TopMenu menu, TopMenuAction action, TopMenuObject objectId,
+	int client, char[] buffer, int maxlength)
+{
+	if (action == TopMenuAction_DisplayTitle || action == TopMenuAction_DisplayOption)
+		Format(buffer, maxlength, "%T", "AdminPlayerAssistance", client);
+}
+
 /**
  * vim: set ts=4 :
  * =============================================================================
@@ -31,7 +81,7 @@
  * Version: $Id$
  */
 
-// Adapted for admin_tools: localized UI and target revalidation.
+// Localized UI and target revalidation retained from admin_tools.
 
 
 bool CanUseNoClip(int client)
@@ -69,7 +119,12 @@ void DisplayNoClipMenu(int client)
 		Format(name, sizeof(name), "%T", GetEntityMoveType(target) == MOVETYPE_NOCLIP ? "AdminNoclipRowOn" : "AdminNoclipRowOff", client, target);
 		menu.AddItem(info, name);
 	}
-	if (menu.ItemCount == 0) AddAdminMenuItem(menu, client, "", "AdminNoAliveTargets", ITEMDRAW_DISABLED);
+	if (menu.ItemCount == 0)
+	{
+		char label[192];
+		Format(label, sizeof(label), "%T", "AdminNoAliveTargets", client);
+		menu.AddItem("", label, ITEMDRAW_DISABLED);
+	}
 	menu.Display(client, MENU_TIME_FOREVER);
 }
 
