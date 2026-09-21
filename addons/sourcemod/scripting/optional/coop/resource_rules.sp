@@ -34,6 +34,8 @@
 #include <imatchext>
 #include <left4dhooks>
 #include <resource_rules>
+#include <l4d2_saferoom_detect>
+#include <confogl>
 #define L4D2UTIL_STOCKS_ONLY 1
 #include <l4d2util>
 
@@ -44,13 +46,20 @@ bool g_roundReady, g_configsReady, g_creating;
 bool g_allowed[ResourceGroup_Count];
 char g_campaign[128];
 int g_meleePickups;
+bool g_limitPassPending;
+
+#include "resource_rules/config.inc"
+#include "resource_rules/spawns.inc"
+#include "resource_rules/replacement.inc"
+#include "resource_rules/limits.inc"
+#include "resource_rules/pill_flow.inc"
 
 public Plugin myinfo =
 {
 	name = "Map Resource Rules",
 	author = "ProdigySim, norths7ar",
 	description = "Owns map supplies, weapon replacements and campaign resource exceptions.",
-	version = "1.0.0"
+	version = "1.1.0"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -64,6 +73,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
 public void OnPluginStart()
 {
 	g_rules = new StringMap();
+	InitPolicy();
 	g_mapEntries = new StringMap();
 	g_rulesFile = CreateConVar("resource_rules_file", "resource_rules.cfg", "Resource policy file relative to SourceMod configs.");
 	LoadRules();
@@ -72,33 +82,11 @@ public void OnPluginStart()
 	CreateTimer(0.3, RoundStartDelay, _, TIMER_FLAG_NO_MAPCHANGE);
 }
 
-void LoadRules()
-{
-	char file[PLATFORM_MAX_PATH], path[PLATFORM_MAX_PATH];
-	g_rulesFile.GetString(file, sizeof(file));
-	BuildPath(Path_SM, path, sizeof(path), "configs/%s", file);
-	KeyValues rules = new KeyValues("ResourceRules");
-	if (!rules.ImportFromFile(path)) SetFailState("Cannot read resource policy %s", path);
-	g_meleePickups = rules.GetNum("melee_pickups", 1);
-	g_rules.Clear();
-	if (rules.JumpToKey("rules") && rules.GotoFirstSubKey(false))
-	{
-		do
-		{
-			char name[64], target[256];
-			rules.GetSectionName(name, sizeof(name));
-			rules.GetString(NULL_STRING, target, sizeof(target));
-			g_rules.SetString(name, target);
-		}
-		while (rules.GotoNextKey(false));
-	}
-	delete rules;
-}
-
 public void OnMapStart()
 {
 	g_roundReady = false;
 	g_configsReady = false;
+	g_limitPassPending = false;
 	g_mapEntries.Clear();
 	// The parsed map lump also retains duplicate output keys. Keep their
 	// association by Hammer ID when a static resource needs a new class.
@@ -115,11 +103,13 @@ public void OnMapEnd()
 {
 	g_roundReady = false;
 	g_configsReady = false;
+	g_limitPassPending = false;
 }
 
 public void OnConfigsExecuted()
 {
 	LoadRules();
+	LoadChapterLimits();
 	UpdateCampaign();
 	g_configsReady = true;
 	if (g_roundReady) ScanResources();
@@ -189,6 +179,7 @@ public void OnEntityCreated(int entity, const char[] classname)
 	if (strncmp(classname, "weapon_", 7) == 0 || strncmp(classname, "upgrade_", 8) == 0
 		|| strncmp(classname, "prop_", 5) == 0)
 	{
+		SDKHook(entity, SDKHook_Spawn, BeforeResourceSpawn);
 		SDKHook(entity, SDKHook_SpawnPost, ResourceSpawned);
 	}
 }
@@ -203,7 +194,11 @@ public void ResourceSpawned(int entity)
 public void ProcessSpawnedResource(int reference)
 {
 	int entity = EntRefToEntIndex(reference);
-	if (entity != INVALID_ENT_REFERENCE && g_configsReady && g_roundReady) ProcessResource(entity);
+	if (entity != INVALID_ENT_REFERENCE && g_configsReady && g_roundReady)
+	{
+		ProcessResource(entity);
+		QueueLimitPass();
+	}
 }
 
 void ScanResources()
@@ -211,201 +206,5 @@ void ScanResources()
 	// Edict slots can have holes; entity count is not the highest valid index.
 	for (int entity = MaxClients + 1; entity < GetMaxEntities(); entity++)
 		if (IsValidEntity(entity)) ProcessResource(entity);
-}
-
-void GetResourceName(int entity, char[] name, int maxlen)
-{
-	char classname[64];
-	GetEntityClassname(entity, classname, sizeof(classname));
-	int id = IdentifyWeapon(entity);
-	if (id > WEPID_NONE && id < WEPID_SIZE)
-	{
-		GetWeaponName(id, name, maxlen);
-		if (strncmp(name, "weapon_", 7) == 0) strcopy(name, maxlen, name[7]);
-		return;
-	}
-	if (StrEqual(classname, "prop_minigun") || StrEqual(classname, "prop_minigun_l4d1") || StrEqual(classname, "prop_mounted_machine_gun"))
-		strcopy(name, maxlen, "mounted_gun");
-	else if (strncmp(classname, "upgrade_", 8) == 0) strcopy(name, maxlen, "upgrade_item");
-	else if (strncmp(classname, "prop_physics", 12) == 0)
-	{
-		char model[PLATFORM_MAX_PATH];
-		GetEntPropString(entity, Prop_Data, "m_ModelName", model, sizeof(model));
-		if (StrEqual(model, "models/props_junk/gascan001a.mdl", false)) strcopy(name, maxlen, "gascan");
-		else if (StrEqual(model, "models/props_junk/explosive_box001.mdl", false)) strcopy(name, maxlen, "fireworkcrate");
-		else if (StrEqual(model, "models/props_junk/propanecanister001a.mdl", false)) strcopy(name, maxlen, "propanetank");
-		else if (StrEqual(model, "models/props_equipment/oxygentank01.mdl", false)) strcopy(name, maxlen, "oxygentank");
-	}
-}
-
-void ProcessResource(int entity)
-{
-	if (!IsValidEntity(entity)) return;
-	if (HasEntProp(entity, Prop_Send, "m_hOwnerEntity") && GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity") > 0) return;
-	char name[64], target[256];
-	GetResourceName(entity, name, sizeof(name));
-	if (StrEqual(name, "melee")) SetMeleeCount(entity);
-	if (!name[0] || IsAllowed(name) || !g_rules.GetString(name, target, sizeof(target))) return;
-	if (StrEqual(target, "none"))
-	{
-		RemoveEntity(entity);
-		return;
-	}
-	char candidates[16][64];
-	int count = ExplodeString(target, ",", candidates, sizeof(candidates), sizeof(candidates[]));
-	if (count < 1) return;
-	int choice = GetRandomInt(0, count - 1);
-	TrimString(candidates[choice]);
-	if (!StrEqual(name, candidates[choice])) ReplaceResource(entity, candidates[choice]);
-}
-
-void SetMeleeCount(int entity)
-{
-	bool infinite;
-	if (HasEntProp(entity, Prop_Data, "m_spawnflags"))
-	{
-		int flags = GetEntProp(entity, Prop_Data, "m_spawnflags");
-		infinite = (flags & 8) != 0;
-		if (infinite) SetEntProp(entity, Prop_Data, "m_spawnflags", flags & ~8);
-	}
-	if (HasEntProp(entity, Prop_Data, "m_itemCount")
-		&& (infinite || GetEntProp(entity, Prop_Data, "m_itemCount") > g_meleePickups))
-		SetEntProp(entity, Prop_Data, "m_itemCount", g_meleePickups);
-}
-
-int WeaponNameToId2(const char[] name)
-{
-	char weapon[64];
-	FormatEx(weapon, sizeof(weapon), "weapon_%s", name);
-	return WeaponNameToId(weapon);
-}
-
-void CopyMapDefinition(int source, int target, StringMap outputs)
-{
-	if (!HasEntProp(source, Prop_Data, "m_iHammerID")) return;
-	char id[24];
-	IntToString(GetEntProp(source, Prop_Data, "m_iHammerID"), id, sizeof(id));
-	int index;
-	if (!g_mapEntries.GetValue(id, index)) return;
-	EntityLumpEntry entry = EntityLump.Get(index);
-	for (int i = 0; i < entry.Length; i++)
-	{
-		char key[128], value[2048];
-		entry.Get(i, key, sizeof(key), value, sizeof(value));
-		if (strncmp(key, "On", 2) == 0)
-		{
-			outputs.SetValue(key, 1);
-			continue;
-		}
-		if (StrEqual(key, "classname") || StrEqual(key, "model") || StrEqual(key, "weapon_selection") || StrEqual(key, "melee_weapon")) continue;
-		DispatchKeyValue(target, key, value);
-	}
-	delete entry;
-}
-
-bool CopyLiveOutputs(int source, int target, StringMap outputs)
-{
-	// These outputs also cover resources created by scripts, with no Hammer ID.
-	static char common[][] = {"OnUser1", "OnUser2", "OnUser3", "OnUser4", "OnPlayerPickup", "OnNPCPickup", "OnPlayerUse", "OnItemSpawn", "OnItemSpawned", "OnCacheInteraction"};
-	for (int i = 0; i < sizeof(common); i++) outputs.SetValue(common[i], 1);
-	StringMapSnapshot names = outputs.Snapshot();
-	bool success = true;
-	for (int i = 0; i < names.Length; i++)
-	{
-		char name[128];
-		names.GetKey(i, name, sizeof(name));
-		// Only engine output identifiers belong in the script, never map values.
-		bool valid = true;
-		for (int j = 0; name[j]; j++)
-			if (!IsCharAlpha(name[j]) && !IsCharNumeric(name[j]) && name[j] != '_') valid = false;
-		if (!valid) { success = false; break; }
-		char code[1006], result[8];
-		FormatEx(code, sizeof(code),
-			"local s=EntIndexToHScript(%d),d=EntIndexToHScript(%d),n=\"%s\",ok=true; if(EntityOutputs.HasAction(s,n)){if(!EntityOutputs.HasOutput(d,n))ok=false;else{for(local i=0;i<EntityOutputs.GetNumElements(s,n);i++){local t={};EntityOutputs.GetOutputTable(s,n,t,i);EntityOutputs.AddOutput(d,n,t.target,t.input,t.parameter,t.delay,t.times_to_fire);}}}; <RETURN>ok ? 1 : 0</RETURN>",
-			source, target, name);
-		if (!L4D2_GetVScriptOutput(code, result, sizeof(result)) || StringToInt(result) != 1)
-		{
-			LogError("Cannot preserve resource output %s on entity %d", name, source);
-			success = false;
-			break;
-		}
-	}
-	delete names;
-	return success;
-}
-
-void ReplaceResource(int entity, const char[] target)
-{
-	int id = WeaponNameToId2(target);
-	if (!IsValidWeaponId(id) || id == WEPID_NONE) return;
-	char classname[64];
-	GetEntityClassname(entity, classname, sizeof(classname));
-	bool spawner = StrEqual(classname, "weapon_spawn") || StrContains(classname, "_spawn") != -1;
-	int count = HasEntProp(entity, Prop_Data, "m_itemCount") ? GetEntProp(entity, Prop_Data, "m_itemCount") : 1;
-	if (spawner && count <= 0) return;
-
-	// Confogl already changes weapon_spawn in place. Keep its outputs,
-	// parent and targetname rather than rebuilding a generic gun spawner.
-	if (StrEqual(classname, "weapon_spawn") && id != WEPID_MELEE && HasValidWeaponModel(id))
-	{
-		char model[PLATFORM_MAX_PATH];
-		GetWeaponModel(id, model, sizeof(model));
-		Format(model, sizeof(model), "models%s", model);
-		PrecacheModel(model);
-		SetEntProp(entity, Prop_Send, "m_weaponID", id);
-		SetEntityModel(entity, model);
-		return;
-	}
-
-	char replacement[64];
-	FormatEx(replacement, sizeof(replacement), "weapon_%s%s", target, spawner ? "_spawn" : "");
-	g_creating = true;
-	int created = CreateEntityByName(replacement);
-	g_creating = false;
-	if (created == -1) { LogError("Cannot replace %s with %s", classname, replacement); return; }
-	StringMap outputs = new StringMap();
-	CopyMapDefinition(entity, created, outputs);
-	char targetname[128];
-	GetEntPropString(entity, Prop_Data, "m_iName", targetname, sizeof(targetname));
-	DispatchKeyValue(created, "targetname", targetname);
-	if (HasEntProp(entity, Prop_Data, "m_spawnflags")) DispatchKeyValueInt(created, "spawnflags", GetEntProp(entity, Prop_Data, "m_spawnflags"));
-	DispatchKeyValueInt(created, "count", id == WEPID_MELEE ? g_meleePickups : count);
-	if (id == WEPID_MELEE)
-	{
-		// The melee unlock plugin owns the mission's available weapon list.
-		// Resolve one script here, including for direct weapon_melee entities.
-		int table = FindStringTable("MeleeWeapons");
-		int available = table == INVALID_STRING_TABLE ? 0 : GetStringTableNumStrings(table);
-		if (available < 1) { delete outputs; RemoveEntity(created); LogError("No precached melee weapons available"); return; }
-		char melee[64];
-		ConVar meleeList = FindConVar("l4d2_melee_spawn");
-		char allowed[512], candidates[32][64];
-		if (meleeList != null) meleeList.GetString(allowed, sizeof(allowed));
-		int choices = ExplodeString(allowed, ",", candidates, sizeof(candidates), sizeof(candidates[]));
-		if (allowed[0] && choices > 0)
-		{
-			strcopy(melee, sizeof(melee), candidates[GetRandomInt(0, choices - 1)]);
-			TrimString(melee);
-		}
-		else ReadStringTable(table, GetRandomInt(0, available - 1), melee, sizeof(melee));
-		DispatchKeyValue(created, "melee_script_name", melee);
-		DispatchKeyValue(created, "melee_weapon", melee);
-	}
-	float origin[3], angles[3];
-	GetEntPropVector(entity, Prop_Send, "m_vecOrigin", origin);
-	GetEntPropVector(entity, Prop_Send, "m_angRotation", angles);
-	TeleportEntity(created, origin, angles, NULL_VECTOR);
-	if (!DispatchSpawn(created)) { delete outputs; RemoveEntity(created); LogError("Cannot spawn replacement %s", replacement); return; }
-	bool copied = CopyLiveOutputs(entity, created, outputs);
-	delete outputs;
-	if (!copied) { RemoveEntity(created); return; }
-	int parent = GetEntPropEnt(entity, Prop_Data, "m_hMoveParent");
-	if (parent > 0)
-	{
-		SetVariantString("!activator");
-		AcceptEntityInput(created, "SetParent", parent);
-	}
-	if (id == WEPID_MELEE) SetMeleeCount(created);
-	// Never remove the source before the replacement has successfully spawned.
-	RemoveEntity(entity);
+	QueueLimitPass();
 }

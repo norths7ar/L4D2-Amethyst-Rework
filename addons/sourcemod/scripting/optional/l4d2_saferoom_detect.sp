@@ -4,6 +4,7 @@
 #include <sdktools>
 #undef REQUIRE_PLUGIN
 #include <confogl>
+#include <l4d2_saferoom_detect>
 
 #define SR_DEBUG_MODE       0               // outputs some coordinate data
 
@@ -51,7 +52,7 @@ public Plugin:myinfo =
     name = "Precise saferoom detection",
     author = "Tabun, devilesk",
     description = "Allows checks whether a coordinate/entity/player is in start or end saferoom (uses saferoominfo.txt).",
-    version = "0.0.8",
+    version = "0.1.0",
     url = "https://github.com/devilesk/rl4d2l-plugins"
 }
 
@@ -78,11 +79,16 @@ new     Float:          g_fEndLocD[3];
 new     Float:          g_fEndRotate;
 
 
+new Handle:g_queryMapInfo = INVALID_HANDLE;
+new bool:g_queryMapAvailable;
+new bool:g_preciseValid[4]; // New queries validate keys, not nonzero coordinates.
+
 // Natives
 // -------
  
 public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max)
 {
+	CreateNative("SAFEDETECT_QueryPoint", Native_QueryPoint);
 	CreateNative("SAFEDETECT_IsEntityInStartSaferoom", Native_IsEntityInStartSaferoom);
 	CreateNative("SAFEDETECT_IsPlayerInStartSaferoom", Native_IsPlayerInStartSaferoom);
 	CreateNative("SAFEDETECT_IsEntityInEndSaferoom", Native_IsEntityInEndSaferoom);
@@ -140,6 +146,14 @@ public OnPluginStart()
 public OnPluginEnd()
 {
     SI_KV_Close();
+    if (g_queryMapInfo != INVALID_HANDLE) CloseHandle(g_queryMapInfo);
+}
+
+public OnMapInit(const String:mapName[])
+{
+    strcopy(g_sMapname, sizeof(g_sMapname), mapName);
+    g_iMode = SI_KV_UpdateSaferoomInfo() ? DETMODE_EXACT : DETMODE_LGO;
+    LoadQueryMapInfo();
 }
 
 public OnMapStart()
@@ -148,11 +162,17 @@ public OnMapStart()
     GetCurrentMap(g_sMapname, sizeof(g_sMapname));
     
     g_iMode = ( SI_KV_UpdateSaferoomInfo() ) ? DETMODE_EXACT : DETMODE_LGO;
+    LoadQueryMapInfo();
+}
+
+public OnConfigsExecuted()
+{
+    LoadQueryMapInfo();
 }
 
 public OnMapEnd()
 {
-    KvRewind(g_kSIData);
+    if (g_kSIData != INVALID_HANDLE) KvRewind(g_kSIData);
 }
 
 
@@ -213,11 +233,11 @@ bool IsPlayerInEndSaferoom(client)
 }
 
 
-bool IsPointInStartSaferoom(Float:location[3], entity=-1)
+bool IsPointInStartSaferoom(Float:location[3], entity=-1, bool:precise=false)
 {
-    if (g_iMode == DETMODE_EXACT)
+    if (precise || g_iMode == DETMODE_EXACT)
     {
-        if (!g_bHasStart) { return false; }
+        if (!(precise ? g_preciseValid[0] : g_bHasStart)) { return false; }
         
         new bool: inSaferoom = false;
         
@@ -245,7 +265,7 @@ bool IsPointInStartSaferoom(Float:location[3], entity=-1)
                             &&  location[2] >= zMin && location[2] <= zMax  );
             
         // two-part saferooms:
-        if (!inSaferoom && g_bHasStartExtra)
+        if (!inSaferoom && (precise ? g_preciseValid[1] : g_bHasStartExtra))
         {
             if (g_fStartLocC[0] < g_fStartLocD[0]) { xMin = g_fStartLocC[0]; xMax = g_fStartLocD[0]; } else { xMin = g_fStartLocD[0]; xMax = g_fStartLocC[0]; }
             if (g_fStartLocC[1] < g_fStartLocD[1]) { yMin = g_fStartLocC[1]; yMax = g_fStartLocD[1]; } else { yMin = g_fStartLocD[1]; yMax = g_fStartLocC[1]; }
@@ -284,11 +304,11 @@ bool IsPointInStartSaferoom(Float:location[3], entity=-1)
     
 }
 
-bool IsPointInEndSaferoom(Float:location[3], entity = -1)
+bool IsPointInEndSaferoom(Float:location[3], entity = -1, bool:precise=false)
 {    
-    if (g_iMode == DETMODE_EXACT)
+    if (precise || g_iMode == DETMODE_EXACT)
     {
-        if (!g_bHasEnd) { return false; }
+        if (!(precise ? g_preciseValid[2] : g_bHasEnd)) { return false; }
         
         new bool: inSaferoom = false;
         
@@ -317,7 +337,7 @@ bool IsPointInEndSaferoom(Float:location[3], entity = -1)
                             &&  location[2] >= zMin && location[2] <= zMax  );
         
         // two-part saferooms:
-        if (!inSaferoom && g_bHasEndExtra)
+        if (!inSaferoom && (precise ? g_preciseValid[3] : g_bHasEndExtra))
         {
             if (g_fEndLocC[0] < g_fEndLocD[0]) { xMin = g_fEndLocC[0]; xMax = g_fEndLocD[0]; } else { xMin = g_fEndLocD[0]; xMax = g_fEndLocC[0]; }
             if (g_fEndLocC[1] < g_fEndLocD[1]) { yMin = g_fEndLocC[1]; yMax = g_fEndLocD[1]; } else { yMin = g_fEndLocD[1]; yMax = g_fEndLocC[1]; }
@@ -382,6 +402,7 @@ SI_KV_Load()
 
 bool: SI_KV_UpdateSaferoomInfo()
 {
+    for (new i = 0; i < 4; i++) g_preciseValid[i] = false;
     if (g_kSIData == INVALID_HANDLE) {
         LogError("[SI] No saferoom keyvalues loaded!");
         return false;
@@ -395,6 +416,7 @@ bool: SI_KV_UpdateSaferoomInfo()
     g_fStartRotate = 0.0;       g_fEndRotate = 0.0;
     
     // get keyvalues
+    KvRewind(g_kSIData);
     if (KvJumpToKey(g_kSIData, g_sMapname))
     {
         KvGetVector(g_kSIData, "start_loc_a", g_fStartLocA);
@@ -408,7 +430,11 @@ bool: SI_KV_UpdateSaferoomInfo()
         KvGetVector(g_kSIData, "end_loc_d", g_fEndLocD);
         g_fEndRotate = KvGetFloat(g_kSIData, "end_rotate", g_fEndRotate);
         
-        // check data:
+        g_preciseValid[0] = ValidBox("start_loc_a", "start_loc_b", g_fStartLocA, g_fStartLocB);
+        g_preciseValid[1] = ValidBox("start_loc_c", "start_loc_d", g_fStartLocC, g_fStartLocD);
+        g_preciseValid[2] = ValidBox("end_loc_a", "end_loc_b", g_fEndLocA, g_fEndLocB);
+        g_preciseValid[3] = ValidBox("end_loc_c", "end_loc_d", g_fEndLocC, g_fEndLocD);
+        // check data (legacy callers retain their old validity rules):
         if (g_fStartLocA[0] != 0.0 && g_fStartLocA[1] != 0.0 && g_fStartLocA[2] != 0.0 && g_fStartLocB[0] != 0.0 && g_fStartLocB[1] != 0.0 && g_fStartLocB[2] != 0.0) { g_bHasStart = true; }
         if (g_fStartLocC[0] != 0.0 && g_fStartLocC[1] != 0.0 && g_fStartLocC[2] != 0.0 && g_fStartLocD[0] != 0.0 && g_fStartLocD[1] != 0.0 && g_fStartLocD[2] != 0.0) { g_bHasStartExtra = true; }
         if (g_fEndLocA[0] != 0.0 && g_fEndLocA[1] != 0.0 && g_fEndLocA[2] != 0.0 && g_fEndLocB[0] != 0.0 && g_fEndLocB[1] != 0.0 && g_fEndLocB[2] != 0.0) { g_bHasEnd = true; }
@@ -417,14 +443,14 @@ bool: SI_KV_UpdateSaferoomInfo()
         // rotate if necessary:
         if (g_fStartRotate != 0.0) {
             RotatePoint(g_fStartLocA, g_fStartLocB[0], g_fStartLocB[1], g_fStartRotate);
-            if (g_bHasStartExtra) {
+            if (g_bHasStartExtra || g_preciseValid[1]) {
                 RotatePoint(g_fStartLocA, g_fStartLocC[0], g_fStartLocC[1], g_fStartRotate);
                 RotatePoint(g_fStartLocA, g_fStartLocD[0], g_fStartLocD[1], g_fStartRotate);
             }
         }
         if (g_fEndRotate != 0.0) {
             RotatePoint(g_fEndLocA, g_fEndLocB[0], g_fEndLocB[1], g_fEndRotate);
-            if (g_bHasEndExtra) {
+            if (g_bHasEndExtra || g_preciseValid[3]) {
                 RotatePoint(g_fEndLocA, g_fEndLocC[0], g_fEndLocC[1], g_fEndRotate);
                 RotatePoint(g_fEndLocA, g_fEndLocD[0], g_fEndLocD[1], g_fEndRotate);
             }
@@ -472,3 +498,77 @@ void PrintDebug(const String:Message[], any:...)
     #endif
 }
 #endif
+
+// Query policies live here, so resource consumers never duplicate geometry/fallback.
+public OnLibraryAdded(const String:name[])
+{
+    if (StrEqual(name, "confogl")) g_bLGOIsAvailable = true;
+}
+public OnLibraryRemoved(const String:name[])
+{
+    if (StrEqual(name, "confogl")) g_bLGOIsAvailable = false;
+}
+
+bool:ValidBox(const String:aKey[], const String:bKey[], const Float:a[3], const Float:b[3])
+{
+    return KvGetDataType(g_kSIData, aKey) != KvData_None && KvGetDataType(g_kSIData, bKey) != KvData_None
+        && a[0] != b[0] && a[1] != b[1] && a[2] != b[2];
+}
+
+public Native_QueryPoint(Handle:plugin, numParams)
+{
+    new Float:point[3];
+    GetNativeArray(1, point, 3);
+    new SafeDetectRegion:region = SafeDetectRegion:GetNativeCell(2);
+    new SafeDetectPolicy:policy = SafeDetectPolicy:GetNativeCell(3);
+    if (region < SafeDetect_Start || region > SafeDetect_End || policy < SafeDetect_Legacy || policy > SafeDetect_PreciseFirst)
+        return ThrowNativeError(SP_ERROR_NATIVE, "Invalid saferoom query policy or region");
+    if (policy == SafeDetect_Legacy)
+        return (region == SafeDetect_Start ? IsPointInStartSaferoom(point) : IsPointInEndSaferoom(point)) ? 1 : 0;
+    new SafeDetectResult:result;
+    if (policy == SafeDetect_MapInfoFirst) {
+        result = QueryMapInfo(point, region);
+        if (result != SafeDetect_Unavailable) return _:result;
+        return _:QueryPrecise(point, region);
+    }
+    result = QueryPrecise(point, region);
+    if (result != SafeDetect_Unavailable) return _:result;
+    return _:QueryMapInfo(point, region);
+}
+
+SafeDetectResult:QueryPrecise(Float:point[3], SafeDetectRegion:region)
+{
+    if (!g_preciseValid[region == SafeDetect_Start ? 0 : 2]) return SafeDetect_Unavailable;
+    return (region == SafeDetect_Start ? IsPointInStartSaferoom(point, -1, true) : IsPointInEndSaferoom(point, -1, true)) ? SafeDetect_Inside : SafeDetect_Outside;
+}
+
+SafeDetectResult:QueryMapInfo(const Float:point[3], SafeDetectRegion:region)
+{
+    if (!g_queryMapAvailable) return SafeDetect_Unavailable;
+    new Float:center[3], Float:missing[3] = {999999.0, 999999.0, 999999.0};
+    new Float:radius;
+    if (region == SafeDetect_Start) {
+        KvGetVector(g_queryMapInfo, "start_point", center, missing);
+        radius = KvGetFloat(g_queryMapInfo, "start_dist", -1.0);
+        new Float:extra = KvGetFloat(g_queryMapInfo, "start_extra_dist", -1.0);
+        if (extra > radius) radius = extra;
+    } else {
+        KvGetVector(g_queryMapInfo, "end_point", center, missing);
+        radius = KvGetFloat(g_queryMapInfo, "end_dist", -1.0);
+    }
+    if (radius < 0.0 || center[0] == missing[0]) return SafeDetect_Unavailable;
+    return GetVectorDistance(point, center) <= radius ? SafeDetect_Inside : SafeDetect_Outside;
+}
+
+// Read the active Config's mapinfo before entities spawn. Confogl's current-map
+// cursor is only advanced in OnMapStart, too late for generation-time queries.
+LoadQueryMapInfo()
+{
+    g_queryMapAvailable = false;
+    if (g_queryMapInfo != INVALID_HANDLE) CloseHandle(g_queryMapInfo);
+    g_queryMapInfo = CreateKeyValues("MapInfo");
+    new String:path[PLATFORM_MAX_PATH];
+    if (GetFeatureStatus(FeatureType_Native, "LGO_BuildConfigPath") != FeatureStatus_Available) return;
+    LGO_BuildConfigPath(path, sizeof(path), "mapinfo.txt");
+    if (FileToKeyValues(g_queryMapInfo, path)) g_queryMapAvailable = KvJumpToKey(g_queryMapInfo, g_sMapname);
+}

@@ -37,6 +37,27 @@ native bool SAFEDETECT_IsEntityInEndSaferoom(int entity);
 native bool SAFEDETECT_IsPlayerInStartSaferoom(int client);
 native bool SAFEDETECT_IsPlayerInEndSaferoom(int client);
 
+// Each query chooses its policy; existing bool natives retain their legacy behavior.
+enum SafeDetectPolicy
+{
+    SafeDetect_Legacy,
+    SafeDetect_MapInfoFirst,
+    SafeDetect_PreciseFirst
+};
+enum SafeDetectResult
+{
+    SafeDetect_Unavailable = -1,
+    SafeDetect_Outside,
+    SafeDetect_Inside
+};
+enum SafeDetectRegion
+{
+    SafeDetect_Start,
+    SafeDetect_End
+};
+// Outside is conclusive. Only unavailable data falls back to the other source.
+native SafeDetectResult SAFEDETECT_QueryPoint(const float point[3], SafeDetectRegion region, SafeDetectPolicy policy = SafeDetect_Legacy);
+
 public SharedPlugin __pl_l4d2_saferoom_detect =
 {
 	name = "l4d2_saferoom_detect",
@@ -51,6 +72,7 @@ public SharedPlugin __pl_l4d2_saferoom_detect =
 #if !defined REQUIRE_PLUGIN
 public void __pl_l4d2_saferoom_detect_SetNTVOptional()
 {
+	MarkNativeAsOptional("SAFEDETECT_QueryPoint");
 	MarkNativeAsOptional("SAFEDETECT_IsEntityInStartSaferoom");
 	MarkNativeAsOptional("SAFEDETECT_IsEntityInEndSaferoom");
 	MarkNativeAsOptional("SAFEDETECT_IsPlayerInStartSaferoom");
