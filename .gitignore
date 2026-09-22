@@ -34,3 +34,6 @@ $RECYCLE.BIN/
 *-shm
 *-journal
 /addons/sourcemod/data/sqlite/
+
+# Player-owned custom join messages, permissions, and sounds
+/addons/sourcemod/data/cannounce_messages.txt

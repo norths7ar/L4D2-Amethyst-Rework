@@ -92,3 +92,13 @@ journalctl -u l4d2 -t l4d2-restart --since today
 ```
 
 服务器广播提示后立即正常退出，systemd 自动拉起。该插件故意不使用会受空服休眠影响的倒计时，也不执行 shell、不持有 sudo、不能运行任意主机命令。
+
+### VPK 文件名与引擎挂载
+
+第三方 VPK 使用简短的 ASCII 文件名，版本号用下划线，例如 `blackmist_re_v13.vpk`。扫描脚本能校验包内容并生成 missioncycle，不代表游戏引擎已挂载该包；缺图时应同时检查引擎 `maps` 输出及 Campaign Switcher 的跳过日志。Blackmist 曾因原文件名未被 Linux 服务端挂载，仅改名并重启后四关恢复识别，包内容未变。
+
+### 玩家自定义进服记录
+
+`addons/sourcemod/data/cannounce_messages.txt` 由插件持有，保存玩家消息、授权与自定义声音，不纳入 Git。云服更新和本地测试服同步均跳过该路径的复制与删除；新实例由插件首次加载时创建文件。
+
+首次发布取消跟踪的变更前，必须先更新云服已安装的 `/usr/local/sbin/l4d2-update-and-restart`，再运行内容更新。仅拉取仓库不会更新已安装的运维脚本；旧脚本会把取消跟踪识别为删除并移除服务器副本。

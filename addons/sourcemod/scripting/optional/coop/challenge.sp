@@ -23,7 +23,6 @@ enum
 	Setting_KillAmmo = 13,
 	Setting_Reset = 14,
 	Setting_SIDamage = 15,
-	Setting_FiniteHordes = 16,
 	Setting_AutoWipe = 17,
 	Setting_AutoWipeDamage = 18,
 	Setting_AllowGrenade = 19,
@@ -56,7 +55,7 @@ public Plugin myinfo =
 	name = "Coop Challenge",
 	author = "海洋空氣, norths7ar",
 	description = "Difficulty Controller for Coop.",
-	version = "2.10.0",
+	version = "2.10.1",
 	url = "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
 };
 
@@ -137,9 +136,6 @@ public Action drawPanel(int client, int first_item)
 	}
 	FormatEx(buffer, sizeof(buffer), "%T", "RehealthMenu", client); AddNamedToggleMenuItem(menu, "rehealth", buffer, GetConVarBool(hRehealth));
 	FormatEx(buffer, sizeof(buffer), "%T", "ReammoMenu", client); AddNamedToggleMenuItem(menu, "reammo", buffer, GetConVarBool(hReammo));
-	ConVar mobLimit = FindConVar("l4d2_heq_enabled");
-	if (mobLimit != null) { FormatEx(buffer, sizeof(buffer), "%T", "FiniteHordesMenu", client); AddNamedToggleMenuItem(menu, "mob_limit", buffer, mobLimit.BoolValue); }
-	else { FormatEx(buffer, sizeof(buffer), "%T", "FiniteHordesUnavailable", client); AddMenuItem(menu, "mob_limit", buffer, ITEMDRAW_DISABLED); }
 	FormatEx(buffer, sizeof(buffer), "%T", "ResourceMenu", client); AddMenuItem(menu, "resources", buffer);
 	FormatEx(buffer, sizeof(buffer), "%T", "ResetMenu", client); AddMenuItem(menu, "reset", buffer);
 
@@ -195,11 +191,6 @@ public int MenuHandler(Handle menu, MenuAction action, int client, int param)
 				return 1;
 			}
 			RequestGameplaySetting(client, Setting_KillAmmo, !GetConVarBool(hReammo));
-			drawPanel(client, 0);
-		} else if (StrEqual(item, "mob_limit")) {
-			ConVar mobLimit = FindConVar("l4d2_heq_enabled");
-			if (mobLimit == null) PrintToChat(client, "\x04[Ast] \x01%t", "FiniteHordesPluginUnavailable");
-			else RequestGameplaySetting(client, Setting_FiniteHordes, !mobLimit.BoolValue);
 			drawPanel(client, 0);
 		} else if (StrEqual(item, "resources")) {
 			Menu_Resources(client);
@@ -353,9 +344,6 @@ public void RequestGameplaySetting(int client, int target, int value)
 			case Setting_SIDamage: {
 				FormatEx(sBuffer, sizeof(sBuffer), "%T", "VoteSIDamage", client, value);
 			}
-			case Setting_FiniteHordes: {
-				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteEnableFiniteHordes" : "VoteDisableFiniteHordes", client);
-			}
 			case Setting_AutoWipe: {
 				FormatEx(sBuffer, sizeof(sBuffer), "%T", value ? "VoteEnableAutoWipe" : "VoteDisableAutoWipe", client);
 			}
@@ -439,7 +427,6 @@ public void GameplayVoteResultHandler(Handle vote, int num_votes, int num_client
 		case Setting_KillAmmo: DisplayVotePassPhrase(vote, "VotePassReammo");
 		case Setting_Reset: DisplayVotePassPhrase(vote, "VotePassResetAll");
 		case Setting_SIDamage: DisplayVotePassPhrase(vote, "VotePassSIDamage");
-		case Setting_FiniteHordes: DisplayVotePassPhrase(vote, "VotePassFiniteHordes");
 		case Setting_AutoWipe: DisplayVotePassPhrase(vote, "VotePassAutoWipe");
 		case Setting_AutoWipeDamage: DisplayVotePassPhrase(vote, "VotePassAutoWipeDamage");
 	}
@@ -747,7 +734,6 @@ ConVar GetChallengeSetting(int target)
 		case Setting_KillHealth: return hRehealth;
 		case Setting_KillAmmo: return hReammo;
 		case Setting_SIDamage: return hDmgThreshold;
-		case Setting_FiniteHordes: return FindConVar("l4d2_heq_enabled");
 		case Setting_AutoWipe: return FindConVar("autowipe_enable");
 		case Setting_AutoWipeDamage: return FindConVar("autowipe_wipe_damage");
 	}
@@ -824,7 +810,7 @@ void PrintOverrideDetails(int client)
 bool IsBooleanChallengeTarget(int target)
 {
 	return target == Setting_TankBhop || target == Setting_TankRock
-		|| target == Setting_RatioDamage || target == Setting_KillHealth || target == Setting_KillAmmo || target == Setting_FiniteHordes
+		|| target == Setting_RatioDamage || target == Setting_KillHealth || target == Setting_KillAmmo
 		|| target == Setting_AutoWipe;
 }
 
@@ -839,7 +825,6 @@ void GetChallengePhrase(int target, char[] phrase, int maxlen)
 		case Setting_KillHealth: strcopy(phrase, maxlen, "InfoRehealth");
 		case Setting_KillAmmo: strcopy(phrase, maxlen, "InfoReammo");
 		case Setting_SIDamage: strcopy(phrase, maxlen, "InfoSIDamage");
-		case Setting_FiniteHordes: strcopy(phrase, maxlen, "InfoMobLimit");
 		case Setting_AutoWipe: strcopy(phrase, maxlen, "InfoAutoWipe");
 		case Setting_AutoWipeDamage: strcopy(phrase, maxlen, "InfoAutoWipeDamage");
 		default: strcopy(phrase, maxlen, "InfoNoOverrides");
