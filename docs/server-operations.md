@@ -102,3 +102,9 @@ journalctl -u l4d2 -t l4d2-restart --since today
 `addons/sourcemod/data/cannounce_messages.txt` 由插件持有，保存玩家消息、授权与自定义声音，不纳入 Git。云服更新和本地测试服同步均跳过该路径的复制与删除；新实例由插件首次加载时创建文件。
 
 首次发布取消跟踪的变更前，必须先更新云服已安装的 `/usr/local/sbin/l4d2-update-and-restart`，再运行内容更新。仅拉取仓库不会更新已安装的运维脚本；旧脚本会把取消跟踪识别为删除并移除服务器副本。
+
+## 全局地图管理
+
+`campaign_switcher.smx` 位于全局插件目录，启动时自动加载，模式插件重载时由 `generalfixes.cfg` 重新加载。`!mapvote`、`!chaptervote`、`!nextmap` 和终章战役衔接不依赖 AstRedux。空服恢复只换地图，不加载或切换玩法模式。
+
+最后一名真人离开后，或空服被大厅切入三方图但无人进入时，插件等待真人连接和引擎预留都消失，再按 `campaign_empty_switch_delay`（默认 15 秒）切到随机官图。已停在官图且没有新的玩家连接时不会反复轮换。预留查询失败时暂不换图。`server.cfg` 使用 `sm_cvar sv_hibernate_when_empty 0`，保证空服计时继续运行。

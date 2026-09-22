@@ -5,7 +5,7 @@
 #include <builtinvotes>
 #include <imatchext>
 
-#define PLUGIN_VERSION "2.2.0"
+#define PLUGIN_VERSION "2.3.0"
 #define MISSION_CYCLE_PATH "configs/missioncycle.txt"
 #define MAX_MAP_NAME 128
 #define MAP_CHANGE_DELAY 3.0
@@ -44,9 +44,9 @@ ArrayList g_mapOfficial;
 ConVar g_voteParticipation;
 ConVar g_votePassPercent;
 ConVar g_emptySwitchDelay;
-ConVar g_emptyMatchMode;
-Handle g_emptyServerTimer;
+float g_emptySince = -1.0;
 bool g_hadHumanPlayers;
+Handle g_emptyServerTimer;
 
 char g_changeVoteMap[MAX_MAP_NAME];
 char g_changeVoteName[MAX_MAP_NAME];
@@ -90,16 +90,10 @@ public void OnPluginStart()
 	g_emptySwitchDelay = CreateConVar(
 		"campaign_empty_switch_delay",
 		"15.0",
-		"Seconds to wait after the last human leaves before selecting an official campaign.",
+		"Seconds without humans or a lobby reservation before idle recovery to an official campaign.",
 		FCVAR_NOTIFY,
 		true,
 		1.0
-	);
-	g_emptyMatchMode = CreateConVar(
-		"campaign_empty_matchmode",
-		"",
-		"Optional safe matchmode command token to load before changing the empty server to an official campaign.",
-		FCVAR_NOTIFY
 	);
 
 	CreateConVar(
@@ -119,11 +113,13 @@ public void OnPluginStart()
 
 	ResetNextMapVotes();
 	g_hadHumanPlayers = CountConnectedHumans() > 0;
+	StartEmptyServerMonitor();
 }
 
 public void OnConfigsExecuted()
 {
 	ReloadMapRegistry();
+	StartEmptyServerMonitor();
 }
 
 public void OnMapStart()
@@ -131,6 +127,7 @@ public void OnMapStart()
 	ResetNextMapVotes();
 	g_finaleChangeScheduled = false;
 	g_hadHumanPlayers = CountConnectedHumans() > 0;
+	g_emptySince = -1.0;
 	CreateTimer(0.5, Timer_ReloadRegistry, _, TIMER_FLAG_NO_MAPCHANGE);
 	CreateTimer(AUTO_MENU_DELAY, Timer_ShowFinaleMenus, _, TIMER_FLAG_NO_MAPCHANGE);
 }
@@ -146,7 +143,7 @@ public void OnClientPutInServer(int client)
 		return;
 
 	g_hadHumanPlayers = true;
-	CancelEmptyServerTimer();
+	g_emptySince = -1.0;
 
 	CreateTimer(AUTO_MENU_DELAY, Timer_ShowFinaleMenuToClient, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
 }
@@ -157,7 +154,7 @@ public void OnClientConnected(int client)
 		return;
 
 	g_hadHumanPlayers = true;
-	CancelEmptyServerTimer();
+	g_emptySince = -1.0;
 }
 
 public void OnClientDisconnect(int client)
@@ -166,52 +163,50 @@ public void OnClientDisconnect(int client)
 	g_nextMapMenuShown[client] = false;
 }
 
-public void OnClientDisconnect_Post(int client)
-{
-	if (CountConnectedHumans() > 0 || !g_hadHumanPlayers || g_emptyServerTimer != null)
-		return;
-
-	g_hadHumanPlayers = false;
-	g_emptyServerTimer = CreateTimer(
-		g_emptySwitchDelay.FloatValue,
-		Timer_ChangeToEmptyServerMap,
-		_,
-		TIMER_FLAG_NO_MAPCHANGE
-	);
-}
-
 public void OnMapEnd()
 {
 	// NO_MAPCHANGE timers are closed by SourceMod during map teardown.
 	g_emptyServerTimer = null;
+	g_emptySince = -1.0;
 }
 
-void CancelEmptyServerTimer()
+void StartEmptyServerMonitor()
 {
 	if (g_emptyServerTimer == null)
-		return;
-
-	delete g_emptyServerTimer;
-	g_emptyServerTimer = null;
+		g_emptyServerTimer = CreateTimer(1.0, Timer_ChangeToEmptyServerMap, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 }
 
 public Action Timer_ChangeToEmptyServerMap(Handle timer)
 {
-	if (timer != g_emptyServerTimer)
-		return Plugin_Stop;
-
-	g_emptyServerTimer = null;
-	if (CountConnectedHumans() > 0)
+	int reservation[2];
+	// A failed query is not proof that the lobby has released the server.
+	if (CountConnectedHumans() > 0 || !GetReservationCookie(reservation)
+		|| reservation[0] != 0 || reservation[1] != 0)
 	{
-		g_hadHumanPlayers = true;
-		return Plugin_Stop;
+		g_emptySince = -1.0;
+		return Plugin_Continue;
 	}
 
+	MissionSymbol current = CurrentMission;
+	if (current == MissionSymbol_Invalid || (!g_hadHumanPlayers && !current.IsAddon))
+	{
+		g_emptySince = -1.0;
+		return Plugin_Continue;
+	}
+
+	float now = GetEngineTime();
+	if (g_emptySince < 0.0)
+		g_emptySince = now;
+	if (now - g_emptySince < g_emptySwitchDelay.FloatValue)
+		return Plugin_Continue;
+
+	// Retry unavailable registry entries without logging on every frame.
+	g_emptySince = now;
 	int winner = SelectRandomOfficialMap();
 	if (winner < 0 || winner >= g_mapFirstChapters.Length)
 	{
 		LogError("Cannot select an official campaign for the empty server: Mission Cache registry is unavailable or empty");
-		return Plugin_Stop;
+		return Plugin_Continue;
 	}
 
 	char firstChapter[MAX_MAP_NAME];
@@ -221,59 +216,14 @@ public Action Timer_ChangeToEmptyServerMap(Handle timer)
 	if (!IsMapValid(firstChapter))
 	{
 		LogError("Cannot change empty server to invalid official Chapter %s (%s)", firstChapter, displayName);
-		return Plugin_Stop;
+		return Plugin_Continue;
 	}
 
 	NotifyNewCampaign();
-	char matchMode[MAX_MAP_NAME];
-	g_emptyMatchMode.GetString(matchMode, sizeof(matchMode));
-	if (IsSafeCommandToken(matchMode) && IsSafeCommandToken(firstChapter) && CommandExists("sm_forcechangematch"))
-	{
-		ServerCommand("sm_forcechangematch %s %s", matchMode, firstChapter);
-	}
-	else
-	{
-		if (matchMode[0] == '\0')
-		{
-			LogMessage("Campaign Switcher empty server matchmode is unset; falling back to direct official Chapter change");
-		}
-		else if (!IsSafeCommandToken(matchMode))
-		{
-			LogError("Campaign Switcher empty server matchmode is not a safe command token (%s); falling back to direct official Chapter change", matchMode);
-		}
-		else if (!IsSafeCommandToken(firstChapter))
-		{
-			LogError("Campaign Switcher selected official Chapter is not a safe command token (%s); falling back to direct Chapter change", firstChapter);
-		}
-		else
-		{
-			LogError("Campaign Switcher cannot use sm_forcechangematch; falling back to direct official Chapter change");
-		}
-
-		ForceChangeLevel(firstChapter, "Campaign Switcher empty server");
-	}
+	LogMessage("Empty unreserved server: changing to official campaign %s (%s)", firstChapter, displayName);
+	ForceChangeLevel(firstChapter, "Campaign Switcher empty server");
+	g_emptyServerTimer = null;
 	return Plugin_Stop;
-}
-
-bool IsSafeCommandToken(const char[] value)
-{
-	int length = strlen(value);
-	if (length == 0)
-		return false;
-
-	for (int i = 0; i < length; i++)
-	{
-		int character = value[i];
-		if ((character < 'a' || character > 'z') &&
-			(character < 'A' || character > 'Z') &&
-			(character < '0' || character > '9') &&
-			character != '_' && character != '-')
-		{
-			return false;
-		}
-	}
-
-	return true;
 }
 
 public Action Timer_ReloadRegistry(Handle timer)
