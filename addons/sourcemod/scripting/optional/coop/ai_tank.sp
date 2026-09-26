@@ -10,7 +10,7 @@
 public Plugin myinfo = {
     name = "AI Tank", author = "Breezy, norths7ar",
     description = "AI Tank movement, throws and opportunistic obstacle interaction",
-    version = "1.2.0"
+    version = "1.3.0"
 };
 
 ConVar g_enable, hCvarTankBhop, hCvarTankRock, hCvarTankBhopStopDistance;
@@ -68,6 +68,7 @@ public void OnSpawn(Event event, const char[] name, bool dontBroadcast) {
     if (client > 0) { RestoreRate(client); ResetTank(client); }
 }
 void ResetTank(int client) {
+    ResetTankMovement(client);
     g_targetUserId[client] = 0;
     g_nextTargetChange[client] = 0.0;
     g_swingRider[client] = 0;
@@ -81,6 +82,7 @@ public void OnEnableChanged(ConVar cvar, const char[] oldValue, const char[] new
     if (!cvar.BoolValue) {
         for (int client = 1; client <= MaxClients; client++) {
             if (IsClientInGame(client)) RestoreRate(client);
+            ResetTankMovement(client);
             g_jumpUntil[client] = 0.0;
         }
     }
@@ -98,7 +100,9 @@ public Action L4D2_OnChooseVictim(int tank, int &target) {
     int sequence = GetEntProp(tank, Prop_Send, "m_nSequence");
     if (GetEntityMoveType(tank) == MOVETYPE_WALK && !(sequence >= 16 && sequence <= 23)
         && !(sequence >= 48 && sequence <= 51)) chosen = Tank_ChooseNearbyTarget(tank, target);
-    g_targetUserId[tank] = IsSurvivor(chosen) ? GetClientUserId(chosen) : 0;
+    int userId = IsSurvivor(chosen) ? GetClientUserId(chosen) : 0;
+    if (userId != g_targetUserId[tank]) { CancelTankRecovery(tank); g_jumpUntil[tank] = 0.0; }
+    g_targetUserId[tank] = userId;
     if (chosen == target) return Plugin_Continue;
     g_jumpUntil[tank] = 0.0;
     target = chosen;
@@ -140,12 +144,13 @@ bool InFront(int tank, const float point[3], float minimumDot = 0.5) {
 }
 
 public Action OnPlayerRunCmd(int tank, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon) {
-    if (!g_enable.BoolValue || !IsAITank(tank)) return Plugin_Continue;
+    if (!g_enable.BoolValue || !IsAITank(tank)) { ResetTankMovement(tank); return Plugin_Continue; }
     int sequence = GetEntProp(tank, Prop_Send, "m_nSequence");
     bool throwing = sequence >= 48 && sequence <= 51;
     if (!throwing && !(sequence >= 16 && sequence <= 23)
         && GetEntityMoveType(tank) == MOVETYPE_WALK && !L4D_IsPlayerStaggering(tank)
         && Tank_AimAtRider(tank, buttons, angles)) {
+        CancelTankRecovery(tank);
         g_jumpUntil[tank] = 0.0;
         return Plugin_Changed;
     }
@@ -156,33 +161,45 @@ public Action OnPlayerRunCmd(int tank, int &buttons, int &impulse, float vel[3],
     }
     // Preserve existing rock/punch arbitration, never inject jump rocks.
     if (throwing || (buttons & IN_ATTACK2)) {
+        CancelTankRecovery(tank);
         g_jumpUntil[tank] = 0.0;
         buttons &= ~(IN_ATTACK | IN_JUMP | IN_DUCK);
         return Plugin_Changed;
     }
     if (GetEntityMoveType(tank) != MOVETYPE_WALK || GetEntProp(tank, Prop_Data, "m_nWaterLevel") > 1
         || (sequence >= 16 && sequence <= 23) || L4D_IsPlayerStaggering(tank)) {
+        CancelTankRecovery(tank);
         g_jumpUntil[tank] = 0.0;
         return Plugin_Changed;
     }
     int target = GetClientOfUserId(g_targetUserId[tank]);
-    if (!IsFreeSurvivor(target)) { g_jumpUntil[tank] = 0.0; return Plugin_Changed; }
+    if (!IsFreeSurvivor(target)) { CancelTankRecovery(tank); g_jumpUntil[tank] = 0.0; return Plugin_Changed; }
     float position[3], targetPos[3], velocity[3];
     GetClientAbsOrigin(tank, position); GetClientAbsOrigin(target, targetPos);
     float distance = GetVectorDistance(position, targetPos);
-    if (ContinueObstacleJump(tank, target, buttons, vel)) return Plugin_Changed;
+    // Intentional flight/platform hold owns movement; never count it as a stall.
+    if (ContinueObstacleJump(tank, target, buttons, vel)) { CancelTankRecovery(tank); return Plugin_Changed; }
+    float wish[3];
+    bool moving = TankWishDirection(buttons, vel, angles, wish);
+    // Busy actions veto only recovery; retain the existing combat/brake/cap paths.
+    if (TankAttackBusy(tank, buttons)) CancelTankRecovery(tank);
+    else if (TankRecover(tank, position, targetPos, moving, wish, buttons, vel, angles)) return Plugin_Changed;
+    bool descending = TankDescending(tank, position, moving, wish);
     if (GetEntityFlags(tank) & FL_ONGROUND) {
         float now = GetGameTime();
         if (now >= g_nextOpportunity[tank] && !(buttons & IN_ATTACK)) {
             g_nextOpportunity[tank] = now + 0.2;
             if (TryHittable(tank, target, targetPos, buttons)) return Plugin_Changed;
-            if (TryObstacleJump(tank, target, position, targetPos, buttons, vel)) return Plugin_Changed;
+            float toward[3]; MakeVectorFromPoints(position, targetPos, toward); toward[2] = 0.0;
+            NormalizeVector(toward, toward);
+            if (!descending && moving && GetVectorDotProduct(wish, toward) > 0.8
+                && TryObstacleJump(tank, target, position, targetPos, buttons, vel)) return Plugin_Changed;
         }
     }
     if (!hCvarTankBhop.BoolValue) return Plugin_Changed;
     GetEntPropVector(tank, Prop_Data, "m_vecVelocity", velocity);
-    bool braking = BrakeChase(tank, target, position, targetPos, distance, velocity);
-    if (braking) {
+    bool braking = BrakeChase(tank, target, position, targetPos, distance, velocity, wish, moving);
+    if (braking || descending || !moving) {
         buttons &= ~(IN_JUMP | IN_DUCK);
         return Plugin_Changed;
     }
@@ -191,13 +208,7 @@ public Action OnPlayerRunCmd(int tank, int &buttons, int &impulse, float vel[3],
     if (!GetEntProp(tank, Prop_Send, "m_hasVisibleThreats") || speed <= 210.0) return Plugin_Changed;
     if (GetEntityFlags(tank) & FL_ONGROUND) {
         // TGMaster/Chanz jump approach, retaining Ast's 60-unit impulse.
-        float heading[3], forwardVector[3]; GetClientEyeAngles(tank, heading);
-        heading[0] = 0.0;
-        if (buttons & IN_BACK) heading[1] += 180.0;
-        if (buttons & IN_MOVELEFT) heading[1] += 90.0;
-        if (buttons & IN_MOVERIGHT) heading[1] -= 90.0;
-        GetAngleVectors(heading, forwardVector, NULL_VECTOR, NULL_VECTOR);
-        for (int axis = 0; axis < 2; axis++) velocity[axis] += forwardVector[axis] * 60.0;
+        for (int axis = 0; axis < 2; axis++) velocity[axis] += wish[axis] * 60.0;
         LimitHorizontalSpeed(velocity, g_bhopMaxSpeed.FloatValue);
         buttons |= IN_DUCK | IN_JUMP;
         TeleportEntity(tank, NULL_VECTOR, NULL_VECTOR, velocity);
@@ -212,10 +223,10 @@ void LimitHorizontalSpeed(float velocity[3], float maximum) {
     velocity[1] *= maximum / speed;
 }
 
-bool BrakeChase(int tank, int target, const float position[3], const float targetPos[3], float distance, float velocity[3]) {
+bool BrakeChase(int tank, int target, const float position[3], const float targetPos[3], float distance, float velocity[3], const float wish[3], bool moving) {
     float toward[3], targetVelocity[3];
     MakeVectorFromPoints(position, targetPos, toward); toward[2] = 0.0;
-    float horizontal = NormalizeVector(toward, toward);
+    NormalizeVector(toward, toward);
     GetEntPropVector(target, Prop_Data, "m_vecVelocity", targetVelocity);
     float speed = SquareRoot(velocity[0] * velocity[0] + velocity[1] * velocity[1]);
     float approach = velocity[0] * toward[0] + velocity[1] * toward[1];
@@ -223,7 +234,8 @@ bool BrakeChase(int tank, int target, const float position[3], const float targe
     bool near = distance < hCvarTankBhopStopDistance.FloatValue
         && approach - fleeing > 15.0 && VisiblePoint(tank, target, targetPos);
     // Bleed sideways/backwards momentum on landing; let Valve steer and choose attacks.
-    bool turning = horizontal > 1.0 && speed > 210.0 && approach / speed < 0.55
+    // Compare momentum to Valve's route command, not a victim across a wall/floor.
+    bool turning = moving && speed > 210.0 && GetVectorDotProduct(velocity, wish) / speed < 0.55
         && (GetEntityFlags(tank) & FL_ONGROUND);
     float cap = g_bhopMaxSpeed.FloatValue;
     if (near || turning) {

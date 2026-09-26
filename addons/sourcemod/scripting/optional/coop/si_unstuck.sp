@@ -30,7 +30,7 @@ public Plugin myinfo =
 	name = "SI Unstuck",
 	author = "OpenAI",
 	description = "Moves a stuck live AI special infected to a safe hidden nav position",
-	version = "1.1.0",
+	version = "1.2.0",
 	url = ""
 };
 
@@ -80,7 +80,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 		g_lastCombatInput[client] = GetGameTime();
 	}
 	if (IsEligibleSI(client) && ((buttons & (IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT | IN_JUMP))
-		|| (GetEntProp(client, Prop_Send, "m_zombieClass") == 8 && (FloatAbs(vel[0]) > 1.0 || FloatAbs(vel[1]) > 1.0))))
+		|| (FloatAbs(vel[0]) > 1.0 || FloatAbs(vel[1]) > 1.0)))
 	{
 		g_lastMoveInput[client] = GetGameTime();
 	}
@@ -102,9 +102,9 @@ public Action Timer_Monitor(Handle timer)
 		bool tank = GetEntProp(client, Prop_Send, "m_zombieClass") == 8;
 		float stuckTime = tank ? g_cvTankTime.FloatValue : g_cvStuckTime.FloatValue;
 		GetClientAbsOrigin(client, origin);
-		// An idle ambusher is not stuck. Only accumulate stationary time while
-		// NextBot is issuing movement input and failing to make progress.
-		if (now - g_lastMoveInput[client] > 1.0)
+		// Keep the Tank's movement-attempt watchdog independent. Normal SI may
+		// spawn embedded or lose their route without ever issuing movement input.
+		if (tank && now - g_lastMoveInput[client] > 1.0)
 		{
 			CopyVector(origin, g_lastOrigin[client]);
 			g_lastProgress[client] = now;
@@ -126,6 +126,16 @@ public Action Timer_Monitor(Handle timer)
 
 		if (now < g_nextAttempt[client] || now - g_lastProgress[client] < stuckTime)
 		{
+			continue;
+		}
+
+		// No input alone is not evidence of being stuck: preserve idle ambushers
+		// unless their current hull is embedded or no survivor route can be built.
+		// Rate-limit the path query as well as failed destination searches.
+		if (!tank && now - g_lastMoveInput[client] > 1.0
+			&& !IsCurrentHullEmbedded(client, origin) && HasPathToSurvivors(origin))
+		{
+			g_nextAttempt[client] = now + g_cvRetryDelay.FloatValue;
 			continue;
 		}
 
@@ -197,6 +207,22 @@ bool HasPathToSurvivors(const float destination[3])
 	return false;
 }
 
+// Use the actual current hull, not the standing destination hull: a crouched
+// Hunter under a low ceiling is not necessarily embedded. Ignore only self.
+bool IsCurrentHullEmbedded(int client, const float position[3])
+{
+	float mins[3], maxs[3];
+	GetClientMins(client, mins);
+	GetClientMaxs(client, maxs);
+	TR_TraceHullFilter(position, position, mins, maxs, MASK_PLAYERSOLID, TraceIgnoreSelf, client);
+	return TR_StartSolid() || TR_AllSolid();
+}
+
+public bool TraceIgnoreSelf(int entity, int contentsMask, any client)
+{
+	return entity != client;
+}
+
 bool IsSafeHull(int client, const float position[3])
 {
 	float mins[3], maxs[3];
@@ -204,7 +230,7 @@ bool IsSafeHull(int client, const float position[3])
 	GetClientMaxs(client, maxs);
 	// A crouched Hunter must also be able to stand up at the destination.
 	if (maxs[2] < 72.0) maxs[2] = 72.0;
-	TR_TraceHull(position, position, mins, maxs, MASK_PLAYERSOLID);
+	TR_TraceHullFilter(position, position, mins, maxs, MASK_PLAYERSOLID, TraceIgnoreSelf, client);
 	return !TR_DidHit();
 }
 
@@ -250,6 +276,25 @@ bool IsBusySI(int client, float now)
 		return true;
 	}
 
+	if (GetEntProp(client, Prop_Send, "m_zombieClass") != 8)
+	{
+		if (GetEntityFlags(client) & FL_FROZEN) return true;
+		int ability = GetEntPropEnt(client, Prop_Send, "m_customAbility");
+		if (ability > MaxClients && IsValidEntity(ability))
+		{
+			// Active ability flags outlive attack input. A cooldown timestamp does
+			// not mean the ability is still executing, so do not use it here.
+			static const char activeProps[][] = {
+				"m_isCharging", "m_isLunging", "m_isLeaping", "m_isSpraying"
+			};
+			for (int i = 0; i < sizeof(activeProps); i++)
+			{
+				if (HasEntProp(ability, Prop_Send, activeProps[i])
+					&& GetEntProp(ability, Prop_Send, activeProps[i]) != 0) return true;
+			}
+		}
+	}
+
 	static const char victimProps[][] = {
 		"m_tongueVictim", "m_pounceVictim", "m_carryVictim", "m_pummelVictim", "m_jockeyVictim"
 	};
@@ -261,6 +306,7 @@ bool IsBusySI(int client, float now)
 		}
 	}
 
+	// CountdownTimer element 1 is the expiry timestamp (Left4DHooks), not duration.
 	return HasEntProp(client, Prop_Send, "m_staggerTimer")
 		&& GetEntPropFloat(client, Prop_Send, "m_staggerTimer", 1) > now;
 }

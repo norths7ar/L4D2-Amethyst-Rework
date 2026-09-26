@@ -62,12 +62,12 @@ bool HullClear(int tank, const float from[3], const float to[3], const float min
     delete trace;
     return clear;
 }
-bool FindTop(int tank, const float sample[3], float bottomZ, float top[3]) {
+bool FindTop(int tank, const float sample[3], float bottomZ, float top[3], float minimumNormalZ = 0.9) {
     float bottom[3]; for (int axis = 0; axis < 3; axis++) bottom[axis] = sample[axis];
     bottom[2] = bottomZ;
     Handle trace = TR_TraceRayFilterEx(sample, bottom, MASK_PLAYERSOLID, RayType_EndPoint, TraceNotSelf, tank);
     float normal[3]; TR_GetPlaneNormal(trace, normal);
-    bool found = TR_DidHit(trace) && !TR_StartSolid(trace) && normal[2] >= 0.9;
+    bool found = TR_DidHit(trace) && !TR_StartSolid(trace) && normal[2] >= minimumNormalZ;
     int entity = TR_GetEntityIndex(trace);
     TR_GetEndPosition(top, trace); delete trace;
     // Never jump onto players or moving physics; default navigation still handles them.
@@ -208,4 +208,170 @@ bool ContinueObstacleJump(int tank, int target, int &buttons, float vel[3]) {
         TeleportEntity(tank, NULL_VECTOR, NULL_VECTOR, motion);
     }
     return true;
+}
+
+// Short local recovery owns only usercmd movement, never persistent CommandABot
+// MOVE. Every exit immediately returns navigation to Valve (Anne command lifecycle).
+float g_stallSince[MAXPLAYERS + 1], g_stallOrigin[MAXPLAYERS + 1][3];
+float g_stallWish[MAXPLAYERS + 1][3], g_retreatUntil[MAXPLAYERS + 1];
+float g_retreatGoal[MAXPLAYERS + 1][3], g_recoveryAfter[MAXPLAYERS + 1];
+float g_retreatCheck[MAXPLAYERS + 1];
+float g_groundZ[MAXPLAYERS + 1], g_noHopUntil[MAXPLAYERS + 1];
+bool g_haveGround[MAXPLAYERS + 1];
+int g_recoveryAttempts[MAXPLAYERS + 1];
+float g_recoveryOrigin[MAXPLAYERS + 1][3];
+
+void CancelTankRecovery(int tank) {
+    g_stallSince[tank] = 0.0;
+    g_retreatUntil[tank] = 0.0;
+}
+void ResetTankMovement(int tank) {
+    CancelTankRecovery(tank);
+    g_recoveryAfter[tank] = 0.0;
+    g_noHopUntil[tank] = 0.0;
+    g_haveGround[tank] = false;
+    g_recoveryAttempts[tank] = 0;
+}
+bool TankAttackBusy(int tank, int buttons) {
+    if (buttons & (IN_ATTACK | IN_ATTACK2)) return true;
+    int sequence = GetEntProp(tank, Prop_Send, "m_nSequence");
+    // Match the existing hulk action exclusions, including rage/flinch/frozen.
+    if ((sequence >= 2 && sequence <= 4) || (sequence >= 24 && sequence <= 31)
+        || (sequence >= 33 && sequence <= 64) || (GetEntityFlags(tank) & FL_FROZEN)) return true;
+    int claw = GetEntPropEnt(tank, Prop_Send, "m_hActiveWeapon");
+    // Attack buttons may already be released during an actual swing/recovery.
+    return GetEntPropFloat(tank, Prop_Send, "m_flNextAttack") > GetGameTime()
+        || (claw > MaxClients && IsValidEntity(claw)
+            && GetEntPropFloat(claw, Prop_Send, "m_flNextPrimaryAttack") > GetGameTime());
+}
+bool TankWishDirection(int buttons, const float vel[3], const float angles[3], float wish[3]) {
+    float forwardMove = vel[0], sideMove = vel[1];
+    // Both forms are used by existing AI consumers (including si_unstuck).
+    // Preserve button-only commands; normalize diagonals instead of adding yaws.
+    if (FloatAbs(forwardMove) + FloatAbs(sideMove) <= 1.0) {
+        forwardMove = float(((buttons & IN_FORWARD) != 0) - ((buttons & IN_BACK) != 0)) * 450.0;
+        sideMove = float(((buttons & IN_MOVERIGHT) != 0) - ((buttons & IN_MOVELEFT) != 0)) * 450.0;
+    }
+    float yaw[3], forwardVector[3], right[3]; yaw[1] = angles[1];
+    GetAngleVectors(yaw, forwardVector, right, NULL_VECTOR);
+    wish[0] = forwardVector[0] * forwardMove + right[0] * sideMove;
+    wish[1] = forwardVector[1] * forwardMove + right[1] * sideMove;
+    wish[2] = 0.0;
+    return NormalizeVector(wish, wish) > 1.0;
+}
+bool TankDescending(int tank, const float position[3], bool moving, const float wish[3]) {
+    float now = GetGameTime();
+    if (GetEntityFlags(tank) & FL_ONGROUND) {
+        if (g_haveGround[tank] && position[2] < g_groundZ[tank] - 4.0) {
+            g_noHopUntil[tank] = now + 0.45;
+            g_groundZ[tank] = position[2];
+        }
+        // Accumulate small per-command drops on continuous ramps. Update the
+        // anchor on ascent too, rather than comparing only adjacent commands.
+        if (!g_haveGround[tank] || position[2] > g_groundZ[tank]) g_groundZ[tank] = position[2];
+        g_haveGround[tank] = true;
+        if (moving) {
+            float sample[3], top[3];
+            for (int axis = 0; axis < 3; axis++) sample[axis] = position[axis] + wish[axis] * 48.0;
+            sample[2] += 18.0;
+            // Require an observed descent: a missing floor alone may be a
+            // same-height gap, not a route down to the lower storey.
+            // Walkable slopes need not be flat enough for an obstacle landing.
+            if (FindTop(tank, sample, position[2] - 96.0, top, 0.7) && top[2] < position[2] - 8.0)
+                g_noHopUntil[tank] = now + 0.45;
+        }
+    }
+    return now < g_noHopUntil[tank];
+}
+
+bool TankRetreatClear(int tank, const float position[3], const float goal[3]) {
+    float mins[3], maxs[3], from[3], to[3];
+    GetClientMins(tank, mins); GetClientMaxs(tank, maxs);
+    // Allow ordinary 18-unit step traversal, but require body room at the goal
+    // and throughout the raised sweep; never accept a low ceiling or solid exit.
+    from = position; to = goal; from[2] += 18.0; to[2] += 18.0;
+    if (!HullClear(tank, from, to, mins, maxs)) return false;
+    to = goal; to[2] += 2.0;
+    if (!HullClear(tank, to, to, mins, maxs)) return false;
+    // Full body clearance plus centre, edges and corners of the actual footprint
+    // along the short route. Permit step-height variation, not unsupported ledges.
+    for (int step = 1; step <= 3; step++) {
+        for (int x = -1; x <= 1; x++) {
+            for (int y = -1; y <= 1; y++) {
+                float sample[3], top[3];
+                for (int axis = 0; axis < 3; axis++)
+                    sample[axis] = position[axis] + (goal[axis] - position[axis]) * float(step) / 3.0;
+                sample[0] += x < 0 ? mins[0] : (x > 0 ? maxs[0] : 0.0);
+                sample[1] += y < 0 ? mins[1] : (y > 0 ? maxs[1] : 0.0);
+                float floorZ = sample[2]; sample[2] += 18.0;
+                if (!FindTop(tank, sample, floorZ - 18.0, top)
+                    || FloatAbs(top[2] - floorZ) > 18.0) return false;
+            }
+        }
+    }
+    return true;
+}
+bool TankRecover(int tank, const float position[3], const float targetPos[3], bool moving,
+    const float wish[3], int &buttons, float vel[3], const float angles[3]) {
+    float now = GetGameTime();
+    // Retreat/return oscillation is not route progress. After two local tries,
+    // leave the blocked bot still long enough for si_unstuck's watchdog. Only
+    // leaving this pocket (not a new victim or elapsed time) renews the budget.
+    if (g_recoveryAttempts[tank] > 0 && GetVectorDistance(position, g_recoveryOrigin[tank]) > 128.0)
+        g_recoveryAttempts[tank] = 0;
+    if (!(GetEntityFlags(tank) & FL_ONGROUND) || g_jumpUntil[tank] > now
+        || GetVectorDistance(position, targetPos) > 300.0 || FloatAbs(position[2] - targetPos[2]) > 64.0) {
+        CancelTankRecovery(tank); return false;
+    }
+    if (g_retreatUntil[tank] > 0.0) {
+        float direction[3]; MakeVectorFromPoints(position, g_retreatGoal[tank], direction); direction[2] = 0.0;
+        if (now >= g_retreatUntil[tank] || NormalizeVector(direction, direction) < 6.0) {
+            CancelTankRecovery(tank); return false;
+        }
+        // Revalidate the remaining route at 10 Hz, not 27 support rays per cmd.
+        if (now >= g_retreatCheck[tank]) {
+            g_retreatCheck[tank] = now + 0.1;
+            if (!TankRetreatClear(tank, position, g_retreatGoal[tank])) {
+                CancelTankRecovery(tank); return false;
+            }
+        }
+        float yaw[3], forwardVector[3], right[3]; yaw[1] = angles[1];
+        GetAngleVectors(yaw, forwardVector, right, NULL_VECTOR);
+        vel[0] = GetVectorDotProduct(direction, forwardVector) * 160.0;
+        vel[1] = GetVectorDotProduct(direction, right) * 160.0;
+        buttons &= ~(IN_JUMP | IN_DUCK | IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT);
+        // si_unstuck already saw Valve's original input earlier in this cmd.
+        // No synthetic positions, clock resets or persistent bot commands.
+        buttons |= vel[0] >= 0.0 ? IN_FORWARD : IN_BACK;
+        buttons |= vel[1] >= 0.0 ? IN_MOVERIGHT : IN_MOVELEFT;
+        return true;
+    }
+    if (!moving || now < g_recoveryAfter[tank] || g_recoveryAttempts[tank] >= 2) {
+        g_stallSince[tank] = 0.0; return false;
+    }
+    if (g_stallSince[tank] == 0.0 || GetVectorDistance(position, g_stallOrigin[tank]) > 6.0
+        || GetVectorDotProduct(wish, g_stallWish[tank]) < 0.7) {
+        g_stallSince[tank] = now; g_stallOrigin[tank] = position; g_stallWish[tank] = wish;
+        return false;
+    }
+    if (now - g_stallSince[tank] < 0.45) return false;
+    g_stallSince[tank] = 0.0;
+    g_recoveryAfter[tank] = now + 1.25;
+    float offsets[3] = {180.0, 135.0, -135.0};
+    for (int candidate = 0; candidate < sizeof(offsets); candidate++) {
+        float yaw = ArcTangent2(wish[1], wish[0]) + DegToRad(offsets[candidate]);
+        float goal[3]; goal = position;
+        goal[0] += Cosine(yaw) * 48.0; goal[1] += Sine(yaw) * 48.0;
+        float sample[3], top[3]; sample = goal; sample[2] += 18.0;
+        if (!FindTop(tank, sample, goal[2] - 18.0, top)) continue;
+        goal[2] = top[2];
+        if (!TankRetreatClear(tank, position, goal)) continue;
+        if (g_recoveryAttempts[tank] == 0) g_recoveryOrigin[tank] = position;
+        g_recoveryAttempts[tank]++;
+        g_retreatGoal[tank] = goal;
+        g_retreatCheck[tank] = now + 0.1;
+        g_retreatUntil[tank] = now + 0.35;
+        return TankRecover(tank, position, targetPos, moving, wish, buttons, vel, angles);
+    }
+    return false;
 }

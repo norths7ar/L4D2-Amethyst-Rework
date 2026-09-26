@@ -34,7 +34,7 @@ public Plugin myinfo =
 	name = "AI: Hard SI",
 	author = "Breezy",
 	description = "Improves the AI behaviour of special infected",
-	version = "1.4.0",
+	version = "1.4.1",
 	url = "github.com/breezyplease"
 };
 
@@ -117,13 +117,20 @@ public void OnHardSIEnableChanged(ConVar convar, const char[] oldValue, const ch
 
 public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
 {
+	Jockey_ResetAll();
 	g_bSurvivorsLeftSafeArea = false;
 	delete g_hAssaultTimer;
 	g_hAssaultTimer = null;
 }
 
+public void OnClientDisconnect(int client)
+{
+	Jockey_Reset(client);
+}
+
 public void OnMapEnd()
 {
+	Jockey_ResetAll();
 	g_bSurvivorsLeftSafeArea = false;
 	g_hAssaultTimer = null;
 }
@@ -290,7 +297,9 @@ public Action OnAbilityUse(Handle event, char[] name, bool dontBroadcast) {
 		// Process for different SI
 		char abilityName[32];
 		GetEventString(event, "ability", abilityName, sizeof(abilityName));
-		if( StrEqual(abilityName, "ability_lunge") ) {
+		if (StrEqual(abilityName, "ability_leap")) {
+			Jockey_OnLeap(bot);
+		} else if( StrEqual(abilityName, "ability_lunge") ) {
 			return Hunter_OnPounce(bot);
 		} else if( StrEqual(abilityName, "ability_charge") ) {
 			Charger_OnCharge(bot);
@@ -332,7 +341,7 @@ public Action OnPlayerShoved(Handle event, char[] name, bool dontBroadcast) {
 	return Plugin_Continue;	
 }
 
-// Re-enable forced hopping when a shoved jockey leaps again naturally
+// Clear the shared shove flag on natural jumps; jockey recovery also checks stagger.
 public Action OnPlayerJump(Handle event, char[] name, bool dontBroadcast) {
 	if (!g_bHardSIActive) return Plugin_Continue;
 	int jumpingPlayer = GetClientOfUserId(GetEventInt(event, "userid"));

@@ -10,9 +10,9 @@ Handle hCvarJockeyLeapRange; // vanilla cvar
 
 Handle hCvarHopActivationProximity; // custom cvar
 // Leaps
-bool bCanLeap[MAXPLAYERS];
-bool bDoNormalJump[MAXPLAYERS]; // used to alternate pounces and normal jumps
- // shoved jockeys will stop hopping
+float g_fJockeyNextLeap[MAXPLAYERS + 1];
+bool bDoNormalJump[MAXPLAYERS + 1]; // used to alternate pounces and normal jumps
+ConVar hCvarJockeyLeapAgain;
 
 Handle hCvarJockeyStumbleRadius; // stumble radius of jockey ride
 bool g_bJockeyRideHooked;
@@ -20,6 +20,8 @@ bool g_bJockeyRideHooked;
 // Bibliography: "hunter pounce push" by "Pan XiaoHai & Marcus101RR & AtomicStryker"
 
 public void Jockey_OnModuleStart() {
+	Jockey_ResetAll();
+	hCvarJockeyLeapAgain = FindConVar("z_jockey_leap_again_timer");
 	// CONSOLE VARIABLES
 	// jockeys will move to attack survivors within this range
 	hCvarJockeyLeapRange = FindConVar("z_jockey_leap_range");
@@ -38,6 +40,7 @@ public void Jockey_OnModuleStart() {
 }
 
 public void Jockey_OnModuleEnd() {
+	Jockey_ResetAll();
 	ResetConVar(hCvarJockeyLeapRange);
 }
 
@@ -47,41 +50,45 @@ public void Jockey_OnModuleEnd() {
 
 ***********************************************************************************************************************************************************************************/
 
-public Action Jockey_OnPlayerRunCmd(int jockey, int& buttons, int& impulse, float vel[3], float angles[3], int& weapon, bool hasBeenShoved) {
+public Action Jockey_OnPlayerRunCmd(int jockey, int& buttons, int& impulse, float vel[3], float angles[3], int& weapon, bool& hasBeenShoved) {
+	// Leave riding, ghost and ladder movement to the engine.
+	if (GetEntProp(jockey, Prop_Send, "m_isGhost")
+		|| GetEntPropEnt(jockey, Prop_Send, "m_jockeyVictim") > 0
+		|| GetEntityMoveType(jockey) == MOVETYPE_LADDER) return Plugin_Continue;
+
+	// A jump cannot be the prerequisite for releasing the shove lock: we block
+	// jumps while it is held. Wait for both the existing delay and real stagger.
+	if (L4D_IsPlayerStaggering(jockey)
+		|| (hasBeenShoved && GetGameTime() < g_fJockeyNextLeap[jockey])) {
+		buttons &= ~(IN_JUMP | IN_ATTACK);
+		return Plugin_Changed;
+	}
+	hasBeenShoved = false;
+
 	float jockeyPos[3];
 	GetClientAbsOrigin(jockey, jockeyPos);
 	int iSurvivorsProximity = GetSurvivorProximity(jockeyPos);
-	bool bHasLOS = view_as<bool>( GetEntProp(jockey, Prop_Send, "m_hasVisibleThreats") ); // line of sight to any survivor
-	
-	// Start hopping if within range	
-	if ( bHasLOS && (iSurvivorsProximity < GetConVarInt(hCvarHopActivationProximity)) ) {
-		
-		// Force them to hop 
-		int flags = GetEntityFlags(jockey);
-		
-		// Alternate normal jump and pounces if jockey has not been shoved
-		if ( (flags & FL_ONGROUND) && !hasBeenShoved ) { // jump/leap off cd when on ground (unless being shoved)
-			if (bDoNormalJump[jockey]) {
-				buttons |= IN_JUMP; // normal jump
-				bDoNormalJump[jockey] = false;
-			} else {
-				if( bCanLeap[jockey] ) {
-					buttons |= IN_ATTACK; // pounce leap
-					bCanLeap[jockey] = false; // leap should be on cooldown
-					float leapCooldown = float( GetConVarInt(FindConVar("z_jockey_leap_again_timer")) );
-					CreateTimer(leapCooldown, Timer_LeapCooldown, jockey, TIMER_FLAG_NO_MAPCHANGE);
-					bDoNormalJump[jockey] = true;
-				} 			
-			}
-			
-		} else { // midair, release buttons
-			buttons &= ~IN_JUMP;
-			buttons &= ~IN_ATTACK;
-		}		
-		return Plugin_Changed;
-	} 
+	bool bHasLOS = view_as<bool>(GetEntProp(jockey, Prop_Send, "m_hasVisibleThreats"));
+	if (!bHasLOS || iSurvivorsProximity < 0
+		|| iSurvivorsProximity >= GetConVarInt(hCvarHopActivationProximity)) return Plugin_Continue;
 
-	return Plugin_Continue;
+	if (GetEntityFlags(jockey) & FL_ONGROUND) {
+		if (bDoNormalJump[jockey]) {
+			buttons &= ~IN_ATTACK;
+			buttons |= IN_JUMP;
+			bDoNormalJump[jockey] = false;
+		} else {
+			int ability = GetEntPropEnt(jockey, Prop_Send, "m_customAbility");
+			if (GetGameTime() >= g_fJockeyNextLeap[jockey]
+				&& ability > MaxClients && IsValidEntity(ability)
+				&& GetEntPropFloat(ability, Prop_Send, "m_timestamp") <= GetGameTime()) {
+				buttons |= IN_ATTACK;
+			}
+		}
+	} else {
+		buttons &= ~(IN_JUMP | IN_ATTACK);
+	}
+	return Plugin_Changed;
 }
 
 /***********************************************************************************************************************************************************************************
@@ -90,23 +97,33 @@ public Action Jockey_OnPlayerRunCmd(int jockey, int& buttons, int& impulse, floa
 
 ***********************************************************************************************************************************************************************************/
 
-// Enable hopping on spawned jockeys
+void Jockey_Reset(int client) {
+	g_fJockeyNextLeap[client] = 0.0;
+	bDoNormalJump[client] = false;
+}
+
+void Jockey_ResetAll() {
+	for (int client = 1; client <= MaxClients; client++) Jockey_Reset(client);
+}
+
 public Action Jockey_OnSpawn(int botJockey) {
-	bCanLeap[botJockey] = true;
+	Jockey_Reset(botJockey);
 	return Plugin_Handled;
 }
 
-// Disable hopping when shoved
+// Keep the full configured delay after the latest shove, without stale timers
+// from an earlier shove, death or client occupying the same slot.
 public void Jockey_OnShoved(int botJockey) {
-	bCanLeap[botJockey] = false;
-	int leapCooldown = GetConVarInt(FindConVar("z_jockey_leap_again_timer"));
-	CreateTimer( float(leapCooldown), Timer_LeapCooldown, botJockey, TIMER_FLAG_NO_MAPCHANGE) ;
+	float nextLeap = GetGameTime() + hCvarJockeyLeapAgain.FloatValue;
+	if (nextLeap > g_fJockeyNextLeap[botJockey]) g_fJockeyNextLeap[botJockey] = nextLeap;
+	bDoNormalJump[botJockey] = false;
 }
 
-public Action Timer_LeapCooldown(Handle timer, int jockey) {
-	if (!g_bHardSIActive) return Plugin_Stop;
-	bCanLeap[jockey] = true;
-	return Plugin_Continue;
+void Jockey_OnLeap(int jockey) {
+	g_fJockeyNextLeap[jockey] = GetGameTime() + hCvarJockeyLeapAgain.FloatValue;
+	// Only advance on an actual ability use, not an attempted attack command.
+	// Occasionally stay on foot instead of the usual intervening normal jump.
+	bDoNormalJump[jockey] = GetRandomInt(0, 3) != 0;
 }
 
 /***********************************************************************************************************************************************************************************
