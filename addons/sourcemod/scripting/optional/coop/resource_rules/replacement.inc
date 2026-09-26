@@ -2,6 +2,12 @@ void GetResourceName(int entity, char[] name, int maxlen)
 {
 	char classname[64];
 	GetEntityClassname(entity, classname, sizeof(classname));
+	// Ammo piles have no normal weapon ID, but participate in point limits.
+	if (StrEqual(classname, "weapon_ammo_spawn"))
+	{
+		strcopy(name, maxlen, "ammo");
+		return;
+	}
 	int id = IdentifyWeapon(entity);
 	if (StrEqual(classname, "weapon_item_spawn") && HasEntProp(entity, Prop_Send, "m_weaponID"))
 		id = GetEntProp(entity, Prop_Send, "m_weaponID");

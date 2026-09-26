@@ -52,14 +52,14 @@ bool g_limitPassPending;
 #include "resource_rules/spawns.inc"
 #include "resource_rules/replacement.inc"
 #include "resource_rules/limits.inc"
-#include "resource_rules/pill_flow.inc"
+#include "resource_rules/distribution.inc"
 
 public Plugin myinfo =
 {
 	name = "Map Resource Rules",
 	author = "ProdigySim, norths7ar",
 	description = "Owns map supplies, weapon replacements and campaign resource exceptions.",
-	version = "1.1.0"
+	version = "2.0.0"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -108,8 +108,7 @@ public void OnMapEnd()
 
 public void OnConfigsExecuted()
 {
-	LoadRules();
-	LoadChapterLimits();
+	LoadRules("", true);
 	UpdateCampaign();
 	g_configsReady = true;
 	if (g_roundReady) ScanResources();
