@@ -42,7 +42,7 @@ public Plugin myinfo =
 	name = "Coop player manager",
 	author = "海洋空氣, norths7ar",
 	description = "Coop join, spectator, bot-slot and player-team lifecycle",
-	version = "1.2.1"
+	version = "1.2.2"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -161,6 +161,12 @@ public Action TimerCheckHumanTeam(Handle timer, int userid)
 	}
 	else if (ValidReservation(reservation) && g_reservationRole[reservation] == RESERVATION_SURVIVOR)
 		ScheduleMoveToSurvivors(client);
+	else if (GetClientTeam(client) == TEAM_SPECTATORS && GetAdmissionCount(-1) < g_maxSurvivors.IntValue)
+	{
+		// Initial spectator assignment follows the same admission path as an
+		// initial infected assignment. Explicit spectator intent was handled above.
+		CommandJoin(client, 0);
+	}
 	return Plugin_Stop;
 }
 
