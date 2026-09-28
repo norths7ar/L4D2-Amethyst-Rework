@@ -14,6 +14,9 @@
 #define MAX_FOOTER_LEN 65
 
 bool g_readyPhase;
+bool g_configsExecuted;
+bool g_roundInitialized;
+bool g_lateLoad;
 bool g_forceStarted;
 bool g_startAreaUnavailable;
 bool g_returnPending[MAXPLAYERS + 1];
@@ -78,11 +81,12 @@ public Plugin myinfo =
 	name = "Coop ready and pause",
 	author = "CanadaRox, 海洋空氣, norths7ar",
 	description = "Per-player readiness, loading gate and start/resume countdowns",
-	version = "1.2.2"
+	version = "1.2.3"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
 {
+	g_lateLoad = late;
 	CreateNative("GetFooterStringAtIndex", NativeGetFooterStringAtIndex);
 	CreateNative("FindIndexOfFooterString", NativeFindFooterString);
 	CreateNative("EditFooterStringAtIndex", NativeEditFooterString);
@@ -157,6 +161,8 @@ public void OnPluginStart()
 
 public void OnMapStart()
 {
+	g_configsExecuted = false;
+	g_roundInitialized = false;
 	g_readyPhase = false;
 	SetReadyProtection(false);
 	g_directorHeld = false;
@@ -177,11 +183,16 @@ public void OnMapStart()
 	PrecacheSounds();
 	ResetPauseState(false);
 	// Mode loads and the first map must also enter ready-up, not only restarts.
-	BeginReadyPhase();
+	// A plugin loaded into a running map missed round_start. Ordinary map loads
+	// must observe the real round boundary before allowing a start countdown.
+	BeginReadyPhase(g_lateLoad);
+	g_lateLoad = false;
 }
 
 public void OnMapEnd()
 {
+	g_configsExecuted = false;
+	g_roundInitialized = false;
 	ToggleVoteCommandListener(false);
 	// Left4DHooks has already ended its map lifecycle. Do not restart the old
 	// Director's timers or query GameRules here; timer cleanup must still run.
@@ -218,11 +229,13 @@ public void OnConfigsExecuted()
 		SetReadyProtection(true);
 		HoldDirector();
 	}
+	g_configsExecuted = true;
+	EvaluateStartReady();
 }
 
 public void OnReadyEnabledChanged(ConVar convar, const char[] oldValue, const char[] newValue)
 {
-	if (g_readyPhase) BeginReadyPhase();
+	if (g_readyPhase) BeginReadyPhase(g_roundInitialized, !IsStartInitialized() && g_forceStarted);
 }
 
 public void OnPauseEnabledChanged(ConVar convar, const char[] oldValue, const char[] newValue)
@@ -262,6 +275,7 @@ public void OnClientDisconnect_Post(int client)
 public Action L4D_OnFirstSurvivorLeftSafeArea(int client)
 {
 	if (!g_readyPhase) return Plugin_Continue;
+	if (!IsStartInitialized()) return Plugin_Handled;
 	if (!g_readyEnabled.BoolValue) return Plugin_Continue;
 	// Do not teleport or issue client commands inside the Director detour.
 	// A failed boundary can fire again before the original call has unwound.
@@ -279,7 +293,7 @@ public void L4D_OnFirstSurvivorLeftSafeArea_Post(int client)
 
 void StartRound()
 {
-	if (!g_readyPhase) return;
+	if (!g_readyPhase || !IsStartInitialized()) return;
 	InvokeForward(g_forwardLivePre);
 	g_readyPhase = false;
 	ToggleVoteCommandListener(false);
@@ -303,10 +317,12 @@ public Action EventRoundBoundary(Event event, const char[] name, bool dontBroadc
 {
 	if (StrEqual(name, "round_start"))
 	{
+		bool forceStartPending = g_readyPhase && !g_roundInitialized && g_forceStarted;
 		ResetPauseState(true);
-		BeginReadyPhase();
+		BeginReadyPhase(true, forceStartPending);
 		return Plugin_Continue;
 	}
+	g_roundInitialized = false;
 	ResetPauseState(true);
 	ToggleVoteCommandListener(false);
 	ReleaseDirector();
@@ -321,14 +337,15 @@ public Action EventRoundBoundary(Event event, const char[] name, bool dontBroadc
 	return Plugin_Continue;
 }
 
-void BeginReadyPhase()
+void BeginReadyPhase(bool roundInitialized, bool forceStartPending = false)
 {
+	g_roundInitialized = false;
 	// Keep the pre-live lifecycle active even when the loading gate is disabled.
 	// Consumers still receive OnRoundIsLive on the first real saferoom exit.
 	g_readyPhase = true;
 	g_startAreaUnavailable = false;
 	g_nextStartAreaNotice = 0.0;
-	g_forceStarted = false;
+	g_forceStarted = forceStartPending;
 	SetReadyProtection(g_readyEnabled.BoolValue);
 	g_countdownRemaining = 0;
 	g_panelStarted = GetEngineTime();
@@ -349,7 +366,14 @@ void BeginReadyPhase()
 		g_returnAttempted[client] = false;
 		g_hasStartPosition[client] = false;
 	}
-	if (!g_readyEnabled.BoolValue) { ToggleVoteCommandListener(false); ReleaseDirector(); return; }
+	if (!g_readyEnabled.BoolValue)
+	{
+		ToggleVoteCommandListener(false);
+		ReleaseDirector();
+		g_roundInitialized = roundInitialized;
+		EvaluateStartReady();
+		return;
+	}
 	ToggleVoteCommandListener(true);
 	// Same engine countdown suppression as competitive readyup/game.inc.
 	CreateTimer(0.3, TimerHoldDirector, _, TIMER_FLAG_NO_MAPCHANGE);
@@ -361,6 +385,8 @@ void BeginReadyPhase()
 	InitReadyPanel();
 	RenderPanel();
 	g_panelTimer = CreateTimer(1.0, TimerRefreshPanel, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+	g_roundInitialized = roundInitialized;
+	EvaluateStartReady();
 }
 
 public Action TimerHoldDirector(Handle timer)
@@ -551,9 +577,22 @@ public Action TimerLoading(Handle timer)
 	return Plugin_Continue;
 }
 
+bool IsStartInitialized()
+{
+	return g_configsExecuted && g_roundInitialized;
+}
+
 void EvaluateStartReady()
 {
-	if (!g_readyPhase || !g_readyEnabled.BoolValue || g_forceStarted) return;
+	if (!g_readyPhase || !IsStartInitialized()) return;
+	if (g_forceStarted)
+	{
+		// A forced start requested during initialization waits for the same
+		// boundary as an ordinary start, without bypassing it or adding a delay.
+		if (g_countdownTimer == null) StartCountdown();
+		return;
+	}
+	if (!g_readyEnabled.BoolValue) return;
 	if (g_countdownRemaining > 0)
 	{
 		if (!AllSurvivorsReady()) CancelCountdown(0, "ReadinessChanged");
@@ -567,6 +606,8 @@ void EvaluateStartReady()
 void StartCountdown()
 {
 	if (g_countdownTimer != null) return;
+	// Pause recovery has its own lifecycle and is not an opening countdown.
+	if (!g_isPaused && (!g_readyPhase || !IsStartInitialized())) return;
 	for (int client = 1; client <= MaxClients; client++)
 		g_countdownParticipant[client] = IsHumanSurvivor(client) ? GetClientSerial(client) : 0;
 	g_countdownRemaining = g_isPaused ? g_unpauseDelay.IntValue : g_readyCountdownCvar.IntValue;
