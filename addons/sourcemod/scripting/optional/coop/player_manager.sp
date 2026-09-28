@@ -34,6 +34,7 @@ int g_reservationCharacter[MAX_RESERVATIONS];
 int g_reservationSet[MAX_RESERVATIONS];
 char g_reservationModel[MAX_RESERVATIONS][PLATFORM_MAX_PATH];
 bool g_wantsSpectator[MAXPLAYERS + 1];
+bool g_initialAdmissionPending[MAXPLAYERS + 1];
 char g_loadedSteamId[MAXPLAYERS + 1][32];
 StringMap g_reservations;
 
@@ -42,7 +43,7 @@ public Plugin myinfo =
 	name = "Coop player manager",
 	author = "海洋空氣, norths7ar",
 	description = "Coop join, spectator, bot-slot and player-team lifecycle",
-	version = "1.2.2"
+	version = "1.2.3"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -90,13 +91,32 @@ public void OnPluginStart()
 	HookEvent("bot_player_replace", EventCharacterTransfer);
 	HookEvent("player_bot_replace", EventCharacterTransfer);
 	for (int client = 1; client <= MaxClients; client++)
-		if (IsHumanClient(client)) CreateTimer(0.2, TimerCheckHumanTeam, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
+	{
+		if (!IsHumanClient(client)) continue;
+		// Confogl may load us after the first human has connected as a spectator.
+		// First enrollment gets one admission check, just like PutInServer;
+		// subsequent team events and map starts must not rearm it.
+		g_initialAdmissionPending[client] = true;
+		GetClientAuthId(client, AuthId_SteamID64, g_loadedSteamId[client], sizeof(g_loadedSteamId[]), true);
+		CreateTimer(0.2, TimerCheckHumanTeam, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
+	}
 }
 
 public void EventPlayerTeam(Event event, const char[] name, bool dontBroadcast)
 {
 	if (!event.GetBool("disconnect"))
 	{
+		int client = GetClientOfUserId(event.GetInt("userid"));
+		// Complete admission at arrival, before a later team change can make
+		// an already successful request look unfinished to its queued timers.
+		if (IsHumanSurvivor(client) && event.GetInt("team") == TEAM_SURVIVORS && !g_transitionCaptured)
+		{
+			g_initialAdmissionPending[client] = false;
+			int reservation = FindReservation(client);
+			// An engine assignment must not complete a requested spectator restore.
+			if (!g_wantsSpectator[client] && (!ValidReservation(reservation) || g_reservationRole[reservation] == RESERVATION_SURVIVOR))
+				ClaimReservation(client);
+		}
 		// A restored identity remains protected from late loaders, but team
 		// events must never turn it back into an outstanding loading wait.
 		CreateTimer(0.2, TimerCheckHumanTeam, event.GetInt("userid"), TIMER_FLAG_NO_MAPCHANGE);
@@ -110,6 +130,7 @@ public Action OnJoinTeamCommand(int client, const char[] command, int argc)
 	GetCmdArg(1, team, sizeof(team));
 	if (StringToInt(team) == TEAM_SPECTATORS || StrEqual(team, "spectator", false))
 	{
+		g_initialAdmissionPending[client] = false;
 		g_wantsSpectator[client] = true;
 		g_requestToken[client]++;
 		int reservation = FindReservation(client);
@@ -117,6 +138,7 @@ public Action OnJoinTeamCommand(int client, const char[] command, int argc)
 	}
 	else if (StringToInt(team) == TEAM_SURVIVORS || StrEqual(team, "survivor", false))
 	{
+		g_initialAdmissionPending[client] = false;
 		g_wantsSpectator[client] = false;
 		int reservation = FindReservation(client);
 		if (ValidReservation(reservation) && g_reservationRole[reservation] == RESERVATION_SPECTATOR)
@@ -132,7 +154,13 @@ public Action TimerCheckHumanTeam(Handle timer, int userid)
 {
 	int client = GetClientOfUserId(userid);
 	if (!IsHumanClient(client) || g_transitionCaptured) return Plugin_Stop;
+	// Arrival alone is insufficient: identify returning players before admitting
+	// them as newcomers or enforcing capacity against their reserved seats.
+	if (!g_loadedSteamId[client][0]) return Plugin_Stop;
 	int reservation = FindReservation(client);
+	int team = GetClientTeam(client);
+	bool initialAdmission = g_initialAdmissionPending[client];
+	if (team >= TEAM_SPECTATORS || ValidReservation(reservation)) g_initialAdmissionPending[client] = false;
 	if (g_wantsSpectator[client] || (ValidReservation(reservation) && g_reservationRole[reservation] == RESERVATION_SPECTATOR))
 	{
 		g_wantsSpectator[client] = true;
@@ -144,7 +172,9 @@ public Action TimerCheckHumanTeam(Handle timer, int userid)
 		// Anne join.sp also checks the actual team event: command-only checks miss
 		// the automatic Versus assignment while a human is connecting.
 		ChangeClientTeam(client, TEAM_SPECTATORS);
-		CommandJoin(client, 0);
+		if (ValidReservation(reservation) && g_reservationRole[reservation] == RESERVATION_SURVIVOR && !g_reservationClaimed[reservation])
+			ScheduleMoveToSurvivors(client);
+		else if (initialAdmission) CommandJoin(client, 0);
 	}
 	else if (GetClientTeam(client) == TEAM_SURVIVORS)
 	{
@@ -159,12 +189,12 @@ public Action TimerCheckHumanTeam(Handle timer, int userid)
 			PrintToChat(client, "%t", "SeatsReserved");
 		}
 	}
-	else if (ValidReservation(reservation) && g_reservationRole[reservation] == RESERVATION_SURVIVOR)
+	else if (ValidReservation(reservation) && g_reservationRole[reservation] == RESERVATION_SURVIVOR && !g_reservationClaimed[reservation])
 		ScheduleMoveToSurvivors(client);
-	else if (GetClientTeam(client) == TEAM_SPECTATORS && GetAdmissionCount(-1) < g_maxSurvivors.IntValue)
+	else if (initialAdmission && team == TEAM_SPECTATORS)
 	{
-		// Initial spectator assignment follows the same admission path as an
-		// initial infected assignment. Explicit spectator intent was handled above.
+		// Consume the one initial attempt even if admission is currently full.
+		// Later team events are not a fresh request to join.
 		CommandJoin(client, 0);
 	}
 	return Plugin_Stop;
@@ -210,6 +240,7 @@ public void OnClientPutInServer(int client)
 	g_pendingReservation[client] = -1;
 	g_requestToken[client]++;
 	g_wantsSpectator[client] = false;
+	g_initialAdmissionPending[client] = !IsFakeClient(client);
 	if (!IsFakeClient(client)) CreateTimer(0.2, TimerCheckHumanTeam, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
 }
 
@@ -252,11 +283,13 @@ public void OnClientDisconnect(int client)
 	}
 	g_pendingReservation[client] = -1;
 	g_loadedSteamId[client][0] = '\0';
+	g_initialAdmissionPending[client] = false;
 }
 
 public Action CommandJoin(int client, int args)
 {
 	if (!IsHumanClient(client)) return Plugin_Handled;
+	g_initialAdmissionPending[client] = false;
 	int reservation = FindReservation(client);
 	// An explicit join overrides a saved spectator role, just as !spec gives up
 	// a survivor reservation. Engine team changes alone do neither.
@@ -289,6 +322,7 @@ public Action CommandJoin(int client, int args)
 public Action CommandSpectate(int client, int args)
 {
 	if (!IsHumanClient(client)) return Plugin_Handled;
+	g_initialAdmissionPending[client] = false;
 	g_requestToken[client]++;
 	g_wantsSpectator[client] = true;
 	int reservation = FindReservation(client);
@@ -393,6 +427,12 @@ public Action TimerMoveToSurvivors(Handle timer, DataPack pack)
 		}
 		if (attempt >= 10) return Plugin_Stop;
 		ChangeClientTeam(client, TEAM_SPECTATORS);
+		if (token != g_requestToken[client]) return Plugin_Stop;
+		if (GetClientTeam(client) == TEAM_SPECTATORS)
+		{
+			ClaimReservation(client);
+			return Plugin_Stop;
+		}
 		ScheduleReservationRestore(client, attempt + 1, desiredRole);
 		return Plugin_Stop;
 	}
@@ -414,6 +454,14 @@ public Action TimerMoveToSurvivors(Handle timer, DataPack pack)
 		FakeClientCommand(client, "jointeam 2 %s", botName);
 	}
 	else FakeClientCommand(client, "jointeam 2");
+	// The command can synchronously fire player_team and complete this request.
+	// Never capture its replacement token into a retry of the old request.
+	if (token != g_requestToken[client]) return Plugin_Stop;
+	if (GetClientTeam(client) == TEAM_SURVIVORS)
+	{
+		ClaimReservation(client);
+		return Plugin_Stop;
+	}
 	ScheduleReservationRestore(client, attempt + 1, desiredRole);
 	return Plugin_Stop;
 }
@@ -432,6 +480,8 @@ void ScheduleReservationRestore(int client, int attempt, int desiredRole)
 
 void ClaimReservation(int client)
 {
+	// Completion invalidates every queued attempt, including unreserved joins.
+	g_requestToken[client]++;
 	// A completed manual team move also consumes an old reservation for this identity.
 	int reservation = FindReservation(client);
 	g_pendingReservation[client] = -1;
