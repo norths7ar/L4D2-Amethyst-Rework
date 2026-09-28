@@ -78,7 +78,7 @@ public Plugin myinfo =
 	name = "Coop ready and pause",
 	author = "CanadaRox, 海洋空氣, norths7ar",
 	description = "Per-player readiness, loading gate and start/resume countdowns",
-	version = "1.2.0"
+	version = "1.2.1"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -183,7 +183,9 @@ public void OnMapStart()
 public void OnMapEnd()
 {
 	ToggleVoteCommandListener(false);
-	ReleaseDirector();
+	// Left4DHooks has already ended its map lifecycle. Do not restart the old
+	// Director's timers or query GameRules here; timer cleanup must still run.
+	ReleaseDirector(false);
 	SetReadyProtection(false);
 	SetSurvivorsFrozen(false);
 	CancelTimer(g_loadingTimer);
@@ -375,11 +377,12 @@ void HoldDirector()
 	L4D2_CTimerStart(L4D2CT_MobSpawnTimer, 99999.9);
 }
 
-void ReleaseDirector()
+void ReleaseDirector(bool restoreTimers = true)
 {
 	if (!g_directorHeld) return;
 	g_directorHeld = false;
 	FindConVar("sb_stop").SetBool(false, .notify = false);
+	if (!restoreTimers) return;
 	L4D2_CTimerStart(L4D2CT_VersusStartTimer, FindConVar("versus_force_start_time").FloatValue);
 	L4D2_CTimerStart(L4D2CT_MobSpawnTimer, GetRandomMobSpawnInterval());
 }
