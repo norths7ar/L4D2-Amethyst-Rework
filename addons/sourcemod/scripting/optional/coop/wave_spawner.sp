@@ -19,7 +19,7 @@ public Plugin myinfo =
     name = "Coop Wave Spawner",
     author = "海洋空氣, norths7ar",
     description = "Runs the single wave-based Special Infected spawn model for Coop.",
-    version = "1.0.0",
+    version = "1.0.1",
     url = "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
 };
 
@@ -28,18 +28,27 @@ ConVar g_cvSize;
 ConVar g_cvOverrideActive;
 ConVar g_cvWaveFields[9];
 
+// Current snapshot: only first successful spawn (or round initialization)
+// writes these. Death handling must never read the mutable settings CVars.
 float g_fWaveInterval;
 int g_iWaveSize;
+// Prepared settings may change until the first successful spawn. The current
+// wave snapshot above remains the owner of death timing until then.
+float g_fPreparedInterval;
+int g_iPreparedSize;
+bool g_bWaveStarted;
 int g_iSpawnedSICount;
 int g_iAliveSICount;
 bool g_bHasFirstDeath;
 bool g_bWaveSettingsPending;
 bool g_bMapReady;
+bool g_bRoundEnded;
 float g_fFirstDeathTime;
+float g_fDeathInterval;
 float g_fBonusSpawnTime;
 
-float g_fPendingInterval = -1.0;
-int g_iPendingSize = -1;
+float g_fVoteInterval = -1.0;
+int g_iVoteSize = -1;
 int g_iPendingWaveSlot;
 Handle g_hVote = INVALID_HANDLE;
 int g_iVoteInitiator;
@@ -56,9 +65,9 @@ int g_iSlotOverrideMask[5];
 public void OnPluginStart()
 {
     LoadTranslations("wave_spawner.phrases");
-    CreateConVar("wave_spawner_version", "1.0.0", "Coop Wave Spawner version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
-    g_cvInterval = CreateConVar("wave_interval", "8.0", "Effective interval between SI waves.", FCVAR_NOTIFY, true, 0.0, true, 10000.0);
-    g_cvSize = CreateConVar("wave_size", "3", "Effective number of SI in each wave.", FCVAR_NOTIFY, true, 1.0, true, 32.0);
+    CreateConVar("wave_spawner_version", "1.0.1", "Coop Wave Spawner version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
+    g_cvInterval = CreateConVar("wave_interval", "8.0", "Interval selected for the next SI wave; running timers keep their snapshot.", FCVAR_NOTIFY, true, 0.0, true, 10000.0);
+    g_cvSize = CreateConVar("wave_size", "3", "Size selected for the next SI wave; a spawning wave keeps its snapshot.", FCVAR_NOTIFY, true, 1.0, true, 32.0);
     g_cvOverrideActive = CreateConVar("wave_override_active", "0", "Whether effective wave parameters are a player override.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_cvWaveFields[0] = g_cvInterval;
     g_cvWaveFields[1] = g_cvSize;
@@ -92,20 +101,18 @@ public void OnPluginStart()
     CreateNative("WaveSpawner_ResetAllOverrides", Native_ResetAllOverrides);
     CreateNative("WaveSpawner_GetCurrentOverrideMask", Native_GetCurrentOverrideMask);
 
-    RefreshEffectiveWave();
 }
 
 public void OnConfigsExecuted()
 {
     g_bMapReady = true;
-    RefreshEffectiveWave();
     g_bWaveSettingsPending = true;
     // round_start can precede SourceMod's map-ready boundary. Initialize here
     // as well so the first round and late plugin loads do not miss their reset.
     ResetWaveNow();
 }
 
-public void OnMapStart() { g_bMapReady = false; }
+public void OnMapStart() { g_bMapReady = false; g_bRoundEnded = false; }
 
 public void OnMapEnd()
 {
@@ -119,7 +126,7 @@ public void ProfileController_OnProfileApplied(int profile)
 {
     g_bProfileApplying = false;
     ApplySlotOrCurrent(profile);
-    g_bWaveSettingsPending = true;
+    MarkWaveSettingsPending();
 }
 
 public void ProfileController_OnProfilePreApply(int profile)
@@ -138,15 +145,30 @@ public void OnEffectiveWaveChanged(ConVar convar, const char[] oldValue, const c
     if (slot < 1 || slot > 4) return;
     CaptureField(slot, convar);
     g_cvOverrideActive.BoolValue = g_iSlotOverrideMask[slot] != 0;
-    // Keep this wave's size and timing; apply the latest CVars at the next wave.
+    MarkWaveSettingsPending();
+}
+
+void MarkWaveSettingsPending()
+{
     g_bWaveSettingsPending = true;
+    PrepareWaveSettings();
+}
+
+void PrepareWaveSettings()
+{
+    // Settings writes never reopen a running wave or alter its timer/counters.
+    if (!g_bMapReady || g_bRoundEnded || g_bWaveStarted || !g_bWaveSettingsPending) return;
+    if (!ApplyDirectorSettings()) return;
+    g_fPreparedInterval = g_cvInterval.FloatValue;
+    g_iPreparedSize = g_cvSize.IntValue;
+    g_bWaveSettingsPending = false;
 }
 
 public void Event_RoundBoundary(Event event, const char[] name, bool dontBroadcast)
 {
+    g_bRoundEnded = StrEqual(name, "round_end");
     delete g_hWaveTimer;
     g_iAliveSICount = 0;
-    RefreshEffectiveWave();
     ResetWaveState();
     // round_end may run during map teardown; only a new round needs a wave.
     if (StrEqual(name, "round_start")) ResetWaveNow();
@@ -161,14 +183,40 @@ public Action L4D_OnSpawnSpecial(int &zombieClass, const float vecPos[3], const 
 {
     if (zombieClass < ZC_WITCH)
     {
-        if (g_iSpawnedSICount >= g_iWaveSize)
+        if (!g_bMapReady || g_bRoundEnded) return Plugin_Handled;
+        if (!g_bWaveStarted && g_bWaveSettingsPending)
+        {
+            // The Director has already selected a class at this hook. If its
+            // settings were not ready, prepare outside the spawn call and let
+            // it select again instead of mixing two settings in the first SI.
+            RequestFrame(PrepareWaveNextFrame);
+            return Plugin_Handled;
+        }
+        int size = g_bWaveStarted ? g_iWaveSize : g_iPreparedSize;
+        if (g_iSpawnedSICount >= size)
         {
             return Plugin_Handled;
         }
-        g_iSpawnedSICount++;
-        g_iAliveSICount++;
     }
     return Plugin_Continue;
+}
+
+void PrepareWaveNextFrame(any data)
+{
+    PrepareWaveSettings();
+}
+
+public void L4D_OnSpawnSpecial_Post(int client, int zombieClass, const float vecPos[3], const float vecAng[3])
+{
+    if (client <= 0 || zombieClass >= ZC_WITCH || !g_bMapReady || g_bRoundEnded) return;
+    if (!g_bWaveStarted)
+    {
+        g_fWaveInterval = g_fPreparedInterval;
+        g_iWaveSize = g_iPreparedSize;
+        g_bWaveStarted = true;
+    }
+    g_iSpawnedSICount++;
+    g_iAliveSICount++;
 }
 
 public void Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast)
@@ -187,13 +235,14 @@ public void Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast
         if (!g_bHasFirstDeath)
         {
             g_bHasFirstDeath = true;
-            g_fFirstDeathTime = now;
-            ScheduleWaveReset(g_fWaveInterval);
+            // Tank recovery may already own a countdown for this waiting
+            // wave. Its start time and interval must remain unchanged.
+            if (g_hWaveTimer == null) StartWaveCountdown(g_fWaveInterval);
         }
-        else if (g_fWaveInterval > 0.0)
+        else if (g_fDeathInterval > 0.0)
         {
-            float remaining = g_fWaveInterval - (now - g_fFirstDeathTime) + g_fBonusSpawnTime;
-            float remainingRatio = remaining / g_fWaveInterval;
+            float remaining = g_fDeathInterval - (now - g_fFirstDeathTime) + g_fBonusSpawnTime;
+            float remainingRatio = remaining / g_fDeathInterval;
             if (remainingRatio <= 0.25)
             {
                 g_fBonusSpawnTime += 5.0;
@@ -211,16 +260,33 @@ public void Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast
     else if (zombieClass == ZC_TANK)
     {
         g_iAliveSICount--;
-        if (g_iWaveSize == 1)
-        {
-            ScheduleWaveReset(g_fWaveInterval);
-        }
     }
 
     if (g_iAliveSICount < 0)
     {
         g_iAliveSICount = 0;
     }
+    EnsureWaveProgress(client);
+}
+
+void EnsureWaveProgress(int deadClient)
+{
+    if (!g_bMapReady || g_bRoundEnded || g_hWaveTimer != null) return;
+    if (!g_bWaveStarted && g_bWaveSettingsPending) return;
+    int size = g_bWaveStarted ? g_iWaveSize : g_iPreparedSize;
+    if (g_iSpawnedSICount < size) return; // The Director can still fill this wave.
+
+    // Quota includes survivors of the previous wave, while deaths deliberately
+    // do not refund it. If no ordinary SI remains to start a death countdown,
+    // this blocked quota needs a next-wave timer, regardless of Tank count.
+    for (int client = 1; client <= MaxClients; client++)
+    {
+        if (client == deadClient || !IsClientInGame(client) || !IsPlayerAlive(client)
+            || GetClientTeam(client) != TEAM_INFECTED || !IsFakeClient(client)) continue;
+        int zombieClass = GetEntProp(client, Prop_Send, "m_zombieClass");
+        if (zombieClass > 0 && zombieClass < ZC_WITCH) return;
+    }
+    StartWaveCountdown(g_bWaveStarted ? g_fWaveInterval : g_fPreparedInterval);
 }
 
 public Action Timer_ResetWave(Handle timer)
@@ -246,17 +312,14 @@ void ResetWaveNow()
 {
     g_iSpawnedSICount = g_iAliveSICount;
     g_bHasFirstDeath = false;
+    g_bWaveStarted = false;
 
     if (!g_bMapReady)
     {
         return;
     }
 
-    if (g_bWaveSettingsPending)
-    {
-        RefreshEffectiveWave();
-        g_bWaveSettingsPending = !ApplyDirectorSettings();
-    }
+    PrepareWaveSettings();
 
     int entity = CreateEntityByName("logic_script");
     if (entity != -1)
@@ -293,11 +356,13 @@ public Action Command_WaveOverride(int client, int args)
 
     char intervalArgument[16];
     char sizeArgument[16];
+    float interval;
+    int size;
     GetCmdArg(1, intervalArgument, sizeof(intervalArgument));
     GetCmdArg(2, sizeArgument, sizeof(sizeArgument));
-    if (StringToFloatEx(intervalArgument, g_fPendingInterval) != strlen(intervalArgument)
-        || StringToIntEx(sizeArgument, g_iPendingSize) != strlen(sizeArgument)
-        || g_fPendingInterval < 0.0 || g_fPendingInterval > 10000.0 || g_iPendingSize < 1 || g_iPendingSize > 32)
+    if (StringToFloatEx(intervalArgument, interval) != strlen(intervalArgument)
+        || StringToIntEx(sizeArgument, size) != strlen(sizeArgument)
+        || interval < 0.0 || interval > 10000.0 || size < 1 || size > 32)
     {
         ReplyToCommand(client, "\x04[%t] \x01%t", "WaveTag", "WaveInvalidRange");
         return Plugin_Handled;
@@ -305,18 +370,16 @@ public Action Command_WaveOverride(int client, int args)
 
     if (CountHumanSurvivors() <= 1)
     {
-        ApplyWaveOverride(g_fPendingInterval, g_iPendingSize, GetCurrentProfile());
-        PrintToChatAll("\x04[%t] \x01%t", "WaveTag", "WaveApplied", g_fPendingInterval, g_iPendingSize);
+        ApplyWaveOverride(interval, size, GetCurrentProfile());
+        PrintToChatAll("\x04[%t] \x01%t", "WaveTag", "WaveApplied", interval, size);
         return Plugin_Handled;
     }
 
-    if (!IsNewBuiltinVoteAllowed())
+    if (g_hVote != INVALID_HANDLE || !IsNewBuiltinVoteAllowed())
     {
         ReplyToCommand(client, "\x04[%t] \x01%t", "WaveTag", "WaveVoteUnavailable");
         return Plugin_Handled;
     }
-
-    g_iPendingWaveSlot = GetCurrentProfile();
 
     int players[MAXPLAYERS];
     int playerCount;
@@ -329,8 +392,13 @@ public Action Command_WaveOverride(int client, int args)
     }
 
     char voteText[64];
-    FormatEx(voteText, sizeof(voteText), "%T", "WaveVoteQuestion", client, g_fPendingInterval, g_iPendingSize);
+    FormatEx(voteText, sizeof(voteText), "%T", "WaveVoteQuestion", client, interval, size);
     g_hVote = CreateBuiltinVote(VoteHandler, BuiltinVoteType_Custom_YesNo, BuiltinVoteAction_Cancel | BuiltinVoteAction_VoteEnd | BuiltinVoteAction_End);
+    // Only an accepted vote owns these values. Parsing another command, even
+    // a rejected command or a solo direct change, cannot mutate this proposal.
+    g_fVoteInterval = interval;
+    g_iVoteSize = size;
+    g_iPendingWaveSlot = GetCurrentProfile();
     g_iVoteInitiator = client;
     SetBuiltinVoteResultCallback(g_hVote, WaveVoteResultHandler);
     SetBuiltinVoteArgument(g_hVote, voteText);
@@ -342,6 +410,7 @@ public Action Command_WaveOverride(int client, int args)
 
 public void WaveVoteResultHandler(Handle vote, int numVotes, int numClients, const int[][] clientInfo, int numItems, const int[][] itemInfo)
 {
+    if (vote != g_hVote) return;
     for (int item = 0; item < numItems; item++)
     {
         if (itemInfo[item][BUILTINVOTEINFO_ITEM_INDEX] == BUILTINVOTES_VOTE_YES && itemInfo[item][BUILTINVOTEINFO_ITEM_VOTES] > (numVotes / 2))
@@ -349,9 +418,9 @@ public void WaveVoteResultHandler(Handle vote, int numVotes, int numClients, con
             char voteText[64];
             int languageClient = LANG_SERVER;
             if (g_iVoteInitiator > 0 && g_iVoteInitiator <= MaxClients && IsClientInGame(g_iVoteInitiator)) languageClient = g_iVoteInitiator;
-            FormatEx(voteText, sizeof(voteText), "%T", "WaveVotePassed", languageClient, g_fPendingInterval, g_iPendingSize);
+            FormatEx(voteText, sizeof(voteText), "%T", "WaveVotePassed", languageClient, g_fVoteInterval, g_iVoteSize);
             DisplayBuiltinVotePass(vote, voteText);
-            ApplyWaveOverride(g_fPendingInterval, g_iPendingSize, g_iPendingWaveSlot);
+            ApplyWaveOverride(g_fVoteInterval, g_iVoteSize, g_iPendingWaveSlot);
             g_iPendingWaveSlot = 0;
             return;
         }
@@ -363,12 +432,15 @@ public void VoteHandler(Handle vote, BuiltinVoteAction action, int param1, int p
 {
     if (action == BuiltinVoteAction_End)
     {
-        g_iPendingWaveSlot = 0;
-        g_iVoteInitiator = 0;
-        g_hVote = INVALID_HANDLE;
+        if (vote == g_hVote)
+        {
+            g_iPendingWaveSlot = 0;
+            g_iVoteInitiator = 0;
+            g_hVote = INVALID_HANDLE;
+        }
         CloseHandle(vote);
     }
-    else if (action == BuiltinVoteAction_Cancel)
+    else if (action == BuiltinVoteAction_Cancel && vote == g_hVote)
     {
         g_iPendingWaveSlot = 0;
         DisplayBuiltinVoteFail(vote, view_as<BuiltinVoteFailReason>(param1));
@@ -384,7 +456,7 @@ public Action Command_ResetWaveOverride(int args)
     {
         ProfileController_Reapply();
     }
-    g_bWaveSettingsPending = true;
+    MarkWaveSettingsPending();
     return Plugin_Handled;
 }
 
@@ -406,7 +478,7 @@ void SetEffectiveWave(float interval, int size)
     g_cvInterval.FloatValue = interval;
     g_cvSize.IntValue = size;
     g_bApplyingEffectiveWave = false;
-    g_bWaveSettingsPending = true;
+    MarkWaveSettingsPending();
 }
 
 int GetCurrentProfile()
@@ -458,12 +530,6 @@ public int Native_GetCurrentOverrideMask(Handle plugin, int numParams)
     return (slot >= 1 && slot <= 4) ? g_iSlotOverrideMask[slot] : 0;
 }
 
-void RefreshEffectiveWave()
-{
-    g_fWaveInterval = g_cvInterval.FloatValue;
-    g_iWaveSize = g_cvSize.IntValue;
-}
-
 bool ApplyDirectorSettings()
 {
     // A late load can receive OnConfigsExecuted before Confogl assigns the
@@ -471,6 +537,20 @@ bool ApplyDirectorSettings()
     char filename[PLATFORM_MAX_PATH];
     FindConVar("sm_vscript_filename").GetString(filename, sizeof(filename));
     if (!filename[0]) return false;
+    // Publish a separate script snapshot: reloading astredux.nut must not read
+    // next-wave CVars into a wave which has already started spawning.
+    int entity = CreateEntityByName("logic_script");
+    if (entity == -1) return false;
+    DispatchSpawn(entity);
+    char code[512];
+    FormatEx(code, sizeof(code), "::WaveSpawnSettings <- { size = %d, limits = [%d,%d,%d,%d,%d,%d], direction = %d, resolved = false };",
+        g_cvSize.IntValue, g_cvWaveFields[2].IntValue, g_cvWaveFields[3].IntValue,
+        g_cvWaveFields[4].IntValue, g_cvWaveFields[5].IntValue, g_cvWaveFields[6].IntValue,
+        g_cvWaveFields[7].IntValue, g_cvWaveFields[8].IntValue);
+    SetVariantString(code);
+    bool published = AcceptEntityInput(entity, "RunScriptCode");
+    RemoveEdict(entity);
+    if (!published) return false;
     if (!VScript_Reload())
     {
         LogError("[Wave] Could not apply Director settings through script_reloader.");
@@ -481,10 +561,22 @@ bool ApplyDirectorSettings()
 
 void ResetWaveState()
 {
+    g_bWaveStarted = false;
+    g_bWaveSettingsPending = true;
+    g_fWaveInterval = g_cvInterval.FloatValue;
+    g_iWaveSize = g_cvSize.IntValue;
     g_iSpawnedSICount = 0;
     g_bHasFirstDeath = false;
     g_fFirstDeathTime = 0.0;
+    g_fDeathInterval = 0.0;
     g_fBonusSpawnTime = 0.0;
+}
+
+void StartWaveCountdown(float interval)
+{
+    g_fFirstDeathTime = GetEngineTime();
+    g_fDeathInterval = interval;
+    ScheduleWaveReset(interval);
 }
 
 void ScheduleWaveReset(float delay)

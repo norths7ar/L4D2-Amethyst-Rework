@@ -62,15 +62,12 @@ function update_diff()
 //-----------------------------------------------------------------------------------------------------------------------------
 function ApplyDirectorOptions()
 {
-	local limits = [
-		Convars.GetStr("wave_hunter_limit").tointeger(),
-		Convars.GetStr("wave_smoker_limit").tointeger(),
-		Convars.GetStr("wave_boomer_limit").tointeger(),
-		Convars.GetStr("wave_spitter_limit").tointeger(),
-		Convars.GetStr("wave_jockey_limit").tointeger(),
-		Convars.GetStr("wave_charger_limit").tointeger()
-	];
-	local waveSize = Convars.GetStr("wave_size").tointeger();
+	// Wave Spawner publishes this only while preparing a wave. A script reload
+	// during a running wave must retain that wave's settings and composition.
+	if (!("WaveSpawnSettings" in getroottable())) return;
+	local settings = ::WaveSpawnSettings;
+	local limits = clone settings.limits;
+	local waveSize = settings.size;
 	local baseTotal = 0;
 	foreach (limit in limits) {
 		baseTotal += limit;
@@ -85,7 +82,7 @@ function ApplyDirectorOptions()
 		if (limit > 0) eligible.append(index);
 	}
 	local extraCount = waveSize - baseTotal;
-	while (extraCount > 0 && eligible.len() > 0) {
+	while (!settings.resolved && extraCount > 0 && eligible.len() > 0) {
 		local order = [];
 		foreach (index in eligible) order.append(index);
 		for (local i = order.len() - 1; i > 0; i--) {
@@ -100,6 +97,8 @@ function ApplyDirectorOptions()
 			extraCount--;
 		}
 	}
+	settings.limits = limits;
+	settings.resolved = true;
 
 	DirectorOptions.HunterLimit = limits[0];
 	DirectorOptions.SmokerLimit = limits[1];
@@ -107,7 +106,7 @@ function ApplyDirectorOptions()
 	DirectorOptions.SpitterLimit = limits[3];
 	DirectorOptions.JockeyLimit = limits[4];
 	DirectorOptions.ChargerLimit = limits[5];
-	DirectorOptions.PreferredSpecialDirection = Convars.GetStr("wave_preferred_direction").tointeger();
+	DirectorOptions.PreferredSpecialDirection = settings.direction;
 
 	// Wave Spawner owns the exact SI wave size. Keep the Director ceilings one slot
 	// above it so a Tank cannot make the script-level cap the limiting mechanism.
@@ -138,6 +137,9 @@ function InitHUD() {
 
 	// load the ModeHUD table
 	HUDSetLayout(ModeHUD);
+	// The default ticker is only one line high. Reserve space for wrapped text
+	// as well as the explicit second line on narrower client aspect ratios.
+	HUDPlace(DirectorScript.HUD_TICKER, 0.10, 0.10, 0.80, 0.16);
 }
 
 function UpdateHUDSI()
@@ -178,7 +180,7 @@ function GetHUDText()
 	// Wave Spawner applies them to the next wave.
 	local interval = Convars.GetStr("wave_interval").tofloat();
 	local count = Convars.GetStr("wave_size").tointeger();
-	return format("当前特感刷新速度：%.1f秒%d特\n使用 !si 修改", interval, count);
+	return format("特感：%.1f 秒 / %d 特\n使用 !si 修改", interval, count);
 }
 
 //-----------------------------------------------------------------------------------------------------------------------------
