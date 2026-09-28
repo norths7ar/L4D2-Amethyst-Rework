@@ -78,7 +78,7 @@ public Plugin myinfo =
 	name = "Coop ready and pause",
 	author = "CanadaRox, 海洋空氣, norths7ar",
 	description = "Per-player readiness, loading gate and start/resume countdowns",
-	version = "1.2.0"
+	version = "1.2.2"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -183,7 +183,9 @@ public void OnMapStart()
 public void OnMapEnd()
 {
 	ToggleVoteCommandListener(false);
-	ReleaseDirector();
+	// Left4DHooks has already ended its map lifecycle. Do not restart the old
+	// Director's timers or query GameRules here; timer cleanup must still run.
+	ReleaseDirector(false);
 	SetReadyProtection(false);
 	SetSurvivorsFrozen(false);
 	CancelTimer(g_loadingTimer);
@@ -375,11 +377,12 @@ void HoldDirector()
 	L4D2_CTimerStart(L4D2CT_MobSpawnTimer, 99999.9);
 }
 
-void ReleaseDirector()
+void ReleaseDirector(bool restoreTimers = true)
 {
 	if (!g_directorHeld) return;
 	g_directorHeld = false;
 	FindConVar("sb_stop").SetBool(false, .notify = false);
+	if (!restoreTimers) return;
 	L4D2_CTimerStart(L4D2CT_VersusStartTimer, FindConVar("versus_force_start_time").FloatValue);
 	L4D2_CTimerStart(L4D2CT_MobSpawnTimer, GetRandomMobSpawnInterval());
 }
@@ -497,6 +500,7 @@ public Action EventPlayerTeam(Event event, const char[] name, bool dontBroadcast
 	{
 		DataPack pack;
 		g_teamTimer[client] = CreateDataTimer(0.1, TimerPlayerTeam, pack, TIMER_FLAG_NO_MAPCHANGE);
+		pack.WriteCell(client);
 		pack.WriteCell(GetClientUserId(client));
 		pack.WriteCell(event.GetInt("oldteam"));
 	}
@@ -506,10 +510,12 @@ public Action EventPlayerTeam(Event event, const char[] name, bool dontBroadcast
 public Action TimerPlayerTeam(Handle timer, DataPack pack)
 {
 	pack.Reset();
+	// Release ownership even when the player is still signing on or has left.
+	int slot = pack.ReadCell();
+	g_teamTimer[slot] = null;
 	int client = GetClientOfUserId(pack.ReadCell());
 	int oldTeam = pack.ReadCell();
 	if (client <= 0 || !IsClientInGame(client)) return Plugin_Stop;
-	g_teamTimer[client] = null;
 	int team = GetClientTeam(client);
 	if (team == oldTeam) return Plugin_Stop;
 	if (team == TEAM_SPECTATORS && oldTeam == TEAM_SURVIVORS) SetReadyFrozen(client, false);
