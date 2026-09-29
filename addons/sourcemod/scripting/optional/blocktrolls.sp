@@ -38,6 +38,22 @@ public Plugin myinfo =
 bool g_bBlockCallvote = false;
 int  loadedPlayers 	  = 0;
 
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
+{
+	RegPluginLibrary("blocktrolls");
+	CreateNative("BlockTrolls_CanVote", Native_CanVote);
+	return APLRes_Success;
+}
+
+int Native_CanVote(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	if (g_bBlockCallvote || client < 1 || client > MaxClients
+		|| !IsClientInGame(client) || IsFakeClient(client)) return false;
+	int team = GetClientTeam(client);
+	return team == 2 || team == 3;
+}
+
 public void OnPluginStart()
 {
 	LoadTranslations("blocktrolls.phrases");

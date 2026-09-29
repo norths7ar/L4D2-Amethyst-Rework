@@ -19,6 +19,7 @@
 #include <sourcemod>
 #include <left4dhooks>
 #include <builtinvotes>
+#include <vote_policy>
 
 #define L4D_TEAM_SPECTATE 1
 
@@ -105,27 +106,23 @@ Action Command_SetScores(int client, int args)
 	
 	if (IsAdmin || allowPlayersToVote.BoolValue) {
 		//If players are allowed to vote, start a vote
-		StartScoreVote(tempSurvivorScore, tempInfectedScore, client, IsAdmin);
+		StartScoreVote(tempSurvivorScore, tempInfectedScore, client);
 	}
 	
 	return Plugin_Handled;
 }
 
 //Starts a vote to change scores
-void StartScoreVote(const int survScore, const int infectScore, const int initiator, bool IsAdmin)
+void StartScoreVote(const int survScore, const int infectScore, const int initiator)
 {
-	//Disallow spectator voting
-	if (!IsAdmin && GetClientTeam(initiator) == L4D_TEAM_SPECTATE) {
-		PrintToChat(initiator, "Score voting isn't allowed for spectators.");
-		return;
-	}
+	if (!VotePolicy_CheckCaller(initiator)) return;
 
 	if (IsNewBuiltinVoteAllowed()) {
 		//Determine the number of voting players (non-spectator) and store their client ids
 		int iNumPlayers;
 		int[] iPlayers = new int[MaxClients];
 		for (int i = 1; i <= MaxClients; i++) {
-			if (!IsClientInGame(i) || IsFakeClient(i) || (GetClientTeam(i) == L4D_TEAM_SPECTATE))
+			if (!VotePolicy_IsPlayingHuman(i))
 				continue;
 				
 			iPlayers[iNumPlayers++] = i;
@@ -137,22 +134,27 @@ void StartScoreVote(const int survScore, const int infectScore, const int initia
 			return;
 		}
 		
-		//The best place for this
-		survivorScore = survScore; 
-		infectedScore = infectScore;
 		
 		//Create the vote
 		voteHandler = CreateBuiltinVote(VoteActionHandler, BuiltinVoteType_Custom_YesNo, BuiltinVoteAction_Cancel | BuiltinVoteAction_VoteEnd | BuiltinVoteAction_End);
+		if (voteHandler == null) return;
 		
 		//Set the text for the vote, initiating client and handler
 		char sBuffer[64];
-		FormatEx(sBuffer, sizeof(sBuffer), "Change scores to %d - %d?", survivorScore, infectedScore);
+		FormatEx(sBuffer, sizeof(sBuffer), "Change scores to %d - %d?", survScore, infectScore);
 		SetBuiltinVoteArgument(voteHandler, sBuffer);
 		SetBuiltinVoteInitiator(voteHandler, initiator);
 		SetBuiltinVoteResultCallback(voteHandler, ScoreVoteResultHandler);
 		
 		//Display the vote and make the initiator automatically vote yes
-		DisplayBuiltinVote(voteHandler, iPlayers, iNumPlayers, 20);
+		if (!DisplayBuiltinVote(voteHandler, iPlayers, iNumPlayers, 20))
+		{
+			// A start veto may already have ended and destroyed the vote.
+			if (IsValidHandle(voteHandler)) delete voteHandler;
+			return;
+		}
+		survivorScore = survScore;
+		infectedScore = infectScore;
 		FakeClientCommand(initiator, "Vote Yes");
 		return;
 	}

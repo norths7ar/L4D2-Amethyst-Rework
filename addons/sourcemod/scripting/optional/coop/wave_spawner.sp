@@ -4,6 +4,7 @@
 #include <sourcemod>
 #include <sdktools>
 #include <builtinvotes>
+#include <vote_policy>
 #include <left4dhooks>
 #include <script_reloader>
 #undef REQUIRE_PLUGIN
@@ -381,6 +382,8 @@ public Action Command_WaveOverride(int client, int args)
         return Plugin_Handled;
     }
 
+    if (!VotePolicy_CheckCaller(client)) return Plugin_Handled;
+
     int players[MAXPLAYERS];
     int playerCount;
     for (int index = 1; index <= MaxClients; index++)
@@ -394,16 +397,22 @@ public Action Command_WaveOverride(int client, int args)
     char voteText[64];
     FormatEx(voteText, sizeof(voteText), "%T", "WaveVoteQuestion", client, interval, size);
     g_hVote = CreateBuiltinVote(VoteHandler, BuiltinVoteType_Custom_YesNo, BuiltinVoteAction_Cancel | BuiltinVoteAction_VoteEnd | BuiltinVoteAction_End);
+    if (g_hVote == null) return Plugin_Handled;
+    SetBuiltinVoteResultCallback(g_hVote, WaveVoteResultHandler);
+    SetBuiltinVoteArgument(g_hVote, voteText);
+    SetBuiltinVoteInitiator(g_hVote, client);
+    if (!DisplayBuiltinVote(g_hVote, players, playerCount, 15))
+    {
+        // A start veto may already have ended and destroyed the vote.
+        if (IsValidHandle(g_hVote)) delete g_hVote;
+        return Plugin_Handled;
+    }
     // Only an accepted vote owns these values. Parsing another command, even
     // a rejected command or a solo direct change, cannot mutate this proposal.
     g_fVoteInterval = interval;
     g_iVoteSize = size;
     g_iPendingWaveSlot = GetCurrentProfile();
     g_iVoteInitiator = client;
-    SetBuiltinVoteResultCallback(g_hVote, WaveVoteResultHandler);
-    SetBuiltinVoteArgument(g_hVote, voteText);
-    SetBuiltinVoteInitiator(g_hVote, client);
-    DisplayBuiltinVote(g_hVote, players, playerCount, 15);
     FakeClientCommand(client, "Vote Yes");
     return Plugin_Handled;
 }

@@ -2,6 +2,7 @@
 #pragma newdecls required
 
 #include <builtinvotes>
+#include <vote_policy>
 #include <colors>
 #include <sourcemod>
 
@@ -76,11 +77,7 @@ Action SlotsRequest(int client, int args)
 
 bool StartSlotVote(int client, char[] Slots)
 {
-	if (GetClientTeam(client) <= L4D2Team_Spectator)
-	{
-		CPrintToChat(client, "%t %t", "Tag", "Spectators");
-		return false;
-	}
+	if (!VotePolicy_CheckCaller(client)) return false;
 
 	if (!IsBuiltinVoteInProgress())
 	{
@@ -90,7 +87,7 @@ bool StartSlotVote(int client, char[] Slots)
 		// list of non-spectators players
 		for (int i = 1; i <= MaxClients; i++)
 		{
-			if (!IsClientInGame(i) || IsFakeClient(i) || GetClientTeam(i) <= L4D2Team_Spectator)
+			if (!VotePolicy_IsPlayingHuman(i))
 			{
 				continue;
 			}
@@ -102,10 +99,16 @@ bool StartSlotVote(int client, char[] Slots)
 		FormatEx(sBuffer, sizeof(sBuffer), "%T", "LimitSlots", LANG_SERVER, Slots);
 
 		g_hVote = CreateBuiltinVote(VoteActionHandler, BuiltinVoteType_Custom_YesNo, BuiltinVoteAction_Cancel | BuiltinVoteAction_VoteEnd | BuiltinVoteAction_End);
+		if (g_hVote == null) return false;
 		SetBuiltinVoteArgument(g_hVote, sBuffer);
 		SetBuiltinVoteInitiator(g_hVote, client);
 		SetBuiltinVoteResultCallback(g_hVote, SlotVoteResultHandler);
-		DisplayBuiltinVote(g_hVote, iPlayers, iNumPlayers, 20);
+		if (!DisplayBuiltinVote(g_hVote, iPlayers, iNumPlayers, 20))
+		{
+			// A start veto may already have ended and destroyed the vote.
+			if (IsValidHandle(g_hVote)) delete g_hVote;
+			return false;
+		}
 		return true;
 	}
 

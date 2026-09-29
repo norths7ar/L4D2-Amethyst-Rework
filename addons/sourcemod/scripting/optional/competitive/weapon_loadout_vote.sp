@@ -4,6 +4,7 @@
 #include <sourcemod>
 #include <l4d2util_constants>
 #include <builtinvotes>
+#include <vote_policy>
 #include <sdktools>
 #include <colors>
 #undef REQUIRE_PLUGIN
@@ -214,6 +215,8 @@ int Menu_VoteMenuHandler(Menu hMenu, MenuAction iAction, int iClient, int iIndex
 {
 	switch (iAction) {
 		case MenuAction_Select: {
+			if (!VotePolicy_CheckCaller(iClient)) return 0;
+
 			// Is a new vote allowed?
 			if (!IsNewBuiltinVoteAllowed()) {
 				CPrintToChat(iClient, "A vote cannot be called at this moment, try again in a second or five.");
@@ -223,14 +226,13 @@ int Menu_VoteMenuHandler(Menu hMenu, MenuAction iAction, int iClient, int iIndex
 			char sInfo[32], sVoteTitle[64];
 			if (hMenu.GetItem(iIndex, sInfo, sizeof(sInfo))) {
 				FormatEx(sVoteTitle, sizeof(sVoteTitle), "Survivors get %s?", sInfo);
-				g_iVotingMode = iIndex + 1;
 
 				// Get all non-spectating players
 				int iNumPlayers;
 				int[] iPlayers = new int[MaxClients];
 
 				for (int i = 1; i <= MaxClients; i++) {
-					if (!IsClientInGame(i) || IsFakeClient(i) || (GetClientTeam(i) == L4D2Team_Spectator)) {
+					if (!VotePolicy_IsPlayingHuman(i)) {
 						continue;
 					}
 
@@ -238,10 +240,18 @@ int Menu_VoteMenuHandler(Menu hMenu, MenuAction iAction, int iClient, int iIndex
 				}
 
 				g_hVote = CreateBuiltinVote(BV_VoteActionHandler, BuiltinVoteType_Custom_YesNo, BuiltinVoteAction_Cancel | BuiltinVoteAction_VoteEnd | BuiltinVoteAction_End);
+				if (g_hVote == null) return 0;
 				SetBuiltinVoteArgument(g_hVote, sVoteTitle);
 				SetBuiltinVoteInitiator(g_hVote, iClient);
 				SetBuiltinVoteResultCallback(g_hVote, BV_VoteResultHandler);
-				DisplayBuiltinVote(g_hVote, iPlayers, iNumPlayers, 20);
+				if (!DisplayBuiltinVote(g_hVote, iPlayers, iNumPlayers, 20))
+				{
+					// A start veto may already have ended and destroyed the vote.
+					if (IsValidHandle(g_hVote)) delete g_hVote;
+					return 0;
+				}
+
+				g_iVotingMode = iIndex + 1;
 
 				if (CheckCommandAccess(iClient, "sm_kick", ADMFLAG_KICK, false)) {
 					g_bIsAdminVote = true;
@@ -452,4 +462,3 @@ bool InSecondHalfOfRound()
 {
 	return view_as<bool>(GameRules_GetProp("m_bInSecondHalfOfRound", 1));
 }
-

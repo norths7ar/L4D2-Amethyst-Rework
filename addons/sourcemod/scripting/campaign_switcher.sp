@@ -3,6 +3,7 @@
 
 #include <sourcemod>
 #include <builtinvotes>
+#include <vote_policy>
 #include <imatchext>
 
 #define PLUGIN_VERSION "2.3.0"
@@ -570,27 +571,29 @@ bool StartImmediateChangeVote(int client, const char[] mapName, const char[] dis
 		BuiltinVoteType_ChgCampaign,
 		BuiltinVoteAction_Select | BuiltinVoteAction_Cancel | BuiltinVoteAction_End
 	);
+	if (vote == null) return false;
 
-	g_changeVoteNewCampaign = newCampaign;
-	strcopy(g_changeVoteMap, sizeof(g_changeVoteMap), mapName);
-	strcopy(g_changeVoteName, sizeof(g_changeVoteName), displayName);
-	SetBuiltinVoteArgument(vote, g_changeVoteName);
+	SetBuiltinVoteArgument(vote, displayName);
 	SetBuiltinVoteInitiator(vote, client);
 	SetBuiltinVoteResultCallback(vote, ImmediateVoteResult);
 
 	if (!DisplayBuiltinVote(vote, players, total, FindConVar("sv_vote_timer_duration").IntValue))
 	{
-		delete vote;
+		// A start veto may already have ended and destroyed the vote.
+		if (IsValidHandle(vote)) delete vote;
 		PrintToChat(client, "\x04[%t] \x01%t", "CampaignTag", "VoteStartFailed");
 		return false;
 	}
 
+	g_changeVoteNewCampaign = newCampaign;
+	strcopy(g_changeVoteMap, sizeof(g_changeVoteMap), mapName);
+	strcopy(g_changeVoteName, sizeof(g_changeVoteName), displayName);
 	return true;
 }
 
 bool CheckVoteAccess(int client)
 {
-	if (!IsEligibleHuman(client))
+	if (!VotePolicy_CheckCaller(client))
 		return false;
 
 	if (IsBuiltinVoteInProgress())
@@ -716,6 +719,9 @@ public int NextMapMenuHandler(Menu menu, MenuAction action, int client, int item
 {
 	if (action == MenuAction_Select)
 	{
+		if (!VotePolicy_CheckCaller(client))
+			return 0;
+
 		char firstChapter[MAX_MAP_NAME];
 		menu.GetItem(item, firstChapter, sizeof(firstChapter));
 		int mapIndex = FindMapIndex(firstChapter);
@@ -1011,11 +1017,7 @@ void ResetNextMapVotes()
 
 bool IsEligibleHuman(int client)
 {
-	return client > 0
-		&& client <= MaxClients
-		&& IsClientInGame(client)
-		&& !IsFakeClient(client)
-		&& GetClientTeam(client) != 1;
+	return VotePolicy_IsPlayingHuman(client);
 }
 
 int CountEligibleHumans()

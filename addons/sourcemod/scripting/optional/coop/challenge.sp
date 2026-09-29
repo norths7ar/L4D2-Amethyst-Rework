@@ -3,6 +3,7 @@
 
 #include <sourcemod>
 #include <builtinvotes>
+#include <vote_policy>
 #include <left4dhooks>
 #undef REQUIRE_PLUGIN
 #include <profile_controller>
@@ -303,9 +304,8 @@ public void RequestGameplaySetting(int client, int target, int value)
 	}
 
 	if ( IsNewBuiltinVoteAllowed() ) {
-		g_iPendingTarget = target;
-		g_iPendingValue = value;
-		g_iPendingSlot = GetCurrentProfile();
+		if (!VotePolicy_CheckCaller(client)) return;
+
 		int iNumPlayers;
 		int iPlayers[MAXPLAYERS];
 		for (int i = 1; i <= MaxClients; i++) {
@@ -317,7 +317,7 @@ public void RequestGameplaySetting(int client, int target, int value)
 
 		char sBuffer[256];
 		g_hVote = CreateBuiltinVote(VoteHandler, BuiltinVoteType_Custom_YesNo, BuiltinVoteAction_Cancel | BuiltinVoteAction_VoteEnd | BuiltinVoteAction_End);
-		g_iVoteInitiator = client;
+		if (g_hVote == null) return;
 
 		switch (target) {
 			case Setting_TankDamage: { // Tank 伤害
@@ -361,7 +361,16 @@ public void RequestGameplaySetting(int client, int target, int value)
 		SetBuiltinVoteResultCallback(g_hVote, GameplayVoteResultHandler);
 		SetBuiltinVoteArgument(g_hVote, sBuffer);
 		SetBuiltinVoteInitiator(g_hVote, client);
-		DisplayBuiltinVote(g_hVote, iPlayers, iNumPlayers, MENU_DISPLAY_TIME);
+		if (!DisplayBuiltinVote(g_hVote, iPlayers, iNumPlayers, MENU_DISPLAY_TIME))
+		{
+			// A start veto may already have ended and destroyed the vote.
+			if (IsValidHandle(g_hVote)) delete g_hVote;
+			return;
+		}
+		g_iPendingTarget = target;
+		g_iPendingValue = value;
+		g_iPendingSlot = GetCurrentProfile();
+		g_iVoteInitiator = client;
 		FakeClientCommand(client, "Vote Yes");
 	}
 }

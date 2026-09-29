@@ -1,6 +1,7 @@
 #include <sourcemod>
 #include <sdktools_client>
 #include <builtinvotes>
+#include <vote_policy>
 #include <colors>
 
 #pragma semicolon 1
@@ -450,6 +451,8 @@ Action KickSpecs_Cmd(int client, int args)
 
 void StartKickSpecsVote(int client)
 {
+	if (!VotePolicy_CheckCaller(client)) return;
+
 	if (IsBuiltinVoteInProgress())
 	{
 		CPrintToChat(client, "%t", "VoteInProgress");
@@ -462,6 +465,7 @@ void StartKickSpecsVote(int client)
 	}
 	
 	Handle hVote = CreateBuiltinVote(VoteActionHandler, BuiltinVoteType_Custom_YesNo, BuiltinVoteAction_Cancel | BuiltinVoteAction_VoteEnd | BuiltinVoteAction_End);
+	if (hVote == null) return;
 
 	char sBuffer[128];
 	FormatEx(sBuffer, sizeof(sBuffer), "%T", "KickSpecsVoteTitle", LANG_SERVER);
@@ -474,11 +478,16 @@ void StartKickSpecsVote(int client)
 	int[] players = new int[MaxClients];
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (!IsClientInGame(i) || IsFakeClient(i) || GetClientTeam(i) == L4D2Team_Spectator)
+		if (!VotePolicy_IsPlayingHuman(i))
 			continue;
 		players[total++] = i;
 	}
-	DisplayBuiltinVote(hVote, players, total, FindConVar("sv_vote_timer_duration").IntValue);
+	if (!DisplayBuiltinVote(hVote, players, total, FindConVar("sv_vote_timer_duration").IntValue))
+	{
+		// A start veto may already have ended and destroyed the vote.
+		if (IsValidHandle(hVote)) delete hVote;
+		return;
+	}
 
 	// Client is voting for
 	FakeClientCommand(client, "Vote Yes");

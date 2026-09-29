@@ -3,6 +3,7 @@
 
 #include <sourcemod>
 #include <builtinvotes>
+#include <vote_policy>
 #undef REQUIRE_PLUGIN
 #include <confogl>
 #include <colors>
@@ -28,7 +29,6 @@ char
 bool
 	g_bIsConfoglAvailable = false,
 	g_bOnSet			  = false,
-	g_bCedaGame			  = false,
 	g_bShutdown			  = false;
 
 public Plugin myinfo =
@@ -112,16 +112,6 @@ public void OnLibraryAdded(const char[] sPluginName)
 {
 	if (strcmp(sPluginName, "confogl") == 0)
 		g_bIsConfoglAvailable = true;
-}
-
-public void OnCedapugStarted()
-{
-	g_bCedaGame = true;
-}
-
-public void OnCedapugEnded()
-{
-	g_bCedaGame = false;
 }
 
 Action MatchRequest(int iClient, int iArgs)
@@ -293,11 +283,7 @@ int ConfigsMenuHandler(Menu menu, MenuAction action, int param1, int param2)
 
 bool StartMatchVote(int iClient, const char[] sCfgName)
 {
-	if (GetClientTeam(iClient) <= TEAM_SPECTATE)
-	{
-		CPrintToChat(iClient, "%t %t", "Tag", "NoSpec");
-		return false;
-	}
+	if (!VotePolicy_CheckCaller(iClient)) return false;
 
 	if (IsBuiltinVoteInProgress())
 	{
@@ -325,10 +311,16 @@ bool StartMatchVote(int iClient, const char[] sCfgName)
 	FormatEx(sTitle, sizeof(sTitle), "%T", "Title_LoadConfig", LANG_SERVER, sCfgName);
 
 	g_hVote = CreateBuiltinVote(VoteActionHandler, BuiltinVoteType_Custom_YesNo, BuiltinVoteAction_Cancel | BuiltinVoteAction_VoteEnd | BuiltinVoteAction_End);
+	if (g_hVote == null) return false;
 	SetBuiltinVoteArgument(g_hVote, sTitle);
 	SetBuiltinVoteInitiator(g_hVote, iClient);
 	SetBuiltinVoteResultCallback(g_hVote, MatchVoteResultHandler);
-	DisplayBuiltinVote(g_hVote, iPlayers, iNumPlayers, 20);
+	if (!DisplayBuiltinVote(g_hVote, iPlayers, iNumPlayers, 20))
+	{
+		// A start veto may already have ended and destroyed the vote.
+		if (IsValidHandle(g_hVote)) delete g_hVote;
+		return false;
+	}
 	return true;
 }
 
@@ -394,12 +386,6 @@ Action MatchReset(int iClient, int iArgs)
 		return Plugin_Handled;
 	}
 
-	if (g_bCedaGame)
-	{
-		CPrintToChat(iClient, "%t %t", "Tag", "CedaGame");
-		return Plugin_Handled;
-	}
-
 	if (!LGO_IsMatchModeLoaded())
 	{
 		CPrintToChat(iClient, "%t %t", "Tag", "MatchNotLoaded");
@@ -413,11 +399,7 @@ Action MatchReset(int iClient, int iArgs)
 
 bool StartResetMatchVote(int iClient)
 {
-	if (GetClientTeam(iClient) <= TEAM_SPECTATE)
-	{
-		CPrintToChat(iClient, "%t %t", "Tag", "NoSpec");
-		return false;
-	}
+	if (!VotePolicy_CheckCaller(iClient)) return false;
 
 	if (IsBuiltinVoteInProgress())
 	{
@@ -439,10 +421,16 @@ bool StartResetMatchVote(int iClient)
 	FormatEx(sTitle, sizeof(sTitle), "%T", "Title_OffConfogl", LANG_SERVER);
 
 	g_hVote = CreateBuiltinVote(VoteActionHandler, BuiltinVoteType_Custom_YesNo, BuiltinVoteAction_Cancel | BuiltinVoteAction_VoteEnd | BuiltinVoteAction_End);
+	if (g_hVote == null) return false;
 	SetBuiltinVoteArgument(g_hVote, sTitle);
 	SetBuiltinVoteInitiator(g_hVote, iClient);
 	SetBuiltinVoteResultCallback(g_hVote, ResetMatchVoteResultHandler);
-	DisplayBuiltinVote(g_hVote, iPlayers, iNumPlayers, 20);
+	if (!DisplayBuiltinVote(g_hVote, iPlayers, iNumPlayers, 20))
+	{
+		// A start veto may already have ended and destroyed the vote.
+		if (IsValidHandle(g_hVote)) delete g_hVote;
+		return false;
+	}
 
 	FakeClientCommand(iClient, "Vote Yes");
 	return true;
@@ -491,12 +479,6 @@ Action ChangeMatchRequest(int iClient, int iArgs)
 	if (!g_bIsConfoglAvailable)
 	{
 		CPrintToChat(iClient, "%t %t", "Tag", "ConfoglNotAvailable");
-		return Plugin_Handled;
-	}
-
-	if (g_bCedaGame)
-	{
-		CPrintToChat(iClient, "%t %t", "Tag", "CedaGame");
 		return Plugin_Handled;
 	}
 
@@ -626,11 +608,7 @@ int ChConfigsMenuHandler(Menu menu, MenuAction action, int param1, int param2)
 
 bool StartChMatchVote(int iClient, const char[] sCfgName)
 {
-	if (GetClientTeam(iClient) <= TEAM_SPECTATE)
-	{
-		CPrintToChat(iClient, "%t %t", "Tag", "NoSpec");
-		return false;
-	}
+	if (!VotePolicy_CheckCaller(iClient)) return false;
 
 	if (IsBuiltinVoteInProgress())
 	{
@@ -658,10 +636,16 @@ bool StartChMatchVote(int iClient, const char[] sCfgName)
 	FormatEx(sTitle, sizeof(sTitle), "%T", "Title_ChangeConfogl", LANG_SERVER, sCfgName);
 
 	g_hVote = CreateBuiltinVote(VoteActionHandler, BuiltinVoteType_Custom_YesNo, BuiltinVoteAction_Cancel | BuiltinVoteAction_VoteEnd | BuiltinVoteAction_End);
+	if (g_hVote == null) return false;
 	SetBuiltinVoteArgument(g_hVote, sTitle);
 	SetBuiltinVoteInitiator(g_hVote, iClient);
 	SetBuiltinVoteResultCallback(g_hVote, ChMatchVoteResultHandler);
-	DisplayBuiltinVote(g_hVote, iPlayers, iNumPlayers, 20);
+	if (!DisplayBuiltinVote(g_hVote, iPlayers, iNumPlayers, 20))
+	{
+		// A start veto may already have ended and destroyed the vote.
+		if (IsValidHandle(g_hVote)) delete g_hVote;
+		return false;
+	}
 
 	return true;
 }
@@ -728,7 +712,7 @@ int ProcessPlayers(int[] iPlayers, int &iNumPlayers)
 		}
 		else
 		{
-			if (!IsFakeClient(i) && GetClientTeam(i) > TEAM_SPECTATE)
+			if (VotePolicy_IsPlayingHuman(i))
 				iPlayers[iNumPlayers++] = i;
 		}
 	}

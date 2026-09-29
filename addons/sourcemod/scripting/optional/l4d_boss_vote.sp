@@ -3,6 +3,7 @@
 
 #include <sourcemod>
 #include <builtinvotes>
+#include <vote_policy>
 #include <colors>
 #define L4D2UTIL_STOCKS_ONLY
 #include <l4d2util_rounds>
@@ -104,11 +105,13 @@ Action VoteBossCmd(int client, int args)
 	}
 	
 	// Get all non-spectating players
+	if (!VotePolicy_CheckCaller(client)) return Plugin_Handled;
+
 	int iNumPlayers;
 	int[] iPlayers = new int[MaxClients];
 	for (int i=1; i<=MaxClients; i++)
 	{
-		if (!IsClientInGame(i) || IsFakeClient(i) || (GetClientTeam(i) == 1))
+		if (!VotePolicy_IsPlayingHuman(i))
 		{
 			continue;
 		}
@@ -121,8 +124,9 @@ Action VoteBossCmd(int client, int args)
 	GetCmdArg(1, bv_sTank, 8);
 	GetCmdArg(2, bv_sWitch, 8);
 	
-	bv_iTank = -1;
-	bv_iWitch = -1;
+	int tankPercent = -1;
+	int witchPercent = -1;
+	bool changeTank, changeWitch;
 	
 	// Make sure the args are actual numbers
 	if (!IsInteger(bv_sTank) || !IsInteger(bv_sWitch))
@@ -134,47 +138,47 @@ Action VoteBossCmd(int client, int args)
 	// Check to make sure static bosses don't get changed
 	if (!IsStaticTankMap())
 	{
-		bv_bTank = (bv_iTank = StringToInt(bv_sTank)) > 0;
+		changeTank = (tankPercent = StringToInt(bv_sTank)) > 0;
 	}
 	else
 	{
-		bv_bTank = false;
+		changeTank = false;
 		CReplyToCommand(client, "%t %t", "Tag", "TankStatic");
 	}
 	
 	if (!IsStaticWitchMap())
 	{
-		bv_bWitch = (bv_iWitch = StringToInt(bv_sWitch)) > 0;
+		changeWitch = (witchPercent = StringToInt(bv_sWitch)) > 0;
 	}
 	else
 	{
-		bv_bWitch = false;
+		changeWitch = false;
 		CReplyToCommand(client, "%t %t", "Tag", "WitchStatic");
 	}
 	
 	// Check if percent is within limits
-	if (bv_bTank && !IsTankPercentValid(bv_iTank))
+	if (changeTank && !IsTankPercentValid(tankPercent))
 	{
-		bv_bTank = false;
+		changeTank = false;
 		CReplyToCommand(client, "%t %t", "Tag", "TankBanned");
 	}
 	
-	if (bv_bWitch && !IsWitchPercentValid(bv_iWitch, true))
+	if (changeWitch && !IsWitchPercentValid(witchPercent, true))
 	{
-		bv_bWitch = false;
+		changeWitch = false;
 		CReplyToCommand(client, "%t %t", "Tag", "WitchBanned");
 	}
 	
 	char bv_voteTitle[64];
 	
 	// Set vote title
-	if (bv_bTank && bv_bWitch)	// Both Tank and Witch can be changed 
+	if (changeTank && changeWitch)	// Both Tank and Witch can be changed
 	{
 		FormatEx(bv_voteTitle, 64, "%T", "SetBosses", LANG_SERVER, bv_sTank, bv_sWitch);
 	}
-	else if (bv_bTank)	// Only Tank can be changed
+	else if (changeTank)	// Only Tank can be changed
 	{
-		if (bv_iWitch == 0)
+		if (witchPercent == 0)
 		{
 			FormatEx(bv_voteTitle, 64, "%T", "SetTank", LANG_SERVER, bv_sTank);
 		}
@@ -183,9 +187,9 @@ Action VoteBossCmd(int client, int args)
 			FormatEx(bv_voteTitle, 64, "%T", "SetOnlyTank", LANG_SERVER, bv_sTank);
 		}
 	}
-	else if (bv_bWitch) // Only Witch can be changed
+	else if (changeWitch) // Only Witch can be changed
 	{
-		if (bv_iTank == 0)
+		if (tankPercent == 0)
 		{
 			FormatEx(bv_voteTitle, 64, "%T", "SetWitch", LANG_SERVER, bv_sWitch);
 		}
@@ -196,15 +200,15 @@ Action VoteBossCmd(int client, int args)
 	}
 	else // Neither can be changed... ok...
 	{
-		if (bv_iTank == 0 && bv_iWitch == 0)
+		if (tankPercent == 0 && witchPercent == 0)
 		{
 			FormatEx(bv_voteTitle, 64, "%T", "SetBossesDisabled", LANG_SERVER);
 		}
-		else if (bv_iTank == 0)
+		else if (tankPercent == 0)
 		{
 			FormatEx(bv_voteTitle, 64, "%T", "SetTankDisabled", LANG_SERVER);
 		}
-		else if (bv_iWitch == 0)
+		else if (witchPercent == 0)
 		{
 			FormatEx(bv_voteTitle, 64, "%T", "SetWitchDisabled", LANG_SERVER);
 		}
@@ -216,10 +220,20 @@ Action VoteBossCmd(int client, int args)
 	
 	// Start the vote!
 	Handle bv_hVote = CreateBuiltinVote(BossVoteActionHandler, BuiltinVoteType_Custom_YesNo, BuiltinVoteAction_Cancel | BuiltinVoteAction_VoteEnd | BuiltinVoteAction_End);
+	if (bv_hVote == null) return Plugin_Handled;
 	SetBuiltinVoteArgument(bv_hVote, bv_voteTitle);
 	SetBuiltinVoteInitiator(bv_hVote, client);
 	SetBuiltinVoteResultCallback(bv_hVote, BossVoteResultHandler);
-	DisplayBuiltinVote(bv_hVote, iPlayers, iNumPlayers, 20);
+	if (!DisplayBuiltinVote(bv_hVote, iPlayers, iNumPlayers, 20))
+	{
+		// A start veto may already have ended and destroyed the vote.
+		if (IsValidHandle(bv_hVote)) delete bv_hVote;
+		return Plugin_Handled;
+	}
+	bv_iTank = tankPercent;
+	bv_iWitch = witchPercent;
+	bv_bTank = changeTank;
+	bv_bWitch = changeWitch;
 	FakeClientCommand(client, "Vote Yes");
 
 	return Plugin_Handled;
@@ -256,7 +270,7 @@ void BossVoteResultHandler(Handle vote, int num_votes, int num_clients, const in
 					return;
 				}
 				
-				if (bv_bTank && bv_bWitch)	// Both Tank and Witch can be changed 
+				if (bv_bTank && bv_bWitch)	// Both Tank and Witch can be changed
 				{
 					char buffer[64];
 					FormatEx(buffer, sizeof(buffer), "%T", "SettingBoss", LANG_SERVER);
