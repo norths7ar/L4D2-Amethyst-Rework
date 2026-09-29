@@ -43,6 +43,10 @@ StringMap g_rules;
 StringMap g_mapEntries;
 ConVar g_rulesFile;
 bool g_roundReady, g_configsReady, g_creating;
+bool g_policyFile, g_roundSettled, g_resourcesProcessed, g_itemsProcessed, g_startKitsProcessed;
+bool g_replayingSupplies;
+ArrayList g_replayedSupplies;
+int g_roundGeneration;
 bool g_allowed[ResourceGroup_Count];
 char g_campaign[128];
 int g_meleePickups;
@@ -53,13 +57,17 @@ bool g_limitPassPending;
 #include "resource_rules/replacement.inc"
 #include "resource_rules/limits.inc"
 #include "resource_rules/distribution.inc"
+#include "resource_rules/weapon_rules.inc"
+#include "resource_rules/weapon_handling.inc"
+#include "resource_rules/saferoom_items.inc"
+#include "resource_rules/start_kits.inc"
 
 public Plugin myinfo =
 {
 	name = "Map Resource Rules",
 	author = "ProdigySim, norths7ar",
 	description = "Owns map supplies, weapon replacements and campaign resource exceptions.",
-	version = "2.0.0"
+	version = "2.1.0"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -73,13 +81,17 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
 public void OnPluginStart()
 {
 	g_rules = new StringMap();
+	g_replayedSupplies = new ArrayList();
 	InitPolicy();
 	g_mapEntries = new StringMap();
-	g_rulesFile = CreateConVar("resource_rules_file", "resource_rules.cfg", "Resource policy file relative to SourceMod configs.");
-	LoadRules();
+	g_rulesFile = CreateConVar("resource_rules_file", "", "Resource policy file relative to SourceMod configs; empty uses the existing framework cvars and weapon rules.");
+	FrameworkRules_Init();
+	WI_OnModuleStart();
+	SafeItems_Init();
+	StartKits_Init();
 	HookEvent("round_start", RoundStartCb, EventHookMode_PostNoCopy);
 	// A mode can load after round_start (or an administrator can reload it).
-	CreateTimer(0.3, RoundStartDelay, _, TIMER_FLAG_NO_MAPCHANGE);
+	BeginResourceRound();
 }
 
 public void OnMapStart()
@@ -87,6 +99,12 @@ public void OnMapStart()
 	g_roundReady = false;
 	g_configsReady = false;
 	g_limitPassPending = false;
+	g_roundSettled = false;
+	g_resourcesProcessed = false;
+	g_itemsProcessed = false;
+	g_startKitsProcessed = false;
+	g_replayingSupplies = false;
+	g_roundGeneration++;
 	g_mapEntries.Clear();
 	// The parsed map lump also retains duplicate output keys. Keep their
 	// association by Hammer ID when a static resource needs a new class.
@@ -97,6 +115,9 @@ public void OnMapStart()
 		if (entry.GetNextKey("hammerid", id, sizeof(id)) != -1) g_mapEntries.SetValue(id, i);
 		delete entry;
 	}
+	// SourceMod also calls OnMapStart for a late load, after OnPluginStart.
+	// Schedule this map's passes even if its round_start event already fired.
+	BeginResourceRound();
 }
 
 public void OnMapEnd()
@@ -104,6 +125,8 @@ public void OnMapEnd()
 	g_roundReady = false;
 	g_configsReady = false;
 	g_limitPassPending = false;
+	WI_OnMapEnd();
+	g_roundGeneration++;
 }
 
 public void OnConfigsExecuted()
@@ -111,20 +134,91 @@ public void OnConfigsExecuted()
 	LoadRules("", true);
 	UpdateCampaign();
 	g_configsReady = true;
-	if (g_roundReady) ScanResources();
+	PrepareResources();
+	FinishResources();
 }
 
 public void RoundStartCb(Event event, const char[] name, bool dontBroadcast)
 {
-	g_roundReady = false;
-	CreateTimer(0.3, RoundStartDelay, _, TIMER_FLAG_NO_MAPCHANGE);
+	BeginResourceRound();
 }
 
-public Action RoundStartDelay(Handle timer)
+void BeginResourceRound()
 {
+	g_replayedSupplies.Clear();
+	g_roundReady = false;
+	g_roundSettled = false;
+	g_resourcesProcessed = false;
+	g_itemsProcessed = false;
+	g_startKitsProcessed = false;
+	g_replayingSupplies = false;
+	g_roundGeneration++;
+	if (g_configsReady && !g_policyFile)
+	{
+		StartKits_RoundStart();
+		g_startKitsProcessed = true;
+	}
+	CreateTimer(0.3, RoundStartDelay, g_roundGeneration, TIMER_FLAG_NO_MAPCHANGE);
+	CreateTimer(1.0, RoundItemsDelay, g_roundGeneration, TIMER_FLAG_NO_MAPCHANGE);
+}
+
+public Action RoundStartDelay(Handle timer, int generation)
+{
+	if (generation != g_roundGeneration) return Plugin_Stop;
 	g_roundReady = true;
-	if (g_configsReady) ScanResources();
+	PrepareResources();
 	return Plugin_Stop;
+}
+
+public Action RoundItemsDelay(Handle timer, int generation)
+{
+	if (generation != g_roundGeneration) return Plugin_Stop;
+	g_roundSettled = true;
+	FinishResources();
+	return Plugin_Stop;
+}
+
+void PrepareResources()
+{
+	if (!g_configsReady || !g_roundReady || g_resourcesProcessed) return;
+	g_resourcesProcessed = true;
+	g_replayingSupplies = LGO_ItemTrackingWillReplay();
+	if (g_policyFile) ScanResources();
+	else
+	{
+		if (!g_startKitsProcessed) StartKits_RoundStart();
+		FrameworkRules_Scan();
+		WI_RoundStartLoop(null);
+	}
+}
+
+void FinishResources()
+{
+	if (!g_configsReady || !g_roundSettled || !g_resourcesProcessed || g_itemsProcessed) return;
+	g_itemsProcessed = true;
+	g_replayingSupplies = LGO_ItemTrackingWillReplay();
+	// A replay must restore supplies before category accounting. On the first
+	// round, selection precedes recording. These are deliberately opposite orders.
+	bool replay = g_replayingSupplies;
+	if (g_policyFile && !g_replayingSupplies) ApplyLimits(0);
+	else if (!g_policyFile) SafeItems_Run();
+	// Reconstructed items are already the final selection. Do not register our
+	// spawn hooks on them and send them through replacement/limiting again.
+	g_creating = true;
+	LGO_RunItemTracking(!g_policyFile);
+	g_creating = false;
+	g_replayingSupplies = false;
+	if (g_policyFile && replay) ApplyLimits(0);
+}
+
+public void LGO_OnItemReplayed(int entity)
+{
+	if (g_policyFile) g_replayedSupplies.Push(EntIndexToEntRef(entity));
+}
+
+bool IsReplayedSupply(int entity)
+{
+	return g_replayedSupplies.FindValue(EntIndexToEntRef(entity)) != -1;
 }
 
 void UpdateCampaign()
@@ -174,7 +268,7 @@ bool IsAllowed(const char[] name)
 
 public void OnEntityCreated(int entity, const char[] classname)
 {
-	if (g_creating || entity <= MaxClients) return;
+	if (!g_policyFile || g_creating || entity <= MaxClients) return;
 	if (strncmp(classname, "weapon_", 7) == 0 || strncmp(classname, "upgrade_", 8) == 0
 		|| strncmp(classname, "prop_", 5) == 0)
 	{
@@ -202,6 +296,7 @@ public void ProcessSpawnedResource(int reference)
 
 void ScanResources()
 {
+	if (!g_policyFile) return;
 	// Edict slots can have holes; entity count is not the highest valid index.
 	for (int entity = MaxClients + 1; entity < GetMaxEntities(); entity++)
 		if (IsValidEntity(entity)) ProcessResource(entity);

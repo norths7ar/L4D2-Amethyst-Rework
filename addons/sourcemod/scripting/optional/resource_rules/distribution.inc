@@ -6,6 +6,18 @@
 #define PF_CULL_LIMIT  3
 #define PF_NO_FLOW    -1
 
+float ResourceFlowFraction(int entity, float maxFlow)
+{
+    float origin[3];
+    GetEntPropVector(entity, Prop_Data, "m_vecAbsOrigin", origin);
+    Address nav = L4D_GetNearestNavArea(origin, 120.0, true, false, false, 2);
+    if (nav == Address_Null) nav = L4D2Direct_GetTerrorNavArea(origin);
+    float flow = nav != Address_Null ? L4D2Direct_GetTerrorNavAreaFlow(nav) : -1.0;
+    if (flow < 0.0) return -1.0;
+    float fraction = flow / maxFlow;
+    return fraction > 1.0 ? 1.0 : fraction;
+}
+
 bool ApplyDistribution(ArrayList hSpawns, ResourcePolicy policy, int[] reasons)
 {
     float fFlowMin = policy.flowMin, fFlowMax = policy.flowMax, fSep = policy.spacing;
@@ -25,7 +37,6 @@ bool ApplyDistribution(ArrayList hSpawns, ResourcePolicy policy, int[] reasons)
     }
 
     int entity;
-    float fOrigins[3];
 
     // Resolve each stored resource point to a flow fraction and apply the window.
     float[] fPct = new float[iCount];
@@ -33,23 +44,11 @@ bool ApplyDistribution(ArrayList hSpawns, ResourcePolicy policy, int[] reasons)
 
     for (int i = 0; i < iCount; i++) {
         entity = EntRefToEntIndex(hSpawns.Get(i));
-        GetEntPropVector(entity, Prop_Data, "m_vecAbsOrigin", fOrigins);
-
-        Address pNav = L4D_GetNearestNavArea(fOrigins, 120.0, true, false, false, 2);
-        if (pNav == Address_Null) {
-            pNav = L4D2Direct_GetTerrorNavArea(fOrigins);
-        }
-
-        float fFlow = (pNav != Address_Null) ? L4D2Direct_GetTerrorNavAreaFlow(pNav) : -1.0;
-        if (fFlow < 0.0) {
+        fPct[i] = ResourceFlowFraction(entity, fMaxFlowDist);
+        if (fPct[i] < 0.0) {
             fPct[i] = -1.0;
             iReason[i] = PF_NO_FLOW;
             continue;
-        }
-
-        fPct[i] = fFlow / fMaxFlowDist;
-        if (fPct[i] > 1.0) {
-            fPct[i] = 1.0;
         }
 
         if (fPct[i] < fFlowMin || fPct[i] > fFlowMax) {

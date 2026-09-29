@@ -3,6 +3,7 @@
 public void OnMapInit(const char[] mapName)
 {
 	LoadRules(mapName);
+	if (!g_policyFile) return; // Framework modes retain their Stripper generation rules.
 	// CurrentMission still describes the previous map during OnMapInit.
 	// Resolve the incoming BSP before applying campaign-scoped permissions.
 	ConVar mode = FindConVar("mp_gamemode");

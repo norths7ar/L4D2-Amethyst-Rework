@@ -251,6 +251,8 @@ void LoadRules(const char[] incomingMap = "", bool withMapInfo = false)
 
 	char file[PLATFORM_MAX_PATH], path[PLATFORM_MAX_PATH], map[128];
 	g_rulesFile.GetString(file, sizeof(file));
+	g_policyFile = file[0] != '\0';
+	if (!g_policyFile) return;
 	BuildPath(Path_SM, path, sizeof(path), "configs/%s", file);
 	KeyValues rules = new KeyValues("ResourceRules");
 	if (!rules.ImportFromFile(path)) SetFailState("Cannot read resource policy %s", path);

@@ -57,13 +57,37 @@ enum /*ItemNames*/
 enum struct ItemTracking
 {
     int IT_entity;
+    int IT_pickupCount;
+    int IT_spawnflags;
     float IT_origins;
     float IT_origins1;
     float IT_origins2;
     float IT_angles;
     float IT_angles1;
     float IT_angles2;
+    // Policy replay metadata belongs to the same spawn record, not another selector.
+    int IT_ref;
+    int IT_hammer;
+    int IT_parentRef;
+    int IT_parentHammer;
+    int IT_attachment;
+    MoveType IT_moveType;
+    char IT_class[64];
+    char IT_name[256];
+    char IT_model[PLATFORM_MAX_PATH];
+    char IT_parentName[256];
+    ArrayList IT_keys;
+    ArrayList IT_outputs;
 }
+
+enum struct IT_KeyValue
+{
+    char key[128];
+    char value[2048];
+}
+
+static GlobalForward g_hItemReplayed;
+static bool g_bItemPolicySnapshot;
 
 static const char g_sItemNames[ItemList_Size][ItemNames_Size][] =
 {
@@ -118,6 +142,9 @@ static int
 static bool
     g_bIsRound1Over = false; // Is round 1 over?
 
+static bool g_bItemSnapshotValid;
+static bool g_bItemRoundProcessed;
+
 static ConVar
     g_hCvarEnabled = null,
     g_hSurvivorLimit = null,
@@ -140,8 +167,56 @@ static ArrayList
 static StringMap
     g_hItemListTrie = null;
 
+void IT_APL()
+{
+    CreateNative("LGO_RunItemTracking", Native_RunItemTracking);
+    CreateNative("LGO_ItemTrackingWillReplay", Native_ItemTrackingWillReplay);
+}
+
+static bool IT_WillReplay()
+{
+    return IsModuleEnabled() && g_bItemSnapshotValid && g_bIsRound1Over && g_hCvarConsistentSpawns.BoolValue;
+}
+
+static int Native_ItemTrackingWillReplay(Handle plugin, int numParams)
+{
+    return IT_WillReplay();
+}
+
+static int Native_RunItemTracking(Handle plugin, int numParams)
+{
+    return IT_Run(GetNativeCell(1) != 0);
+}
+
+static bool IT_Run(bool applyLimits)
+{
+    if (!IsModuleEnabled() || g_bItemRoundProcessed) return false;
+    // A policy-file caller already selected its supplies. With replay disabled,
+    // there is no reason to enumerate or alter that result a second time.
+    if (!applyLimits && !g_hCvarConsistentSpawns.BoolValue) return false;
+    if (IT_WillReplay() && g_bItemPolicySnapshot == applyLimits) {
+        LogError("[%s] Snapshot mode changed; refusing incompatible replay.", IT_MODULE_NAME);
+        return false;
+    }
+    g_bItemRoundProcessed = true;
+    g_iSaferoomCount[START_SAFEROOM - 1] = 0;
+    g_iSaferoomCount[END_SAFEROOM - 1] = 0;
+    if (IT_WillReplay()) {
+        if (!applyLimits) return IT_ReplayPolicy();
+        GenerateStoredSpawns();
+    } else {
+        g_bItemSnapshotValid = true;
+        g_bItemPolicySnapshot = !applyLimits;
+        if (applyLimits) EnumAndElimSpawns();
+        else EnumerateSpawns(false);
+        return g_bItemSnapshotValid;
+    }
+    return true;
+}
+
 void IT_OnModuleStart()
 {
+    g_hItemReplayed = new GlobalForward("LGO_OnItemReplayed", ET_Ignore, Param_Cell);
     g_hCvarEnabled = CreateConVarEx("enable_itemtracking", "0", "Enable the itemtracking module", _, true, 0.0, true, 1.0);
     g_hCvarConsistentSpawns = CreateConVarEx("itemtracking_savespawns", "0", "Keep item spawns the same on both rounds", _, true, 0.0, true, 1.0);
     g_hCvarMapSpecificSpawns = CreateConVarEx("itemtracking_mapspecific", "0", "Change how mapinfo.txt overrides work. 0 = ignore mapinfo.txt, 1 = allow limit reduction, 2 = allow limit increases.", _, true, 0.0, true, 3.0);
@@ -182,6 +257,7 @@ void IT_OnModuleStart()
 
 void IT_OnMapStart()
 {
+    IT_ClearSpawns();
     for (int i = 0; i < ItemList_Size; i++) {
         g_iItemLimits[i] = g_hCvarLimits[i].IntValue;
     }
@@ -208,6 +284,8 @@ void IT_OnMapStart()
     }
 
     g_bIsRound1Over = false;
+    g_bItemSnapshotValid = false;
+    g_bItemRoundProcessed = false;
 }
 
 static void _IT_RoundEndEvent(Event hEvent, const char[] sEventName, bool bDontBroadcast)
@@ -217,6 +295,7 @@ static void _IT_RoundEndEvent(Event hEvent, const char[] sEventName, bool bDontB
 
 static void _IT_RoundStartEvent(Event hEvent, const char[] sEventName, bool bDontBroadcast)
 {
+    g_bItemRoundProcessed = false;
     g_iSaferoomCount[START_SAFEROOM - 1] = 0;
     g_iSaferoomCount[END_SAFEROOM - 1] = 0;
 
@@ -235,21 +314,10 @@ static void _IT_RoundStartEvent(Event hEvent, const char[] sEventName, bool bDon
 
 static Action IT_RoundStartTimer(Handle hTimer)
 {
-    if (!g_bIsRound1Over) {
-        // Round1
-        if (IsModuleEnabled()) {
-            EnumAndElimSpawns();
-        }
-    } else {
-        // Round2
-        if (IsModuleEnabled()) {
-            if (g_hCvarConsistentSpawns.BoolValue) {
-                GenerateStoredSpawns();
-            } else {
-                EnumAndElimSpawns();
-            }
-        }
-    }
+    // The shared resource plugin runs this module after its replacements and
+    // saferoom cleanup. Do not race it with a second, timer-owned pass.
+    if (LibraryExists("resource_rules")) return Plugin_Stop;
+    IT_Run(true);
 
     return Plugin_Stop;
 }
@@ -265,13 +333,13 @@ static void EnumAndElimSpawns()
     RemoveToLimits();
 }
 
-static void GenerateStoredSpawns()
+static void GenerateStoredSpawns(bool applyLimits = true)
 {
-    KillRegisteredItems();
+    KillRegisteredItems(applyLimits);
     SpawnItems();
 
     // Repaint glows on the respawned entities.
-    if (g_hCvarPillFlowVisualize.IntValue > 0) {
+    if (applyLimits && g_hCvarPillFlowVisualize.IntValue > 0) {
         ApplyPillFlowFilter();
     }
 }
@@ -310,9 +378,9 @@ static void CreateItemListTrie()
     g_hItemListTrie.SetValue("weapon_vomitjar", IL_VomitJar);
 }
 
-static void KillRegisteredItems()
+static void KillRegisteredItems(bool applyLimits = true)
 {
-    int itemindex = 0, psychonic = GetEntityCount();
+    int itemindex = 0, psychonic = applyLimits ? GetEntityCount() : GetMaxEntities() - 1;
     int iSurvivorLimit = g_hSurvivorLimit.IntValue;
     bool bKeepPlayerItems = g_hCvarIgnorePlayerItems.BoolValue;
 
@@ -323,9 +391,12 @@ static void KillRegisteredItems()
 
         itemindex = GetItemIndexFromEntity(i);
         if (itemindex >= 0/* && !IsEntityInSaferoom(i)*/) {
-            if (IsEntityInSaferoom(i, START_SAFEROOM) && g_iSaferoomCount[START_SAFEROOM - 1] < iSurvivorLimit) {
+            if (!applyLimits && HasEntProp(i, Prop_Send, "m_hOwnerEntity") && GetEntPropEnt(i, Prop_Send, "m_hOwnerEntity") > 0) {
+                continue;
+            }
+            if (applyLimits && IsEntityInSaferoom(i, START_SAFEROOM) && g_iSaferoomCount[START_SAFEROOM - 1] < iSurvivorLimit) {
                 g_iSaferoomCount[START_SAFEROOM - 1]++;
-            } else if (IsEntityInSaferoom(i, END_SAFEROOM) && g_iSaferoomCount[END_SAFEROOM - 1] < iSurvivorLimit) {
+            } else if (applyLimits && IsEntityInSaferoom(i, END_SAFEROOM) && g_iSaferoomCount[END_SAFEROOM - 1] < iSurvivorLimit) {
                 g_iSaferoomCount[END_SAFEROOM - 1]++;
             } else {
                 // Kill items we're tracking;
@@ -374,9 +445,10 @@ static void SpawnItems()
 
             SetEntProp(itement, Prop_Send, "m_weaponID", wepid);
             SetEntityModel(itement, sModelname);
-            DispatchKeyValue(itement, "count", "1");
+            DispatchKeyValueInt(itement, "count", curitem.IT_pickupCount);
+            DispatchKeyValueInt(itement, "spawnflags", curitem.IT_spawnflags);
             TeleportEntity(itement, origins, angles, NULL_VECTOR);
-            DispatchSpawn(itement);
+            bool spawned = DispatchSpawn(itement);
             SetEntityMoveType(itement, MOVETYPE_NONE);
 
             /*
@@ -386,25 +458,24 @@ static void SpawnItems()
             */
             curitem.IT_entity = itement;
             g_hItemSpawns[itemidx].SetArray(idx, curitem, sizeof(curitem));
+            if (spawned && IsValidEntity(itement)) IT_NotifyReplayed(itement);
         }
     }
 }
 
-static void EnumerateSpawns()
+static void EnumerateSpawns(bool applyLimits = true)
 {
     /*
         Start every enumeration from a clean slate.
         Without this, configs running savespawns 0 stack round-2 entries on round-1 leftovers
         and mapspecific 0 leaks spawns across maps (OnMapStart only clears when mapspecific != 0)
     */
-    for (int i = 0; i < ItemList_Size; i++) {
-        g_hItemSpawns[i].Clear();
-    }
+    IT_ClearSpawns();
 
     ItemTracking curitem;
 
     float origins[3], angles[3];
-    int itemindex = 0, psychonic = GetEntityCount();
+    int itemindex = 0, psychonic = applyLimits ? GetEntityCount() : GetMaxEntities() - 1;
     int iSurvivorLimit = g_hSurvivorLimit.IntValue;
 
     for (int i = (MaxClients + 1); i <= psychonic; i++) {
@@ -414,7 +485,13 @@ static void EnumerateSpawns()
 
         itemindex = GetItemIndexFromEntity(i);
         if (itemindex >= 0/* && !IsEntityInSaferoom(i)*/) {
-            if (IsEntityInSaferoom(i, START_SAFEROOM)) {
+            if (!applyLimits && IT_IsHeld(i)) {
+                continue;
+            }
+            if (!applyLimits && HasEntProp(i, Prop_Data, "m_itemCount") && GetEntProp(i, Prop_Data, "m_itemCount") <= 0) {
+                continue;
+            }
+            if (applyLimits && IsEntityInSaferoom(i, START_SAFEROOM)) {
                 if (g_iSaferoomCount[START_SAFEROOM - 1] < iSurvivorLimit) {
                     g_iSaferoomCount[START_SAFEROOM - 1]++;
                 } else {
@@ -423,7 +500,7 @@ static void EnumerateSpawns()
                         Debug_LogError(IT_MODULE_NAME, "Error killing instance of item %s", g_sItemNames[itemindex][IN_longname]);
                     }*/
                 }
-            } else if (IsEntityInSaferoom(i, END_SAFEROOM)) {
+            } else if (applyLimits && IsEntityInSaferoom(i, END_SAFEROOM)) {
                 if (g_iSaferoomCount[END_SAFEROOM - 1] < iSurvivorLimit) {
                     g_iSaferoomCount[END_SAFEROOM - 1]++;
                 } else {
@@ -433,7 +510,7 @@ static void EnumerateSpawns()
                     }*/
                 }
             } else {
-                int mylimit = g_iItemLimits[itemindex];
+                int mylimit = applyLimits ? g_iItemLimits[itemindex] : -1;
                 if (IsDebugEnabled()) {
                     LogMessage("[%s] Found an instance of item %s (%d), with limit %d", IT_MODULE_NAME, g_sItemNames[itemindex][IN_longname], itemindex, mylimit);
                 }
@@ -451,6 +528,10 @@ static void EnumerateSpawns()
                 } else {
                     // Store entity, angles, origin
                     curitem.IT_entity = i;
+                    // The framework path retains its original one-pickup replay.
+                    // A policy-file snapshot preserves its already-normalized count.
+                    curitem.IT_pickupCount = !applyLimits && HasEntProp(i, Prop_Data, "m_itemCount") ? GetEntProp(i, Prop_Data, "m_itemCount") : 1;
+                    curitem.IT_spawnflags = !applyLimits && HasEntProp(i, Prop_Data, "m_spawnflags") ? GetEntProp(i, Prop_Data, "m_spawnflags") : 0;
 
                     GetEntPropVector(i, Prop_Send, "m_vecOrigin", origins);
                     GetEntPropVector(i, Prop_Send, "m_angRotation", angles);
@@ -462,12 +543,308 @@ static void EnumerateSpawns()
                     SetSpawnOrigins(origins, curitem);
                     SetSpawnAngles(angles, curitem);
 
+                    if (!applyLimits && !IT_CapturePolicy(i, curitem)) {
+                        LogError("[%s] Cannot preserve policy entity %d; snapshot replay disabled for this round.", IT_MODULE_NAME, i);
+                        g_bItemSnapshotValid = false;
+                    }
+
                     // Push this instance onto our array for that item
                     g_hItemSpawns[itemindex].PushArray(curitem, sizeof(curitem));
                 }
             }
         }
     }
+}
+
+static void IT_NotifyReplayed(int entity)
+{
+    Call_StartForward(g_hItemReplayed);
+    Call_PushCell(entity);
+    Call_Finish();
+}
+
+static void IT_ClearSpawns()
+{
+    ItemTracking item;
+    for (int type = 0; type < ItemList_Size; type++) {
+        for (int i = 0; i < g_hItemSpawns[type].Length; i++) {
+            g_hItemSpawns[type].GetArray(i, item, sizeof(item));
+            delete item.IT_keys;
+            delete item.IT_outputs;
+        }
+        g_hItemSpawns[type].Clear();
+    }
+}
+
+static bool IT_IsHeld(int entity)
+{
+    return (HasEntProp(entity, Prop_Send, "m_hOwnerEntity") && GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity") > 0)
+        || (HasEntProp(entity, Prop_Send, "m_hOwner") && GetEntPropEnt(entity, Prop_Send, "m_hOwner") > 0);
+}
+
+static int IT_HammerID(int entity)
+{
+    return HasEntProp(entity, Prop_Data, "m_iHammerID") ? GetEntProp(entity, Prop_Data, "m_iHammerID") : 0;
+}
+
+static bool IT_CapturePolicy(int entity, ItemTracking item)
+{
+    IT_KeyValue pair;
+    item.IT_keys = new ArrayList(sizeof(pair));
+    item.IT_outputs = new ArrayList(sizeof(pair));
+    item.IT_ref = EntIndexToEntRef(entity);
+    item.IT_hammer = IT_HammerID(entity);
+    item.IT_moveType = GetEntityMoveType(entity);
+    GetEntityClassname(entity, item.IT_class, sizeof(item.IT_class));
+    GetEntPropString(entity, Prop_Data, "m_iName", item.IT_name, sizeof(item.IT_name));
+    GetEntPropString(entity, Prop_Data, "m_ModelName", item.IT_model, sizeof(item.IT_model));
+    if (strlen(item.IT_name) == sizeof(item.IT_name) - 1 || strlen(item.IT_model) == sizeof(item.IT_model) - 1) return false;
+    int parent = GetEntPropEnt(entity, Prop_Data, "m_hMoveParent");
+    item.IT_parentRef = INVALID_ENT_REFERENCE;
+    item.IT_parentHammer = 0;
+    item.IT_parentName[0] = '\0';
+    item.IT_attachment = GetEntProp(entity, Prop_Send, "m_iParentAttachment");
+    if (parent > 0) {
+        item.IT_parentRef = EntIndexToEntRef(parent);
+        item.IT_parentHammer = IT_HammerID(parent);
+        GetEntPropString(parent, Prop_Data, "m_iName", item.IT_parentName, sizeof(item.IT_parentName));
+        if (strlen(item.IT_parentName) == sizeof(item.IT_parentName) - 1) return false;
+    }
+
+    StringMap outputs = new StringMap();
+    static const char common[][] = {"OnUser1", "OnUser2", "OnUser3", "OnUser4", "OnPlayerPickup", "OnNPCPickup", "OnPlayerUse", "OnItemSpawn", "OnItemSpawned", "OnCacheInteraction"};
+    for (int i = 0; i < sizeof(common); i++) outputs.SetValue(common[i], 1);
+    // Read the effective lump (including generation-time edits), as RR does.
+    if (item.IT_hammer > 0) {
+        bool found = false;
+        for (int i = 0; i < EntityLump.Length(); i++) {
+            EntityLumpEntry entry = EntityLump.Get(i);
+            char id[24];
+            entry.GetNextKey("hammerid", id, sizeof(id));
+            if (StringToInt(id) != item.IT_hammer) { delete entry; continue; }
+            found = true;
+            for (int k = 0; k < entry.Length; k++) {
+                entry.Get(k, pair.key, sizeof(pair.key), pair.value, sizeof(pair.value));
+                if (strlen(pair.key) == sizeof(pair.key) - 1 || strlen(pair.value) == sizeof(pair.value) - 1) {
+                    delete entry;
+                    delete outputs;
+                    return false;
+                }
+                if (strncmp(pair.key, "On", 2) == 0) outputs.SetValue(pair.key, 1);
+                else item.IT_keys.PushArray(pair, sizeof(pair));
+            }
+            delete entry;
+            break;
+        }
+        if (!found) { delete outputs; return false; }
+    }
+    StringMapSnapshot names = outputs.Snapshot();
+    bool ok = true;
+    for (int i = 0; i < names.Length && ok; i++) {
+        names.GetKey(i, pair.key, sizeof(pair.key));
+        // Script source contains identifiers and integers only, never map values.
+        for (int j = 0; pair.key[j]; j++) {
+            if (!IsCharAlpha(pair.key[j]) && !IsCharNumeric(pair.key[j]) && pair.key[j] != '_') ok = false;
+        }
+        if (!ok) break;
+        char code[1006], result[32];
+        FormatEx(code, sizeof(code), "local e=EntIndexToHScript(%d); <RETURN>EntityOutputs.HasAction(e,\"%s\") ? EntityOutputs.GetNumElements(e,\"%s\") : 0</RETURN>", entity, pair.key, pair.key);
+        if (!L4D2_GetVScriptOutput(code, result, sizeof(result))) { ok = false; break; }
+        int count = StringToInt(result);
+        for (int k = 0; k < count; k++) {
+            // ESC separates output fields without interpreting commas in parameters.
+            // Reject unrepresentable values rather than silently truncating a contract.
+            FormatEx(code, sizeof(code), "local t={}; EntityOutputs.GetOutputTable(EntIndexToHScript(%d),\"%s\",t,%d); local s=(27).tochar(); local v=t.target+s+t.input+s+t.parameter+s+t.delay+s+t.times_to_fire; <RETURN>(t.target.find(s)!=null || t.input.find(s)!=null || t.parameter.find(s)!=null || t.target.len()>255 || t.input.len()>255 || t.parameter.len()>255 || t.input.len()==0 || t.times_to_fire==0 || v.len()>2046) ? \"!\" : \"+\"+v</RETURN>", entity, pair.key, k);
+            char value[2049];
+            if (!L4D2_GetVScriptOutput(code, value, sizeof(value)) || value[0] != '+') { ok = false; break; }
+            strcopy(pair.value, sizeof(pair.value), value[1]);
+            item.IT_outputs.PushArray(pair, sizeof(pair));
+        }
+    }
+    delete names;
+    delete outputs;
+    return ok;
+}
+
+// Resolve stable identity first. Ambiguous identities must not bind to an arbitrary
+// entity (notably duplicate targetnames and template-generated Hammer IDs).
+static int IT_FindIdentity(int ref, int hammer, const char[] name)
+{
+    int entity = EntRefToEntIndex(ref);
+    if (entity > MaxClients && IsValidEntity(entity)) return entity;
+    int found = -1;
+    for (int i = MaxClients + 1; i < GetMaxEntities(); i++) {
+        if (!IsValidEntity(i)) continue;
+        if (hammer > 0) {
+            if (IT_HammerID(i) != hammer) continue;
+        } else {
+            if (!name[0]) continue;
+            char targetname[256];
+            GetEntPropString(i, Prop_Data, "m_iName", targetname, sizeof(targetname));
+            if (!StrEqual(targetname, name)) continue;
+        }
+        if (found != -1) return -2;
+        found = i;
+    }
+    return found;
+}
+
+static int IT_FindPolicyItem(const ItemTracking item, const bool[] used)
+{
+    int entity = IT_FindIdentity(item.IT_ref, item.IT_hammer, item.IT_name);
+    if (entity != -1) return entity;
+    // Unnamed director/script items have no stable map identity. Match the saved
+    // class and local transform, one-to-one, rather than trusting a recycled index.
+    if (item.IT_hammer > 0 || item.IT_name[0]) return -1;
+    float origin[3], saved[3];
+    GetSpawnOrigins(saved, item);
+    for (int i = MaxClients + 1; i < GetMaxEntities(); i++) {
+        if (used[i] || !IsValidEdict(i) || IT_IsHeld(i)) continue;
+        char classname[64];
+        GetEntityClassname(i, classname, sizeof(classname));
+        if (!StrEqual(classname, item.IT_class)) continue;
+        GetEntPropVector(i, Prop_Send, "m_vecOrigin", origin);
+        if (GetVectorDistance(origin, saved) < 0.1) return i;
+    }
+    return -1;
+}
+
+static int IT_RespawnPolicy(const ItemTracking item, int type, int parent)
+{
+    int entity = CreateEntityByName(item.IT_class);
+    if (entity == -1) return -1;
+    IT_KeyValue pair;
+    for (int i = 0; i < item.IT_keys.Length; i++) {
+        item.IT_keys.GetArray(i, pair, sizeof(pair));
+        // Live policy state below supersedes original generation settings.
+        if (StrEqual(pair.key, "classname") || StrEqual(pair.key, "origin") || StrEqual(pair.key, "angles")
+            || StrEqual(pair.key, "parentname") || StrEqual(pair.key, "model") || StrEqual(pair.key, "weapon_selection")) continue;
+        DispatchKeyValue(entity, pair.key, pair.value);
+    }
+    DispatchKeyValue(entity, "targetname", item.IT_name);
+    DispatchKeyValueInt(entity, "hammerid", item.IT_hammer);
+    DispatchKeyValueInt(entity, "count", item.IT_pickupCount);
+    DispatchKeyValueInt(entity, "spawnflags", item.IT_spawnflags);
+    if (StrEqual(item.IT_class, "weapon_spawn")) {
+        char selection[80];
+        FormatEx(selection, sizeof(selection), "weapon_%s", g_sItemNames[type][IN_officialname]);
+        DispatchKeyValue(entity, "weapon_selection", selection);
+        DispatchKeyValueInt(entity, "spawn_without_director", 1);
+    }
+    if (StrEqual(item.IT_class, "weapon_item_spawn")) {
+        // Recreate the selected result, not a fresh director lottery. Keep the
+        // original class and restore its saved flags after forced generation.
+        static const int choices[ItemList_Size] = {4, 11, 5, 3, 13};
+        for (int i = 1; i <= 18; i++) {
+            char key[16];
+            FormatEx(key, sizeof(key), "item%d", i);
+            DispatchKeyValueInt(entity, key, i == choices[type] ? 1 : 0);
+        }
+        DispatchKeyValueInt(entity, "spawnflags", item.IT_spawnflags | 2);
+    }
+    // Engine output parsing prepends actions. Restore in reverse to retain their
+    // firing order, including output names supplied by the map.
+    for (int i = item.IT_outputs.Length - 1; i >= 0; i--) {
+        item.IT_outputs.GetArray(i, pair, sizeof(pair));
+        if (!DispatchKeyValue(entity, pair.key, pair.value)) { RemoveEntity(entity); return -1; }
+    }
+    float origin[3], angles[3];
+    GetSpawnOrigins(origin, item);
+    GetSpawnAngles(angles, item);
+    TeleportEntity(entity, origin, angles, NULL_VECTOR);
+    bool spawned = DispatchSpawn(entity);
+    if (!IsValidEntity(entity)) return -1;
+    if (!spawned) { RemoveEntity(entity); return -1; }
+    if (parent > 0) {
+        SetVariantString("!activator");
+        if (!AcceptEntityInput(entity, "SetParent", parent)) { RemoveEntity(entity); return -1; }
+        SetEntProp(entity, Prop_Send, "m_iParentAttachment", item.IT_attachment);
+        // These are local coordinates when parented; TeleportEntity uses world.
+        SetEntPropVector(entity, Prop_Send, "m_vecOrigin", origin);
+        SetEntPropVector(entity, Prop_Send, "m_angRotation", angles);
+    }
+    SetEntityMoveType(entity, item.IT_moveType);
+    if (item.IT_model[0]) {
+        PrecacheModel(item.IT_model);
+        SetEntityModel(entity, item.IT_model);
+    }
+    if (HasEntProp(entity, Prop_Send, "m_weaponID")) SetEntProp(entity, Prop_Send, "m_weaponID", GetWeaponIDFromItemList(type));
+    if (HasEntProp(entity, Prop_Data, "m_itemCount")) SetEntProp(entity, Prop_Data, "m_itemCount", item.IT_pickupCount);
+    if (HasEntProp(entity, Prop_Data, "m_spawnflags")) SetEntProp(entity, Prop_Data, "m_spawnflags", item.IT_spawnflags);
+    return entity;
+}
+
+static bool IT_ReplayPolicy()
+{
+    if (!g_bItemPolicySnapshot) {
+        LogError("[%s] Cannot replay a framework snapshot as policy items.", IT_MODULE_NAME);
+        return false;
+    }
+    bool[] used = new bool[GetMaxEntities()];
+    // Freeze the cleanup set before creating anything (spawn outputs may create
+    // other resources); entrefs prevent deleting a newly recycled entity slot.
+    ArrayList candidates = new ArrayList();
+    for (int i = MaxClients + 1; i < GetMaxEntities(); i++) {
+        if (IsValidEdict(i) && !IT_IsHeld(i) && GetItemIndexFromEntity(i) >= 0) candidates.Push(EntIndexToEntRef(i));
+    }
+    bool ok = true;
+    ItemTracking item;
+    for (int type = 0; type < ItemList_Size; type++) {
+        for (int i = 0; i < g_hItemSpawns[type].Length; i++) {
+            g_hItemSpawns[type].GetArray(i, item, sizeof(item));
+            int entity = IT_FindPolicyItem(item, used);
+            if (entity == -2 || (entity > 0 && (used[entity] || IT_IsHeld(entity)))) {
+                LogError("[%s] Ambiguous or held replay entity (Hammer ID %d); retaining current resources.", IT_MODULE_NAME, item.IT_hammer);
+                ok = false;
+                continue;
+            }
+            char classname[64];
+            if (entity > 0) GetEntityClassname(entity, classname, sizeof(classname));
+            bool reuse = entity > 0 && StrEqual(classname, item.IT_class)
+                && (GetItemIndexFromEntity(entity) == type || StrEqual(classname, "weapon_spawn") || StrEqual(classname, "weapon_item_spawn"));
+            if (!reuse) {
+                int parent = -1;
+                if (item.IT_parentRef != INVALID_ENT_REFERENCE) {
+                    parent = IT_FindIdentity(item.IT_parentRef, item.IT_parentHammer, item.IT_parentName);
+                    if (parent < 1) {
+                        LogError("[%s] Missing/ambiguous parent for replay Hammer ID %d; retaining current resources.", IT_MODULE_NAME, item.IT_hammer);
+                        ok = false;
+                        continue;
+                    }
+                }
+                int created = IT_RespawnPolicy(item, type, parent);
+                if (created == -1) {
+                    LogError("[%s] Cannot restore %s (Hammer ID %d); retaining current resources.", IT_MODULE_NAME, item.IT_class, item.IT_hammer);
+                    ok = false;
+                    continue;
+                }
+                if (entity > 0) RemoveEntity(entity);
+                entity = created;
+            } else {
+                // Do not respawn, reparent, or overwrite outputs on a live map item.
+                // Only restore the policy-owned selection/count/flags.
+                if (HasEntProp(entity, Prop_Data, "m_itemCount")) SetEntProp(entity, Prop_Data, "m_itemCount", item.IT_pickupCount);
+                if (HasEntProp(entity, Prop_Data, "m_spawnflags")) SetEntProp(entity, Prop_Data, "m_spawnflags", item.IT_spawnflags);
+                if (StrEqual(classname, "weapon_spawn") || StrEqual(classname, "weapon_item_spawn")) {
+                    SetEntProp(entity, Prop_Send, "m_weaponID", GetWeaponIDFromItemList(type));
+                    if (item.IT_model[0]) SetEntityModel(entity, item.IT_model);
+                }
+            }
+            used[entity] = true;
+            item.IT_entity = entity;
+            item.IT_ref = EntIndexToEntRef(entity);
+            g_hItemSpawns[type].SetArray(i, item, sizeof(item));
+            IT_NotifyReplayed(entity);
+        }
+    }
+    if (ok) {
+        for (int i = 0; i < candidates.Length; i++) {
+            int entity = EntRefToEntIndex(candidates.Get(i));
+            if (entity > MaxClients && !used[entity] && !IT_IsHeld(entity)) RemoveEntity(entity);
+        }
+    }
+    delete candidates;
+    return ok;
 }
 
 static void RemoveToLimits()

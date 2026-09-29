@@ -1,13 +1,20 @@
-#if defined __weapon_information_included
+// Migrated from Confogl WeaponInformation (Confogl Team, GPL-3.0-or-later).
+// The framework profile calls WI_RoundStartLoop after fixed weapon rules.
+#if defined _resource_rules_weapon_handling_included
 	#endinput
 #endif
-#define __weapon_information_included
+#define _resource_rules_weapon_handling_included
 
 #define DEBUG_WI							0
 
-#if (DEBUG_ALL)
-	#define DEBUG_WI						1
+#if defined DEBUG_ALL
+	#if (DEBUG_ALL)
+		#undef DEBUG_WI
+		#define DEBUG_WI 1
+	#endif
 #endif
+
+#define WI_MAX_ENTITY_NAME_LENGTH 64
 
 #define WI_MODULE_NAME						"WepInfo"
 
@@ -561,7 +568,6 @@ void WI_OnModuleStart()
 {
 	WI_Convar_Setup();
 
-	HookEvent("round_start", WI_RoundStart_Event, EventHookMode_PostNoCopy);
 	HookEvent("round_end", WI_RoundEnd_Event, EventHookMode_PostNoCopy);
 	HookEvent("spawner_give_item", WI_SpawnerGiveItem_Event);
 }
@@ -576,23 +582,23 @@ void WI_OnMapEnd()
 //====================================================
 static void WI_Convar_Setup()
 {
-	Weapon_hEnabled = CreateConVarEx("enable_weaponhandling", "1", "Enable legacy weapon and medkit processing", _, true, 0.0, true, 1.0);
+	Weapon_hEnabled = CreateConVar("confogl_enable_weaponhandling", "1", "Enable legacy weapon and medkit processing", _, true, 0.0, true, 1.0);
 	// Opt-in for Coop modes that remove map medkits, including direct item entities.
-	Weapon_hRemoveDirectKits = CreateConVarEx("remove_directkits", "0", "Remove unowned direct medkit entities during the round-start item scan", _, true, 0.0, true, 1.0);
-	Weapon_hConvar[WEAPON_SMG_MP5_INDEX] = CreateConVarEx("replace_cssweapons", "1", "Replace CSS weapons with normal L4D2 weapons", _, true, 0.0, true, 1.0);
+	Weapon_hRemoveDirectKits = CreateConVar("confogl_remove_directkits", "0", "Remove unowned direct medkit entities during the round-start item scan", _, true, 0.0, true, 1.0);
+	Weapon_hConvar[WEAPON_SMG_MP5_INDEX] = CreateConVar("confogl_replace_cssweapons", "1", "Replace CSS weapons with normal L4D2 weapons", _, true, 0.0, true, 1.0);
 
 	Weapon_hConvar[WEAPON_RIFLE_SG552_INDEX] = Weapon_hConvar[WEAPON_SMG_MP5_INDEX];
 	Weapon_hConvar[WEAPON_SNIPER_AWP_INDEX] = Weapon_hConvar[WEAPON_SMG_MP5_INDEX];
 	Weapon_hConvar[WEAPON_SNIPER_SCOUT_INDEX] = Weapon_hConvar[WEAPON_SMG_MP5_INDEX];
 
-	Weapon_hConvar[WEAPON_GRENADE_LAUNCHER_INDEX] = CreateConVarEx("remove_grenade", "1", "Remove all grenade launchers", _, true, 0.0, true, 1.0);
-	Weapon_hConvar[WEAPON_CHAINSAW_INDEX] = CreateConVarEx("remove_chainsaw", "1", "Remove all chainsaws", _, true, 0.0, true, 1.0);
-	Weapon_hConvar[WEAPON_RIFLE_M60_INDEX] = CreateConVarEx("remove_m60", "1", "Remove all M60 rifles", _, true, 0.0, true, 1.0);
+	Weapon_hConvar[WEAPON_GRENADE_LAUNCHER_INDEX] = CreateConVar("confogl_remove_grenade", "1", "Remove all grenade launchers", _, true, 0.0, true, 1.0);
+	Weapon_hConvar[WEAPON_CHAINSAW_INDEX] = CreateConVar("confogl_remove_chainsaw", "1", "Remove all chainsaws", _, true, 0.0, true, 1.0);
+	Weapon_hConvar[WEAPON_RIFLE_M60_INDEX] = CreateConVar("confogl_remove_m60", "1", "Remove all M60 rifles", _, true, 0.0, true, 1.0);
 
-	Weapon_hConvar[WEAPON_FIRST_AID_KIT_INDEX] = CreateConVarEx("remove_statickits", "1", "Remove all static medkits (medkits such as the gun shop, these are compiled into the map)", _, true, 0.0, true, 1.0);
-	Weapon_hConvar[WEAPON_DEFIBRILLATOR_INDEX] = CreateConVarEx("remove_defib", "1", "Remove all defibrillators", _, true, 0.0, true, 1.0);
-	Weapon_hConvar[WEAPON_UPG_EXPLOSIVE_INDEX] = CreateConVarEx("remove_upg_explosive", "1", "Remove all explosive upgrade packs", _, true, 0.0, true, 1.0);
-	Weapon_hConvar[WEAPON_UPG_INCENDIARY_INDEX] = CreateConVarEx("remove_upg_incendiary", "1", "Remove all incendiary upgrade packs", _, true, 0.0, true, 1.0);
+	Weapon_hConvar[WEAPON_FIRST_AID_KIT_INDEX] = CreateConVar("confogl_remove_statickits", "1", "Remove all static medkits (medkits such as the gun shop, these are compiled into the map)", _, true, 0.0, true, 1.0);
+	Weapon_hConvar[WEAPON_DEFIBRILLATOR_INDEX] = CreateConVar("confogl_remove_defib", "1", "Remove all defibrillators", _, true, 0.0, true, 1.0);
+	Weapon_hConvar[WEAPON_UPG_EXPLOSIVE_INDEX] = CreateConVar("confogl_remove_upg_explosive", "1", "Remove all explosive upgrade packs", _, true, 0.0, true, 1.0);
+	Weapon_hConvar[WEAPON_UPG_INCENDIARY_INDEX] = CreateConVar("confogl_remove_upg_incendiary", "1", "Remove all incendiary upgrade packs", _, true, 0.0, true, 1.0);
 
 	for (int index = FIRST_WEAPON; index < NUM_OF_WEAPONS; index++) {
 		if (Weapon_hConvar[index] == null) {
@@ -603,17 +609,17 @@ static void WI_Convar_Setup()
 		Weapon_hConvar[index].AddChangeHook(WI_ConvarChange);
 	}
 
-	Weapon_hReplaceTier2 = CreateConVarEx("replace_tier2", "1", "Replace tier 2 weapons in start and end safe room with their tier 1 equivalent", _, true, 0.0, true, 1.0);
-	Weapon_hReplaceTier2_Finale = CreateConVarEx("replace_tier2_finale", "1", "Replace tier 2 weapons in start safe room with their tier 1 equivalent, on finale", _, true, 0.0, true, 1.0);
-	Weapon_hReplaceTier2_All = CreateConVarEx("replace_tier2_all", "1", "Replace ALL tier 2 weapons with their tier 1 equivalent EVERYWHERE", _, true, 0.0, true, 1.0);
-	Weapon_hLimitTier2 = CreateConVarEx("limit_tier2", "1", "Limit tier 2 weapons outside safe rooms. Replaces a tier 2 stack with tier 1 upon first weapon pickup", _, true, 0.0, true, 1.0);
-	Weapon_hLimitTier2_Safehouse = CreateConVarEx("limit_tier2_saferoom", "1", "Limit tier 2 weapons inside safe rooms. Replaces a tier 2 stack with tier 1 upon first weapon pickup", _, true, 0.0, true, 1.0);
-	Weapon_hReplaceStartKits = CreateConVarEx("replace_startkits", "1", "Replaces start medkits with pills", _, true, 0.0, true, 1.0);
-	Weapon_hReplaceFinaleKits = CreateConVarEx("replace_finalekits", "1", "Replaces finale medkits with pills", _, true, 0.0, true, 1.0);
-	Weapon_hRemoveLaserSight = CreateConVarEx("remove_lasersight", "1", "Remove all laser sight upgrades", _, true, 0.0, true, 1.0);
-	Weapon_hRemoveExtraItems = CreateConVarEx("remove_saferoomitems", "1", "Remove all extra items inside saferooms (items for slot 3, 4 and 5, minus medkits)", _, true, 0.0, true, 1.0);
+	Weapon_hReplaceTier2 = CreateConVar("confogl_replace_tier2", "1", "Replace tier 2 weapons in start and end safe room with their tier 1 equivalent", _, true, 0.0, true, 1.0);
+	Weapon_hReplaceTier2_Finale = CreateConVar("confogl_replace_tier2_finale", "1", "Replace tier 2 weapons in start safe room with their tier 1 equivalent, on finale", _, true, 0.0, true, 1.0);
+	Weapon_hReplaceTier2_All = CreateConVar("confogl_replace_tier2_all", "1", "Replace ALL tier 2 weapons with their tier 1 equivalent EVERYWHERE", _, true, 0.0, true, 1.0);
+	Weapon_hLimitTier2 = CreateConVar("confogl_limit_tier2", "1", "Limit tier 2 weapons outside safe rooms. Replaces a tier 2 stack with tier 1 upon first weapon pickup", _, true, 0.0, true, 1.0);
+	Weapon_hLimitTier2_Safehouse = CreateConVar("confogl_limit_tier2_saferoom", "1", "Limit tier 2 weapons inside safe rooms. Replaces a tier 2 stack with tier 1 upon first weapon pickup", _, true, 0.0, true, 1.0);
+	Weapon_hReplaceStartKits = CreateConVar("confogl_replace_startkits", "1", "Replaces start medkits with pills", _, true, 0.0, true, 1.0);
+	Weapon_hReplaceFinaleKits = CreateConVar("confogl_replace_finalekits", "1", "Replaces finale medkits with pills", _, true, 0.0, true, 1.0);
+	Weapon_hRemoveLaserSight = CreateConVar("confogl_remove_lasersight", "1", "Remove all laser sight upgrades", _, true, 0.0, true, 1.0);
+	Weapon_hRemoveExtraItems = CreateConVar("confogl_remove_saferoomitems", "1", "Remove all extra items inside saferooms (items for slot 3, 4 and 5, minus medkits)", _, true, 0.0, true, 1.0);
 
-	ConVarsInType();
+	WI_ConVarsInType();
 
 	Weapon_hReplaceTier2.AddChangeHook(WI_ConvarChange);
 	Weapon_hReplaceTier2_Finale.AddChangeHook(WI_ConvarChange);
@@ -626,7 +632,7 @@ static void WI_Convar_Setup()
 	Weapon_hRemoveExtraItems.AddChangeHook(WI_ConvarChange);
 }
 
-static void ConVarsInType()
+static void WI_ConVarsInType()
 {
 	Weapon_bReplaceTier2 = Weapon_hReplaceTier2.BoolValue;
 	Weapon_bReplaceTier2_Finale = Weapon_hReplaceTier2_Finale.BoolValue;
@@ -649,7 +655,7 @@ static void WI_ConvarChange(ConVar hConVar, const char[] sOldValue, const char[]
 		Weapon_bConvar[index] = Weapon_hConvar[index].BoolValue;
 	}
 
-	ConVarsInType();
+	WI_ConVarsInType();
 }
 
 //================================================
@@ -712,7 +718,7 @@ static int WI_GetWeaponIndex(int iEntity, const char[] sEntityClassName)
 	//  static classes
 	// If we got a match we know the index
 	else {
-		char sBuffer[MAX_ENTITY_NAME_LENGTH];
+		char sBuffer[WI_MAX_ENTITY_NAME_LENGTH];
 		for (WeaponIndex = FIRST_WEAPON; WeaponIndex < NUM_OF_WEAPONS; WeaponIndex++) {
 			if (strlen(Weapon_Spawns[WeaponIndex]) < 1) {
 				continue;
@@ -766,7 +772,7 @@ static bool WI_IsStatic(int iEntity, int iWeaponIndex)
 		return false;
 	}
 
-	char sEntityClassName[MAX_ENTITY_NAME_LENGTH], sBuffer[MAX_ENTITY_NAME_LENGTH];
+	char sEntityClassName[WI_MAX_ENTITY_NAME_LENGTH], sBuffer[WI_MAX_ENTITY_NAME_LENGTH];
 
 	GetEdictClassname(iEntity, sEntityClassName, sizeof(sEntityClassName));
 	FormatEx(sBuffer, sizeof(sBuffer), "%s%s%s", SPAWN_PREFIX, Weapon_Spawns[iWeaponIndex], SPAWN_SURFIX);
@@ -809,7 +815,7 @@ static void WI_ReplaceWeapon(int iEntity, int iWeaponIndex, bool bSpawnerEvent =
 		&& Weapon_Attributes[iWeaponIndex][ReplacementIndex] == WEAPON_REMOVE_INDEX
 		&& Weapon_bConvar[iWeaponIndex]
 	) {
-		KillEntity(iEntity);
+		RemoveEntity(iEntity);
 
 		#if (DEBUG_WI)
 			LogMessage("[%s]         Killing weapon as requested...", WI_MODULE_NAME);
@@ -834,7 +840,7 @@ static void WI_ReplaceWeapon(int iEntity, int iWeaponIndex, bool bSpawnerEvent =
 	) {
 		GetEntPropVector(iEntity, Prop_Send, "m_vecOrigin", fOrigin);
 		GetEntPropVector(iEntity, Prop_Send, "m_angRotation", fRotation);
-		KillEntity(iEntity);
+		RemoveEntity(iEntity);
 
 		iEntity = CreateEntityByName("weapon_spawn");
 		SetEntProp(iEntity, Prop_Send, "m_weaponID", Weapon_Attributes[iWeaponIndex][WeaponID]);
@@ -900,7 +906,7 @@ static void WI_ReplaceWeapon(int iEntity, int iWeaponIndex, bool bSpawnerEvent =
 	GetEntPropVector(iEntity, Prop_Send, "m_vecOrigin", fOrigin);
 
 	// Within start safe room
-	if (!Weapon_bReplaceTier2_All && IsVersus()) {
+	if (!Weapon_bReplaceTier2_All && WI_IsVersus()) {
 		if (GetVectorDistance(Weapon_fMapOrigin_Start, fOrigin) > Weapon_fMapDist_StartExtra
 			&& GetVectorDistance(Weapon_fMapOrigin_End, fOrigin) > Weapon_fMapDist_End
 		) {
@@ -1002,7 +1008,7 @@ static void WI_ReplaceExtra(int iEntity, int iWeaponIndex)
 		&& Weapon_bConvar[iWeaponIndex]
 		&& iWeaponIndex != WEAPON_FIRST_AID_KIT_INDEX
 	) {
-		KillEntity(iEntity);
+		RemoveEntity(iEntity);
 
 		#if (DEBUG_WI)
 			LogMessage("[%s]         Killing weapon as requested...", WI_MODULE_NAME);
@@ -1061,7 +1067,7 @@ static void WI_ReplaceExtra(int iEntity, int iWeaponIndex)
 	if (Weapon_bRemoveExtraItems &&
 		(bIsInEndSaferoom || (bIsInStartSaferoomExtra && iWeaponIndex != WEAPON_FIRST_AID_KIT_INDEX))
 	) {
-		KillEntity(iEntity);
+		RemoveEntity(iEntity);
 
 		#if (DEBUG_WI)
 			LogMessage("[%s]         Extra item is within a safe room, killing...", WI_MODULE_NAME);
@@ -1092,7 +1098,7 @@ static void WI_ReplaceExtra(int iEntity, int iWeaponIndex)
 	// it is a static medkit and it needs removal
 
 	if (Weapon_bConvar[iWeaponIndex] && !bIsInStartSaferoom && !bIsInFinaleArea) {
-		KillEntity(iEntity);
+		RemoveEntity(iEntity);
 
 		#if (DEBUG_WI)
 			LogMessage("[%s]         Static medkit outside saferoom and finale, killing...", WI_MODULE_NAME);
@@ -1103,7 +1109,7 @@ static void WI_ReplaceExtra(int iEntity, int iWeaponIndex)
 	}
 
 	if (Weapon_iKitCount >= WEAPON_NUMBER_OF_START_KITS && bIsInStartSaferoom) {
-		KillEntity(iEntity);
+		RemoveEntity(iEntity);
 
 		#if (DEBUG_WI)
 			LogMessage("[%s]         More than 4 saferoom medkits found, killing entity...", WI_MODULE_NAME);
@@ -1114,12 +1120,12 @@ static void WI_ReplaceExtra(int iEntity, int iWeaponIndex)
 	}
 
 	float fRotation[3];
-	char sSpawnBuffer[MAX_ENTITY_NAME_LENGTH];
+	char sSpawnBuffer[WI_MAX_ENTITY_NAME_LENGTH];
 
 	if (bIsInStartSaferoom && Weapon_bReplaceStartKits) {
 		GetEntPropVector(iEntity, Prop_Send, "m_angRotation", fRotation);
 
-		KillEntity(iEntity);
+		RemoveEntity(iEntity);
 
 		FormatEx(sSpawnBuffer, sizeof(sSpawnBuffer), "%s%s%s", SPAWN_PREFIX, Weapon_Spawns[WEAPON_PAIN_PILLS_INDEX], SPAWN_SURFIX);
 
@@ -1134,7 +1140,7 @@ static void WI_ReplaceExtra(int iEntity, int iWeaponIndex)
 	} else if (bIsInFinaleArea && Weapon_bReplaceFinaleKits) {
 		GetEntPropVector(iEntity, Prop_Send, "m_angRotation", fRotation);
 
-		KillEntity(iEntity);
+		RemoveEntity(iEntity);
 
 		FormatEx(sSpawnBuffer, sizeof(sSpawnBuffer), "%s%s%s", SPAWN_PREFIX, Weapon_Spawns[WEAPON_PAIN_PILLS_INDEX], SPAWN_SURFIX);
 
@@ -1195,22 +1201,10 @@ static void WI_GetMapInfo()
 		return;
 	}
 
-	Weapon_fMapOrigin_Start[0] = GetMapStartOriginX();
-	Weapon_fMapOrigin_Start[1] = GetMapStartOriginY();
-	Weapon_fMapOrigin_Start[2] = GetMapStartOriginZ();
-	Weapon_fMapOrigin_End[0] = GetMapEndOriginX();
-	Weapon_fMapOrigin_End[1] = GetMapEndOriginY();
-	Weapon_fMapOrigin_End[2] = GetMapEndOriginZ();
-	Weapon_fMapDist_Start = GetMapStartDist();
-	Weapon_fMapDist_StartExtra = GetMapStartExtraDist();
-	Weapon_fMapDist_End = GetMapEndDist();
+	LGO_GetMapAreas(Weapon_fMapOrigin_Start, Weapon_fMapOrigin_End,
+		Weapon_fMapDist_Start, Weapon_fMapDist_StartExtra, Weapon_fMapDist_End);
 
 	Weapon_bUpdateMapInfo = false;
-}
-
-static void WI_RoundStart_Event(Event hEvent, const char[] sEventName, bool bDontBroadcast)
-{
-	CreateTimer(0.3, WI_RoundStartLoop, _, TIMER_FLAG_NO_MAPCHANGE);
 }
 
 static void WI_RoundEnd_Event(Event hEvent, const char[] sEventName, bool bDontBroadcast)
@@ -1218,9 +1212,10 @@ static void WI_RoundEnd_Event(Event hEvent, const char[] sEventName, bool bDontB
 	Weapon_bUpdateMapInfo = true;
 }
 
-static Action WI_RoundStartLoop(Handle hTimer)
+Action WI_RoundStartLoop(Handle hTimer)
 {
-	if (!IsPluginEnabled() || !Weapon_hEnabled.BoolValue) {
+	#pragma unused hTimer
+	if (!LGO_IsMatchModeLoaded() || !Weapon_hEnabled.BoolValue) {
 		return Plugin_Stop;
 	}
 
@@ -1238,7 +1233,7 @@ static Action WI_RoundStartLoop(Handle hTimer)
 		int kit = -1;
 		while ((kit = FindEntityByClassname(kit, "weapon_first_aid_kit")) != -1) {
 			if (GetEntPropEnt(kit, Prop_Send, "m_hOwnerEntity") == -1) {
-				KillEntity(kit);
+				RemoveEntity(kit);
 			}
 		}
 	}
@@ -1254,7 +1249,7 @@ static Action WI_RoundStartLoop(Handle hTimer)
 
 	Weapon_iKitCount = 0;
 
-	char entclass[MAX_ENTITY_NAME_LENGTH];
+	char entclass[WI_MAX_ENTITY_NAME_LENGTH];
 	int iEntity, iWeaponIndex, entcount = GetEntityCount();
 
 	for (iEntity = (MaxClients + 1); iEntity <= entcount; iEntity++) {
@@ -1274,7 +1269,7 @@ static Action WI_RoundStartLoop(Handle hTimer)
 		}
 
 		if (Weapon_bRemoveLaserSight && StrContains(entclass, "upgrade_laser_sight") != -1) {
-			KillEntity(iEntity);
+			RemoveEntity(iEntity);
 
 			#if (DEBUG_WI)
 				LogMessage("[%s] Killing laser sight...", WI_MODULE_NAME);
@@ -1294,13 +1289,13 @@ static Action WI_RoundStartLoop(Handle hTimer)
 
 static void WI_SpawnerGiveItem_Event(Event hEvent, const char[] sEventName, bool bDontBroadcast)
 {
-	if (!IsPluginEnabled() || !Weapon_hEnabled.BoolValue) {
+	if (!LGO_IsMatchModeLoaded() || !Weapon_hEnabled.BoolValue) {
 		return;
 	}
 
 	int iEntity = hEvent.GetInt("spawner");
 
-	char sEntityClassName[MAX_ENTITY_NAME_LENGTH];
+	char sEntityClassName[WI_MAX_ENTITY_NAME_LENGTH];
 	GetEdictClassname(iEntity, sEntityClassName, sizeof(sEntityClassName));
 
 	int iWeaponIndex = WI_GetWeaponIndex(iEntity, sEntityClassName);
@@ -1309,4 +1304,12 @@ static void WI_SpawnerGiveItem_Event(Event hEvent, const char[] sEventName, bool
 	}
 
 	WI_ReplaceWeapon(iEntity, iWeaponIndex, true);
+}
+
+// This is the original WI location-branch condition, not profile selection.
+static bool WI_IsVersus()
+{
+	char GameMode[32];
+	FindConVar("mp_gamemode").GetString(GameMode, sizeof(GameMode));
+	return (StrContains(GameMode, "versus", false) != -1);
 }

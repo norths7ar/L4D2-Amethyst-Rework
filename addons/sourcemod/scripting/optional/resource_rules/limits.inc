@@ -7,6 +7,7 @@
 
 void QueueLimitPass()
 {
+	if (!g_policyFile) return;
 	if (g_limitPassPending) return;
 	g_limitPassPending = true;
 	RequestFrame(ApplyLimits);
@@ -16,6 +17,7 @@ public void ApplyLimits(any unused)
 {
 	g_limitPassPending = false;
 	if (!g_configsReady || !g_roundReady) return;
+	if (g_replayingSupplies) return; // Count the restored result, not the pre-replay map.
 	ArrayList resources = new ArrayList();
 	int maximum = GetMaxEntities();
 	int[] reasons = new int[maximum];
@@ -76,6 +78,7 @@ void ApplyResourcePolicy(ArrayList resources, ResourcePolicy policy, bool catego
 	if (policy.limit < 0 && !flow) return;
 	if (category && !policy.members[0]) return;
 	ArrayList matches = new ArrayList();
+	ArrayList saved = new ArrayList();
 	for (int i = 0; i < resources.Length; i++)
 	{
 		int entity = EntRefToEntIndex(resources.Get(i));
@@ -93,8 +96,17 @@ void ApplyResourcePolicy(ArrayList resources, ResourcePolicy policy, bool catego
 		if (region < 0) region = 3;
 		if (!(policy.regions & (1 << region))) continue;
 		touched[entity] = true;
-		matches.Push(EntIndexToEntRef(entity));
+		if (IsReplayedSupply(entity)) saved.Push(EntIndexToEntRef(entity));
+		else matches.Push(EntIndexToEntRef(entity));
 	}
+	// Saved points still consume individual/category slots. Only new candidates
+	// can be culled, so an unrelated spawn cannot reroll the previous half's result.
+	if (policy.limit >= 0)
+	{
+		policy.limit -= saved.Length;
+		if (policy.limit < 0) policy.limit = 0;
+	}
+	if (flow && saved.Length > 0) ApplySavedSpacing(matches, saved, policy, reasons);
 	if (!ApplyDistribution(matches, policy, reasons) && policy.limit >= 0)
 	{
 		// Retain Confogl's random excess removal when flow selection is inactive.
@@ -107,6 +119,29 @@ void ApplyResourcePolicy(ArrayList resources, ResourcePolicy policy, bool catego
 		}
 	}
 	if (g_visualize.IntValue > 0)
-		LogMessage("[ResourceRules] Rule %s: %d points retained", policy.name, matches.Length);
+		LogMessage("[ResourceRules] Rule %s: %d points retained", policy.name, matches.Length + saved.Length);
 	delete matches;
+	delete saved;
+}
+
+void ApplySavedSpacing(ArrayList matches, ArrayList saved, ResourcePolicy policy, int[] reasons)
+{
+	if (policy.spacing <= 0.0 || policy.flowMax < policy.flowMin) return;
+	if (!policy.finale && L4D_IsMissionFinalMap()) return;
+	float maxFlow = L4D2Direct_GetMapMaxFlowDistance();
+	if (maxFlow <= 0.0) return;
+	for (int i = matches.Length - 1; i >= 0; i--)
+	{
+		int entity = EntRefToEntIndex(matches.Get(i));
+		float flow = ResourceFlowFraction(entity, maxFlow);
+		if (flow < 0.0) continue;
+		for (int j = 0; j < saved.Length; j++)
+		{
+			float other = ResourceFlowFraction(EntRefToEntIndex(saved.Get(j)), maxFlow);
+			if (other < 0.0 || FloatAbs(flow - other) >= policy.spacing) continue;
+			MarkResourceCull(entity, RR_SPACING, policy.name, reasons);
+			matches.Erase(i);
+			break;
+		}
+	}
 }

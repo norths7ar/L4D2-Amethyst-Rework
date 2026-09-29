@@ -27,6 +27,7 @@ static KeyValues
 
 void MI_APL()
 {
+	CreateNative("LGO_GetMapAreas", _native_GetMapAreas);
 	CreateNative("LGO_IsMapDataAvailable", _native_IsMapDataAvailable);
 	CreateNative("LGO_GetMapValueInt", _native_GetMapValueInt);
 	CreateNative("LGO_GetMapValueFloat", _native_GetMapValueFloat);
@@ -420,6 +421,19 @@ stock float GetMapStartExtraDist() //WeaponInformation use it
 }
 
 // Natives
+static int _native_GetMapAreas(Handle plugin, int numParams)
+{
+	float start[3], end[3];
+	GetMapStartOrigin(start);
+	GetMapEndOrigin(end);
+	SetNativeArray(1, start, 3);
+	SetNativeArray(2, end, 3);
+	SetNativeCellRef(3, GetMapStartDist());
+	SetNativeCellRef(4, GetMapStartExtraDist());
+	SetNativeCellRef(5, GetMapEndDist());
+	return 0;
+}
+
 static int _native_IsMapDataAvailable(Handle plugin, int numParams)
 {
 	return IsMapDataAvailable();

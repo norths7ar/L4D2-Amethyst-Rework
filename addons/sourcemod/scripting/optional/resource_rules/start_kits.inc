@@ -1,47 +1,24 @@
-#pragma semicolon 1
-#pragma newdecls required;
+// Migrated from nosaferoomkits by Blade (0.1.1).
+// The resource_rules framework profile owns activation and round-start calls.
+#if defined _resource_rules_start_kits_included
+	#endinput
+#endif
+#define _resource_rules_start_kits_included
 
-#include <sourcemod>
-#include <sdktools>
+static float g_startKitsSurvivorStart[3];
 
-#define PLUGIN_VERSION "0.1.1"
-
-float SurvivorStart[3];
-
-public Plugin myinfo = 
+void StartKits_Init()
 {
-	name = "No Safe Room Medkits",
-	author = "Blade",
-	description = "Removes Safe Room Medkits",
-	version = PLUGIN_VERSION,
-	url = "https://github.com/Attano/L4D2-Competitive-Framework"
-};
-
-public void OnPluginStart()
-{
-	char game[64];
-	GetGameFolderName(game, sizeof(game));
-	if (!StrEqual(game, "left4dead2", false)) {
-		SetFailState("Plugin supports Left 4 Dead 2 only.");
-	}
-	
-	CreateConVar("nokits_version", PLUGIN_VERSION,"No Safe Room Medkits Version", FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY);
-	HookEvent("round_start", Event_RoundStart, EventHookMode_PostNoCopy);
+	CreateConVar("nokits_version", "0.1.1", "No Safe Room Medkits Version", FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY);
 }
 
-void Event_RoundStart(Event hEvent, const char[] name, bool dontBroadcast)
+void StartKits_RoundStart()
 {
-	char GameMode[32];
-	GetConVarString(FindConVar("mp_gamemode"), GameMode, sizeof(GameMode));
-	if (StrContains(GameMode, "versus", false) != -1) {
-		//find where the survivors start so we know which medkits to replace,
-		FindSurvivorStart();
-		//and replace the medkits with pills.
-		ReplaceMedkits();
-	}
+	// Find the survivor start, then remove the nearest medkit cluster.
+	StartKits_FindSurvivorStart();
+	StartKits_ReplaceMedkits();
 }
-
-void FindSurvivorStart()
+static void StartKits_FindSurvivorStart()
 {
 	int iEntityCount = GetEntityCount();
 	char EdictClassName[128];
@@ -52,7 +29,7 @@ void FindSurvivorStart()
 			GetEdictClassname(i, EdictClassName, sizeof(EdictClassName));
 			if ((StrContains(EdictClassName, "prop_door_rotating_checkpoint", false) != -1) && (GetEntProp(i, Prop_Send, "m_bLocked")== 1)) {
 				GetEntPropVector(i, Prop_Send, "m_vecOrigin", Location);
-				SurvivorStart = Location;
+				g_startKitsSurvivorStart = Location;
 				return;
 			}
 		}
@@ -64,14 +41,14 @@ void FindSurvivorStart()
 			GetEdictClassname(i, EdictClassName, sizeof(EdictClassName));
 			if (StrContains(EdictClassName, "info_survivor_position", false) != -1) {
 				GetEntPropVector(i, Prop_Send, "m_vecOrigin", Location);
-				SurvivorStart = Location;
+				g_startKitsSurvivorStart = Location;
 				return;
 			}
 		}
 	}
 }
 
-void ReplaceMedkits()
+static void StartKits_ReplaceMedkits()
 {
 	int iEntityCount = GetEntityCount();
 	char EdictClassName[128];
@@ -92,7 +69,7 @@ void ReplaceMedkits()
 				}
 				
 				//If this medkit is closer than the last medkit, record its location.
-				if (GetVectorDistance(SurvivorStart, Location, false) < GetVectorDistance(SurvivorStart, NearestMedkit, false)) {
+				if (GetVectorDistance(g_startKitsSurvivorStart, Location, false) < GetVectorDistance(g_startKitsSurvivorStart, NearestMedkit, false)) {
 					NearestMedkit = Location;
 				}
 			}

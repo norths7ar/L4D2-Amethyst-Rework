@@ -9,7 +9,6 @@
 // and they will not be included in the plugin at compile time,
 // to disable, specify 0 for the required module.
 #define MODULE_MAPINFO			   1	// MapInfo
-#define MODULE_WEAPONINFORMATION   1	// WeaponInformation
 #define MODULE_REQMATCH			   1	// ReqMatch
 #define MODULE_CVARSETTINGS		   1	// CvarSettings
 #define MODULE_GHOSTTANK		   1	// GhostTank
@@ -43,10 +42,6 @@
 
 #if MODULE_MAPINFO
 	#include "confoglcompmod/MapInfo.sp"
-#endif
-
-#if MODULE_WEAPONINFORMATION
-	#include "confoglcompmod/WeaponInformation.sp"
 #endif
 
 #if MODULE_REQMATCH
@@ -140,6 +135,10 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	SM_APL();
 #endif
 
+#if MODULE_ITEMTRACKING
+	IT_APL();
+#endif
+
 	// Other
 	RegPluginLibrary("confogl");
 	return APLRes_Success;
@@ -157,10 +156,6 @@ public void OnPluginStart()
 	// Modules
 #if MODULE_MAPINFO
 	MI_OnModuleStart();	   // MapInfo
-#endif
-
-#if MODULE_WEAPONINFORMATION
-	WI_OnModuleStart();	   // WeaponInformation
 #endif
 
 #if MODULE_REQMATCH
@@ -289,7 +284,7 @@ public void OnMapStart()
 }
 #endif
 
-#if MODULE_MAPINFO || MODULE_REQMATCH || MODULE_WEAPONINFORMATION || MODULE_PASSWORDSYSTEM || MODULE_WATERSLOWDOWN
+#if MODULE_MAPINFO || MODULE_REQMATCH || MODULE_PASSWORDSYSTEM || MODULE_WATERSLOWDOWN
 
 public void OnMapEnd()
 {
@@ -300,10 +295,6 @@ public void OnMapEnd()
 
 	#if MODULE_MAPINFO
 	MI_OnMapEnd();	  // MapInfo
-	#endif
-
-	#if MODULE_WEAPONINFORMATION
-	WI_OnMapEnd();	  // WeaponInformation
 	#endif
 
 	#if MODULE_PASSWORDSYSTEM

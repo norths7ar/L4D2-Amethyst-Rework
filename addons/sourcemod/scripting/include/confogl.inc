@@ -52,6 +52,9 @@ forward void LGO_OnMatchModeLoaded();
  */
 forward void LGO_OnMatchModeUnloaded();
 
+// Emitted for each successfully restored/reconciled ItemTracking resource.
+forward void LGO_OnItemReplayed(int entity);
+
 /* NATIVES */
 
 /**
@@ -61,6 +64,16 @@ forward void LGO_OnMatchModeUnloaded();
  * @return 	True if matchmode is loaded, false otherwise
  */
 native bool LGO_IsMatchModeLoaded();
+
+// Resource coordinator: call once after the round's replacements and cleanup.
+// applyLimits=false records/replays an already filtered policy-file result;
+// confogl_enable_itemtracking and confogl_itemtracking_savespawns still apply.
+native bool LGO_RunItemTracking(bool applyLimits = true);
+native bool LGO_ItemTrackingWillReplay();
+
+// Cached MapInfo areas, including Confogl's fallback detection when mapinfo
+// has no explicit entry. Raw LGO_GetMapValue* does not include that fallback.
+native void LGO_GetMapAreas(float start[3], float end[3], float &startDist, float &startExtraDist, float &endDist);
 
 /**
  * @brief Get current match name
@@ -184,6 +197,9 @@ public void __pl_confogl_SetNTVOptional()
 	MarkNativeAsOptional("LGO_GetMapValueString");
 	MarkNativeAsOptional("LGO_CopyMapSubsection");
 	MarkNativeAsOptional("LGO_IsMatchModeLoaded");
+	MarkNativeAsOptional("LGO_RunItemTracking");
+	MarkNativeAsOptional("LGO_ItemTrackingWillReplay");
+	MarkNativeAsOptional("LGO_GetMapAreas");
 	MarkNativeAsOptional("LGO_GetConfigName");
 	MarkNativeAsOptional("LGO_IsScoremodEnabled");
 	MarkNativeAsOptional("LGO_GetHealthScore");
