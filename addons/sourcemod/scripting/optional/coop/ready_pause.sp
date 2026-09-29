@@ -141,7 +141,6 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_toggleready", CommandToggleReady, "Toggle your ready status.");
 	RegConsoleCmd("sm_pause", CommandPause, "Pause the game.");
 	RegConsoleCmd("sm_p", CommandPause, "Pause the game.");
-	RegConsoleCmd("sm_pausepanel", CommandShowPausePanel, "Show the coop pause panel.");
 	RegConsoleCmd("sm_return", CommandReturn, "Return to the saferoom during the ready phase.");
 	RegConsoleCmd("sm_show", CommandShowPanel, "Show the ready or pause panel.");
 	RegConsoleCmd("sm_hide", CommandHidePanel, "Hide the ready or pause panel.");
@@ -1093,12 +1092,6 @@ public Action CommandForceStart(int client, int args)
 	g_forceStarted = true;
 	StartCountdown();
 	RenderPanel();
-	return Plugin_Handled;
-}
-
-public Action CommandShowPausePanel(int client, int args)
-{
-	if (client > 0 && g_isPaused) { g_panelHidden[client] = false; RenderPanel(); }
 	return Plugin_Handled;
 }
 
