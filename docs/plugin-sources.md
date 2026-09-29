@@ -10,29 +10,13 @@
 
 ## 源码例外
 
-这里只列缺源码、构建对应关系尚未确认或仅有参考实现的插件。普通源码直接阅读 `.sp`，不另列作者和下载记录。
-
-| 插件 | 状态 |
-| --- | --- |
-| `l4d2_bot_spit_ignite_gascan.smx` | 有源码，未确认同构建 |
-| `l4d2_drop.smx` | 有源码，未确认同构建 |
-| `l4d2_votetospec.smx` | 有源码，未确认同构建 |
-| `script_reloader.smx` | 有源码，未确认同构建 |
-| `l4d_reload_fix.smx` | 有源码，未确认同构建 |
-| `musical_jockeys_coop.smx` | 有源码，未确认同构建 |
-| `enhancedsprays.smx` | 缺源码 |
-| `l4d_swimming.smx` | 有源码，未确认同构建 |
-| `l4d2_si_ladder_booster.smx` | 有源码，未确认同构建 |
-| `l4d2_tank_facts_announce.smx` | 有源码，未确认同构建 |
-| `spawnstatefix.smx` | 有源码，未确认同构建 |
-| `tls_restore_vocalize.smx` | 有源码，未确认同构建 |
-| `witch_glow.smx` | 有源码，未确认同构建 |
+`enhancedsprays.smx` 缺源码。本插件的功能是允许无CD、随时随地、远近皆可喷漆，无其他效果。
 
 ## 已知差异与特殊依赖
 
-- `l4d2_si_ladder_booster`：源码和 SMX 都标为 2.3.3，但源码增加了 `l4d2_boost_multiplier`，当前 SMX 未见此项。
-- `spawnstatefix`：SMX 为 1.0，源码为 1.1，增加 `uf4_airfield` 自动修复；涉及引擎内存偏移，修改时需核对兼容性。
-- `l4d_swimming`：SMX 为 1.8，源码为 1.9；源码更新日志说明新版修复 SM 1.11 编译警告。
+- `l4d_reload_fix` 修复修改弹夹容量后的换弹动画。
+- `l4d2_reload_fix` 修复拿取同种武器跳过装填的问题。
+- `l4d_swimming` 依赖 `ready_pause` 提供的 `readyup` 接口，仅准备阶段可启用；倒计时结束、正式开局前关闭并清理游泳状态。
 
 ## 原生扩展
 

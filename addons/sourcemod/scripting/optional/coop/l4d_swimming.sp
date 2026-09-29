@@ -18,7 +18,7 @@
 
 
 
-#define PLUGIN_VERSION 		"1.9"
+#define PLUGIN_VERSION 		"1.9.1"
 
 /*======================================================================================
 	Plugin Info:
@@ -31,6 +31,9 @@
 
 ========================================================================================
 	Change Log:
+
+1.9.1 (29-Sep-2026)
+	- Limit swimming to ready-up and release swimming state before the round goes live.
 
 1.9 (11-Dec-2022)
 	- Changes to fix compile warnings on SourceMod 1.11.
@@ -72,6 +75,7 @@
 #include <sourcemod>
 #include <sdktools>
 #include <sdkhooks>
+#include <readyup>
 
 #define CVAR_FLAGS			FCVAR_NOTIFY
 #define CHAT_TAG			"\x04[\x05Swimming] \x01"
@@ -81,6 +85,7 @@ ConVar g_hCvarAllow, g_hCvarDecayRate, g_hCvarDive, g_hCvarDrown, g_hCvarIncap, 
 int g_iCvarDive, g_iCvarDrown, g_iCvarIncap, g_iHealth[MAXPLAYERS+1], g_iPlayerEnum[MAXPLAYERS+1], g_iSwimming[MAXPLAYERS+1], g_iWater[MAXPLAYERS+1];
 float g_fCvarDecayRate, g_fCvarRate, g_fCvarSpeedDown, g_fCvarSpeedIdle, g_fCvarSpeedJmp, g_fCvarSpeedUp, g_fHealth[MAXPLAYERS+1];
 bool g_bCvarAllow, g_bMapStarted, g_bLeft4Dead2;
+bool g_bRoundLive, g_bLedgeHangDisabled[MAXPLAYERS+1];
 
 enum
 {
@@ -147,6 +152,8 @@ public void OnPluginStart()
 	g_hCvarSpeedIdle.AddChangeHook(ConVarChanged_Cvars);
 	g_hCvarSpeedJmp.AddChangeHook(ConVarChanged_Cvars);
 	g_hCvarSpeedUp.AddChangeHook(ConVarChanged_Cvars);
+	// Keep the round boundary hooked even while swimming is disabled after live.
+	HookEvent("round_start", Event_RoundStart, EventHookMode_PostNoCopy);
 }
 
 public void OnPluginEnd()
@@ -157,6 +164,7 @@ public void OnPluginEnd()
 public void OnMapStart()
 {
 	g_bMapStarted = true;
+	g_bRoundLive = false;
 }
 
 public void OnMapEnd()
@@ -169,14 +177,49 @@ void ResetPlugin()
 {
 	for( int i = 1; i <= MaxClients; i++ )
 	{
-		g_iPlayerEnum[i] = 0;
-		g_iSwimming[i] = 0;
-		g_iWater[i] = 0;
-		g_iHealth[i] = 0;
-		g_fHealth[i] = 0.0;
+		StopSwimming(i);
 	}
 }
 
+void StopSwimming(int client, bool restoreHealth = true)
+{
+	if( IsClientInGame(client) )
+	{
+		SDKUnhook(client, SDKHook_OnTakeDamage, OnTakeDamage);
+		if( g_bLedgeHangDisabled[client] )
+			AcceptEntityInput(client, "EnableLedgeHang");
+		// Underwater air temporarily occupies the health buffer. Restore it before
+		// ready-up's live callbacks grant starting health and equipment.
+		if( restoreHealth && g_iHealth[client] != 0 && IsPlayerAlive(client) && GetClientTeam(client) == 2 )
+		{
+			SetEntityHealth(client, g_iHealth[client]);
+			SetTempHealth(client, g_fHealth[client]);
+		}
+	}
+	g_bLedgeHangDisabled[client] = false;
+	g_iPlayerEnum[client] = 0;
+	g_iSwimming[client] = 0;
+	g_iWater[client] = 0;
+	g_iHealth[client] = 0;
+	g_fHealth[client] = 0.0;
+}
+
+public void OnClientDisconnect(int client)
+{
+	StopSwimming(client, false);
+}
+
+public void OnReadyUpInitiate()
+{
+	g_bRoundLive = false;
+	IsAllowed();
+}
+
+public void OnRoundIsLivePre()
+{
+	g_bRoundLive = true;
+	IsAllowed();
+}
 
 
 // ====================================================================================================
@@ -184,6 +227,8 @@ void ResetPlugin()
 // ====================================================================================================
 public void OnConfigsExecuted()
 {
+	// Also handle loading this plugin after the round has already gone live.
+	g_bRoundLive = !IsInReady();
 	IsAllowed();
 }
 
@@ -212,7 +257,7 @@ void GetCvars()
 
 void IsAllowed()
 {
-	bool bCvarAllow = g_hCvarAllow.BoolValue;
+	bool bCvarAllow = g_hCvarAllow.BoolValue && !g_bRoundLive && IsInReady();
 	bool bAllowMode = IsAllowedGameMode();
 	GetCvars();
 
@@ -307,7 +352,6 @@ void OnGamemode(const char[] output, int caller, int activator, float delay)
 // ====================================================================================================
 void HookEvents()
 {
-	HookEvent("round_start",			Event_RoundStart);
 	HookEvent("heal_success",			Event_HealSuccess);
 	HookEvent("revive_success",			Event_ReviveSuccess);
 	HookEvent("player_death",			Event_Unblock);
@@ -328,7 +372,6 @@ void HookEvents()
 
 void UnhookEvents()
 {
-	UnhookEvent("round_start",				Event_RoundStart);
 	UnhookEvent("heal_success",				Event_HealSuccess);
 	UnhookEvent("revive_success",			Event_ReviveSuccess);
 	UnhookEvent("player_death",				Event_Unblock);
@@ -350,6 +393,8 @@ void UnhookEvents()
 void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
 	ResetPlugin();
+	g_bRoundLive = false;
+	IsAllowed();
 }
 
 void Event_BlockStart(Event event, const char[] name, bool dontBroadcast)
@@ -408,22 +453,22 @@ void Event_ReviveSuccess(Event event, const char[] name, bool dontBroadcast)
 void Event_Unblock(Event event, const char[] name, bool dontBroadcast)
 {
 	int client = GetClientOfUserId(event.GetInt("userid"));
-	if( client > 0)
-		g_iPlayerEnum[client] = 0;
-
-	if( g_iSwimming[client] )
-	{
-		g_iSwimming[client] = 0;
-		g_iHealth[client] = 0;
-		g_fHealth[client] = 0.0;
-		SDKUnhook(client, SDKHook_OnTakeDamage, OnTakeDamage);
-	}
+	if( client > 0 ) StopSwimming(client, false);
 }
 
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon)
 {
+	// Turning ready-up off must release active swimmers even without a countdown.
+	if( g_bCvarAllow && !IsInReady() ) IsAllowed();
 	if( g_bCvarAllow && IsClientInGame(client) && GetClientTeam(client) == 2 && IsPlayerAlive(client) )
 	{
+		// Ready-up owns frozen movement; do not apply buoyancy or consume air.
+		if( GetEntityMoveType(client) == MOVETYPE_NONE )
+		{
+			StopSwimming(client);
+			return Plugin_Continue;
+		}
+
 		int swimming = g_iSwimming[client];
 		int water = GetEntProp(client, Prop_Send, "m_nWaterLevel");
 		g_iWater[client] = water;
@@ -461,6 +506,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 					if( water == 2 )
 					{
 						AcceptEntityInput(client, "DisableLedgeHang");
+						g_bLedgeHangDisabled[client] = true;
 						vVel[2] = g_fCvarSpeedJmp;
 					}
 					else
@@ -502,10 +548,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 		{
 			if( water == 0 )
 			{
-				g_iSwimming[client] = 0;
-
-				SDKUnhook(client, SDKHook_OnTakeDamage, OnTakeDamage);
-				AcceptEntityInput(client, "EnableLedgeHang");
+				StopSwimming(client);
 			}
 		}
 	}
