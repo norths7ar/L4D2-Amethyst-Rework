@@ -98,6 +98,7 @@ StringMap playerPauseCount;
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
     CreateNative("IsInPause", Native_IsInPause);
+    CreateNative("Pause_CanCallVote", Native_CanCallVote);
     pauseForward = CreateGlobalForward("OnPause", ET_Ignore);
     unpauseForward = CreateGlobalForward("OnUnpause", ET_Ignore);
 
@@ -807,8 +808,21 @@ void ToggleCommandListeners(bool enable)
     }
 }
 
+int Native_CanCallVote(Handle plugin, int params)
+{
+    int client = GetNativeCell(1);
+    return client > 0 && client <= MaxClients && IsClientInGame(client)
+        && (!isPaused || SpecTimer[client] == null);
+}
+
 Action Callvote_Callback(int client, char[] command, int argc)
 {
+    // The shared vote plugin owns kick policy and consults our pause guard.
+    char issue[16];
+    GetCmdArg(1, issue, sizeof(issue));
+    if (LibraryExists("server_votes") && StrEqual(issue, "Kick", false))
+        return Plugin_Continue;
+
     if (!client || !IsClientInGame(client))
     {
         return Plugin_Continue;

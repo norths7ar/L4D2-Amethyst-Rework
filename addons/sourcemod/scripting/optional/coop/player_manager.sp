@@ -4,6 +4,7 @@
 #include <sourcemod>
 #include <sdktools>
 #include <left4dhooks>
+#include <player_management>
 
 #define TEAM_SPECTATORS 1
 #define TEAM_SURVIVORS 2
@@ -49,6 +50,8 @@ public Plugin myinfo =
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
 {
 	g_lateLoad = late;
+	CreateNative("PlayerManagement_MoveToSpectator", Native_MoveToSpectator);
+	RegPluginLibrary("player_management");
 	CreateNative("Coop_GetHumanSurvivorCount", Native_GetHumanSurvivorCount);
 	CreateNative("Coop_GetTotalSurvivorCount", Native_GetTotalSurvivorCount);
 	CreateNative("Coop_IsHumanSurvivor", Native_IsHumanSurvivor);
@@ -317,6 +320,17 @@ public Action CommandJoin(int client, int args)
 	while (GetTotalSurvivors() < g_maxSurvivors.IntValue && SpawnSurvivorBot()) {}
 	ScheduleMoveToSurvivors(client);
 	return Plugin_Handled;
+}
+
+int Native_MoveToSpectator(Handle plugin, int params)
+{
+	int client = GetNativeCell(1);
+	if (!PlayerManagement_CanMoveToSpectator(client)) return false;
+	int serial = GetClientSerial(client);
+	// Reuse admission, reservation, request-token and last-survivor cleanup.
+	CommandSpectate(client, 0);
+	return IsHumanClient(client) && GetClientSerial(client) == serial
+		&& GetClientTeam(client) == TEAM_SPECTATORS;
 }
 
 public Action CommandSpectate(int client, int args)

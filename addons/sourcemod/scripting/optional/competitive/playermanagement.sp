@@ -5,6 +5,7 @@
 #include <sdktools>
 #include <left4dhooks>
 #include <colors>
+#include <player_management>
 
 #define ZC_TANK	 8
 
@@ -54,6 +55,8 @@ ConVar	 l4d_pm_supress_spectate;
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
 	isMapActive = late;
+	CreateNative("PlayerManagement_MoveToSpectator", Native_MoveToSpectator);
+	RegPluginLibrary("player_management");
 	return APLRes_Success;
 }
 
@@ -152,6 +155,17 @@ Action FixBots_Cmd(int client, int args)
 void survivor_limitChanged(ConVar convar, const char[] oldValue, const char[] newValue)
 {
 	if (isMapActive && GetHumanCount()) FixBotCount();
+}
+
+int Native_MoveToSpectator(Handle plugin, int params)
+{
+	int client = GetNativeCell(1);
+	if (!PlayerManagement_CanMoveToSpectator(client)) return false;
+	int serial = GetClientSerial(client);
+	// Retain survivor restrictions, infected cleanup and spectator lifecycle.
+	Spectate_Cmd(client, 0);
+	return IsClientInGame(client) && GetClientSerial(client) == serial
+		&& GetClientTeamEx(client) == L4D2Team_Spectator;
 }
 
 Action Spectate_Cmd(int client, int args)
