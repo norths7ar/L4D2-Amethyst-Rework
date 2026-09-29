@@ -2,6 +2,8 @@
 
 ## 未发布
 
+- 缩减至 Zone 系列、AstRedux 和冻结的 AstFlex 共 11 个模式入口；移除其他 16 个模式及专属配置、插件、源码和地图资源。纯 Hunter 1v1 由 ZoneHunters 提供，保留模式的玩法配置不变。
+
 - 补齐作者原版 `l4d_reload_fix` 1.3a 源码并重建替换；源码例外仅剩 `enhancedsprays`，改为简短说明。
 
 - 取消 Jockey 独有的出生音乐，与其他普通特感保持一致。
