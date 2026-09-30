@@ -13,7 +13,7 @@ public Plugin myinfo =
     name = "VScript Reloader",
     author = "海洋空氣, norths7ar",
     description = "Owns VScript reload requests and publishes their completion.",
-    version = "1.1.0",
+    version = "1.1.1",
     url = "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
 };
 
@@ -28,7 +28,7 @@ public void OnPluginStart()
 {
     LoadTranslations("script_reloader.phrases");
     g_cvFilename = CreateConVar("sm_vscript_filename", "", "Gamemode VScript filename.");
-    RegConsoleCmd("sm_reloadscript", Command_Reload, "Reload the configured VScript file.");
+    RegAdminCmd("sm_reloadscript", Command_Reload, ADMFLAG_GENERIC, "Reload the configured VScript file.");
     HookConVarChange(g_cvFilename, OnFilenameChange);
     g_fwdReloaded = new GlobalForward("VScript_OnReloaded", ET_Ignore, Param_String, Param_Cell);
 }

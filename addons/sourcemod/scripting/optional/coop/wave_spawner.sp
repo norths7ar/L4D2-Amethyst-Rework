@@ -20,7 +20,7 @@ public Plugin myinfo =
     name = "Coop Wave Spawner",
     author = "海洋空氣, norths7ar",
     description = "Runs the single wave-based Special Infected spawn model for Coop.",
-    version = "1.0.1",
+    version = "1.0.2",
     url = "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
 };
 
@@ -66,7 +66,7 @@ int g_iSlotOverrideMask[5];
 public void OnPluginStart()
 {
     LoadTranslations("wave_spawner.phrases");
-    CreateConVar("wave_spawner_version", "1.0.1", "Coop Wave Spawner version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
+    CreateConVar("wave_spawner_version", "1.0.2", "Coop Wave Spawner version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
     g_cvInterval = CreateConVar("wave_interval", "8.0", "Interval selected for the next SI wave; running timers keep their snapshot.", FCVAR_NOTIFY, true, 0.0, true, 10000.0);
     g_cvSize = CreateConVar("wave_size", "3", "Size selected for the next SI wave; a spawning wave keeps its snapshot.", FCVAR_NOTIFY, true, 1.0, true, 32.0);
     g_cvOverrideActive = CreateConVar("wave_override_active", "0", "Whether effective wave parameters are a player override.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
@@ -82,7 +82,7 @@ public void OnPluginStart()
     CreateConVar("wave_preferred_direction", "4", "Preferred special direction for the Coop VScript.", FCVAR_DONTRECORD, true, 0.0);
 
     RegConsoleCmd("sm_si", Command_WaveOverride, "Adjust Coop SI wave interval and size.");
-    RegConsoleCmd("sm_spawnwave", Command_ForceWave, "Reset the current Coop SI wave.");
+    RegAdminCmd("sm_spawnwave", Command_ForceWave, ADMFLAG_GENERIC, "Reset the current Coop SI wave.");
     RegServerCmd("sm_wave_reset_override", Command_ResetWaveOverride, "Clear the active Coop wave override.");
 
     HookEvent("round_end", Event_RoundBoundary, EventHookMode_PostNoCopy);
