@@ -1,6 +1,12 @@
 # 资源规则
 
-`resource_rules` 将物品替换、数量及分布策略集中在 `addons/sourcemod/configs/resource_rules.cfg`。
+`optional/resource_rules.smx` 统一承载武器替换、安全室物资处理和资源策略。Zone 系列继续使用原有 `l4d2_addweaponrule`、`confogl_*`、`sm_safeitemkill_*` 设置及 Stripper；AstRedux 使用 `addons/sourcemod/configs/resource_rules.cfg`。下文的策略文件格式适用于后者。
+
+## 半场一致性
+
+复用 Confogl 的 ItemTracking，而非另写一套保存机制。Zone 系列在替换和安全室清理后，由 ItemTracking 执行原数量／路程筛选，再保存和重建药丸、针及三种投掷物；原有 MapInfo 覆盖和人数限额保持不变。武器生成仍使用原生生成器及各模式原有固定替换规则。
+
+AstRedux 的数量／分布仍由策略文件负责，ItemTracking 只提供可选的结果保存／重建，不再套用旧限额。`confogl_enable_itemtracking 1` 启用这一接口；`confogl_itemtracking_savespawns 0` 保持每轮重新选择，设为 `1` 则复用已保存的上述五类补给。新地图清除记录。重建时不重复执行资源替换和随机裁剪。
 
 随机补给按地图候选池抽取，再执行删除或替换，最后按替换后的物品裁剪数量和分布。先执行单物品限制，再按分类首次声明顺序执行分类限制；重叠分类依次处理剩余物品。
 
@@ -126,7 +132,7 @@
 
 ## ConVar
 
-- `resource_rules_file`：相对 SourceMod `configs` 的文件路径，默认 `resource_rules.cfg`。
+- `resource_rules_file`：相对 SourceMod `configs` 的文件路径；默认空字符串，使用框架原有资源设置。各模式插件加载清单显式选择空字符串或 `resource_rules.cfg`，在地图生成前确定配置来源。
 - `resource_rules_visualize`：`0` 正常执行，`1` 预览数量／分布裁剪，`2` 执行并高亮保留点。预览时物品替换照常执行。
 
 原 `resource_pills_flow_*` 参数迁入配置文件。修改配置后换图生效。

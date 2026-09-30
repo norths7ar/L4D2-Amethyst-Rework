@@ -1,110 +1,52 @@
 # 服务器操作
 
-## 性能观测
+日常维护入口如下；运维工具的安装、配置和部署规则见 [ops/README](../ops/README.md)。
 
-主机 `l4d2-observe.service` 每 5 秒采集一次，使用服务器现有 Python 3.10+ 标准库，不需要安装包。要求 cgroup v2 的 `system.slice/$SERVICE_NAME` 布局；安装入口启用 `kernel.sched_schedstats=1` 并只重启观测服务，不启动或重启游戏。完整基线为 `/var/lib/l4d2-observe/host-YYYY-MM-DD.jsonl`，按日保留约 7–8 天（到期按文件修改时间清理），不再限制为最近若干行。`OBSERVE_INTERVAL_SECONDS` 和 `OBSERVE_RETENTION_DAYS` 在 `/etc/l4d2-restart.conf` 配置。
+## 更新与重启
 
-记录逐逻辑 CPU 的 steal/user/system/idle、进程及各线程的区间 CPU、运行毫秒和调度等待毫秒、上下文切换、真实 swap、三类 PSI、换页、磁盘 I/O、网卡 errors/drops 和游戏 cgroup 的限流计数。线程 CPU 以一个逻辑 CPU 为 100%，主机汇总以所有 CPU 为 100%；等待是 Linux 调度器记录的 runnable 等待，不代表全部宿主机干扰。不可用字段为 null/缺失，不等于零。网卡本地丢包不是玩家网络链路丢包率。云平台未暴露的硬件频率、IPC 和物理核争用不能由这些指标直接证实或排除。
+Windows 通过本机 SSH 配置中的 `l4d2-coreyun` 连接服务器：
 
-进程更替、逐核 steal 连续 3 个样本达到 10%、主线程调度等待占区间至少 10%、或 cgroup throttle 会在 `incidents/` 封存最近约 2 分钟主机样本与控制台尾部；非进程事件冷却 5 分钟。事后的记录仍在完整日文件中，判断卡顿不依赖是否触发归档。
+| 入口 | 用途 | 远端命令 |
+| --- | --- | --- |
+| `ops/windows/01-check-content.cmd` | 检查上传内容，不重启 | `sudo l4d2-content-apply --check` |
+| `ops/windows/02-apply-content-and-restart.cmd` | 更新仓库、部署内容、检查地图并重启 | `sudo l4d2-update-and-restart` |
+| `ops/windows/03-restart-server.cmd` | 仅重启 | `sudo l4d2-restart-now` |
 
-全局加载的 `server_observe.smx` 在 `addons/sourcemod/logs/server_observe_YYYYMMDD.log` 每约 5 秒记录真实帧间隔的平均/最大值、超过 20/50/100ms 的次数、真人/特感/普通感染者/Witch/实体数、地图及暂停/准备/休眠状态；只清理自身超过 7 天的日文件。帧间隔不是 CPU 执行耗时；插件在引擎阻塞时也无法执行，恢复后才记录长间隔，完全无响应依靠主机日志判断。时间来自 SourcePawn 浮点引擎时钟，长时间运行后的精度会降低，不应解释成亚毫秒精密 profiler。实体数量是每次输出时的快照，不是该窗口所有工作量或峰值。
+02 会部署仓库文件，但不会更新已经安装到系统中的运维脚本；脚本有改动时先按 [安装与配置](../ops/README.md#安装与配置) 更新工具。执行后检查输出和服务状态；提示 Git 获取失败时，不要把随后成功的内容应用与重启当作仓库更新成功。
 
-管理员可在聊天输入 `!lag`（卡）或 `!fine`（顺）；需带备注时仍可用 `!observe_mark <备注>`。命令只标记玩家体感，不参与自动测量；标记不广播、不记录玩家身份，只向调用者确认。没打标记也会持续采样。报告读取两套日志，排除空服/明确暂停/休眠样本，列出地图汇总、标记附近的窗口与缺失状态：
+游戏内拥有 `m`（RCON）标志的管理员也可执行 `!restart 原因` 或 `!restartserver 原因`，广播后立即退出游戏进程，由 systemd 重新启动。
 
-```bash
-sudo python3 /usr/local/libexec/l4d2/observe_report.py --date 2026-09-10
-```
+## 配置与地图维护
 
-报告是事后命令，不会自动给玩家发送消息。第一次部署后应检查 observer 的 active 状态、两端新日志及一次标记落盘；实时游玩表现仍需实际验证。
+云服游戏目录为 `/home/l4d2/server/left4dead2/`。仓库跟踪的配置应在仓库修改，再通过 02 部署；直接修改运行目录中的同名文件，下次部署会覆盖。未跟踪的私有文件和第三方地图可以通过 SSH/SFTP 维护。
 
-服务器是单所有者环境。`root` 用于 SSH/WinSCP 和部署，`l4d2` 只运行游戏，不授予 root 权限。游戏目录 `/home/l4d2/server` 是唯一运行状态，Git checkout `/home/l4d2/integration` 是仓库内容的部署来源；不使用 overlay、release staging 或单独的 VPK 投递目录。
-
-## 直接修改
-
-通过 root 登录 SSH/WinSCP 后，可以直接进入：
-
-```text
-/home/l4d2/server/left4dead2/
-```
-
-常用位置：
-
-| 内容 | 路径 |
+| 内容 | 游戏目录下的路径 |
 | --- | --- |
 | 管理员 | `addons/sourcemod/configs/admins_simple.ini` |
-| 服务器名、密码和基础设置 | `cfg/server.cfg` |
-| 公告和插件配置 | `cfg/`、`addons/sourcemod/configs/` |
+| 服务器名、密码与基础设置 | `cfg/server.cfg` |
+| 模式、公告与插件配置 | `cfg/`、`addons/sourcemod/configs/` |
 | Stripper | `addons/stripper/` |
 | 插件 | `addons/sourcemod/plugins/` |
-| 第三方地图 | `addons/` |
+| 第三方地图 VPK | `addons/` |
 
-Git 跟踪的 CFG、管理员、公告和 Stripper 文件在仓库中维护，并由 02 部署；未跟踪的服务器私有文件和第三方内容仍可直接维护。需要立即让 SourceMod 重读管理员时，在服务器控制台执行 `sm_reloadadmins`；普通 CFG 是否立即生效由具体插件和执行时机决定。
+修改管理员后，可在服务器控制台执行 `sm_reloadadmins`；其他配置是否即时生效取决于插件及执行时机。SQLite 数据库和 `addons/sourcemod/data/cannounce_messages.txt` 是运行数据，不在仓库维护。
 
-## 应用 VPK/SMX
+整批 VPK 上传完成后，先运行 01 检查，再执行 `sudo l4d2-content-apply` 应用地图清单并重启；若同时需要部署仓库改动，则运行 02。VPK 使用简短 ASCII 文件名，例如 `blackmist_re_v13.vpk`。第三方战役需提供 AstRedux 所需的 Versus 章节定义；坏包或冲突战役会被跳过，应查看输出确认结果。
 
-部署保护脚本须先更新到 `/usr/local/sbin/l4d2-update-and-restart`，再部署包含数据库取消跟踪的版本；仅拉取仓库不会自动更新这个已安装脚本。
+## 地图管理
 
-Windows 的唯一更新/部署入口是 `ops/windows/02-apply-content-and-restart.cmd`，远端执行 `sudo l4d2-update-and-restart`。命令要求 Git checkout 位于配置分支且工作树干净，fetch 后仅允许 fast-forward，并以 `OWNER_USER` 身份运行 Git；只部署 Git 跟踪的 `addons/`、`cfg/`、`scripts/` 到 `GAME_DIR`，不覆盖未跟踪文件，也不执行 `rsync --delete`。数据库及 SQLite 辅助文件在复制和删除阶段均排除，即使旧版本曾跟踪数据库，也保留运行服现有数据。首次运行以更新前的 checkout revision 为基线，后续使用已成功部署的 revision；只按 Git revision 差异删除被删除或重命名的运行时路径。检查或重启失败时 marker 不更新，01 仍只检查内容，03 仍只重启。Git fetch 最多尝试 3 次，失败间隔 3 秒；连续失败时明确提示仓库未更新，跳过 Git 合并和文件部署，仍使用现有 checkout 清单执行 VPK 内容应用及重启，不推进部署 marker。内容应用失败仍返回失败。
+`!mapvote`、`!chaptervote`、`!nextmap` 和终章战役衔接由全局 `campaign_switcher` 提供，不依赖 AstRedux。地图清单由内容应用工具生成，具体合并规则见 [地图内容处理](../ops/README.md#地图内容处理)。
 
-文件仍然直接上传到游戏目录。整批 VPK/SMX 传完后先检查：
+空服时，插件等待真人连接和引擎预留消失，再按 `campaign_empty_switch_delay`（默认 15 秒）切到随机官图；已停在官图且没有新连接时不会反复轮换。该流程只换地图，不切换玩法模式。`sv_hibernate_when_empty 0` 保证空服计时继续运行。
 
-```bash
-sudo l4d2-content-apply --check
-```
-
-确认结果后执行：
-
-```bash
-sudo l4d2-content-apply
-```
-
-命令按文件大小和修改时间缓存成功校验结果（`/var/cache/l4d2/vpk-campaigns.json`），仅完整校验新增或变化的 VPK；分卷任一变化会重新检查整组。汇总全部战役检查冲突，并要求第三方战役提供 AstRedux 的 Versus 章节定义；随后合并并原子更新 `addons/sourcemod/configs/missioncycle.txt`，再重启一次。02 不直接覆盖云服清单：官图段使用仓库版本；三方图按“仓库顺序及译名、仓库外历史顺序及名字、本次新增地图”排列。新增地图被仓库收录后移到仓库指定位置，不重复出现；删除 VPK 则移除条目。直接内容应用使用相同规则，仓库来源为 `CHECKOUT_ROOT`（默认 `/home/l4d2/integration`）；`!mapvote`、`!nextmap` 使用每个战役的第一关，`!chaptervote` 由 Mission Cache 读取当前战役的全部章节。VPK 损坏或任务定义错误时跳过该包；ID/地图冲突时跳过涉及的战役，列出原因，其余正常战役照常生成清单并重启。失败包不缓存为成功结果，修复后下次重新扫描；旧清单中对应的失败战役也不会保留为可选地图。
-
-## 客户端教学过滤
-
-AstRedux 加载 `optional/coop/instructor_filter_support.smx`，只解除 `scripts/instructor_lessons.txt` 的逐文件一致性要求，保持 `sv_consistency` 和原有白名单配置。客户端可选安装教学过滤 VPK；未安装的玩家继续使用原版教学，无需与其他玩家统一脚本。客户端仍需开启游戏指导，必要时在附加内容加载完成后执行 `gameinstructor_reload_lessons`。
-
-该例外允许这个文件的任意修改，并非仅认可某一份过滤包。Instructor 脚本可以改变提示目标与可见性，因此仅在允许此类客户端自定义的模式加载；对抗模式不加载。卸载插件会恢复当前地图原始校验数据，新地图按当前加载插件重新设置。不要把客户端过滤脚本复制到服务端来要求所有玩家使用相同版本。
-
-## 重启
-
-有人急着玩、无需等待空服时：
-
-```bash
-sudo l4d2-restart-now "原因"
-```
-
-脚本会在 systemd journal 中记录操作者、当前地图、真人数和原因，然后直接重启并等待健康检查；不再生成内容 manifest 或独立历史文件。
-
-查看服务和重启历史：
+## 日志与排障
 
 ```bash
 systemctl status l4d2
+journalctl -u l4d2 --since today
 journalctl -u l4d2 -t l4d2-restart --since today
 ```
 
-具备 SourceMod `m`（RCON）管理标志的管理员也可以在游戏内执行：
+SourceMod 日志位于游戏目录的 `addons/sourcemod/logs/`，引擎日志位于 `logs/`。启用崩溃诊断时另查 `/home/l4d2/server/debug.log`；报告是否包含完整回溯取决于 core 是否可用。
 
-```text
-!restart 原因
-!restartserver 原因
-```
-
-服务器广播提示后立即正常退出，systemd 自动拉起。该插件故意不使用会受空服休眠影响的倒计时，也不执行 shell、不持有 sudo、不能运行任意主机命令。
-
-### VPK 文件名与引擎挂载
-
-第三方 VPK 使用简短的 ASCII 文件名，版本号用下划线，例如 `blackmist_re_v13.vpk`。扫描脚本能校验包内容并生成 missioncycle，不代表游戏引擎已挂载该包；缺图时应同时检查引擎 `maps` 输出及 Campaign Switcher 的跳过日志。Blackmist 曾因原文件名未被 Linux 服务端挂载，仅改名并重启后四关恢复识别，包内容未变。
-
-### 玩家自定义进服记录
-
-`addons/sourcemod/data/cannounce_messages.txt` 由插件持有，保存玩家消息、授权与自定义声音，不纳入 Git。云服更新和本地测试服同步均跳过该路径的复制与删除；新实例由插件首次加载时创建文件。
-
-首次发布取消跟踪的变更前，必须先更新云服已安装的 `/usr/local/sbin/l4d2-update-and-restart`，再运行内容更新。仅拉取仓库不会更新已安装的运维脚本；旧脚本会把取消跟踪识别为删除并移除服务器副本。
-
-## 全局地图管理
-
-`campaign_switcher.smx` 位于全局插件目录，启动时自动加载，模式插件重载时由 `generalfixes.cfg` 重新加载。`!mapvote`、`!chaptervote`、`!nextmap` 和终章战役衔接不依赖 AstRedux。空服恢复只换地图，不加载或切换玩法模式。
-
-最后一名真人离开后，或空服被大厅切入三方图但无人进入时，插件等待真人连接和引擎预留都消失，再按 `campaign_empty_switch_delay`（默认 15 秒）切到随机官图。已停在官图且没有新的玩家连接时不会反复轮换。预留查询失败时暂不换图。`server.cfg` 使用 `sm_cvar sv_hibernate_when_empty 0`，保证空服计时继续运行。
+报错时记录时间、地图、模式和操作步骤，并保留对应日志。新增地图或更新插件后，实际验证模式加载、准备开局和换图；VPK 校验通过但游戏仍缺图时，检查引擎 `maps` 输出及 Campaign Switcher 日志。

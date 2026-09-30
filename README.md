@@ -2,11 +2,11 @@
 
 基于 [L4D2 Competitive Rework](https://github.com/SirPlease/L4D2-Competitive-Rework) 的 求生之路 2 服务端配置，保留 Zone 系列药抗模式，并提供 AstRedux 药役。
 
-AstMod (Amethyst) 为 海洋空气 开发的药役模式。Ast作为模式统一简称后，Redux后缀意为在原Mod基础上进行的二次开发修改; AstFlex 的 Flex 后缀本意是低压力休闲模式。
+AstMod (Amethyst) 为 海洋空气 开发的药役模式。Ast作为模式统一简称后，Redux后缀意为在原Mod基础上进行的二次开发修改。
 
-当前主要维护 **AstRedux**，AstFlex 暂停开发。AstMod 已归档至 `archive/astmod-legacy` 分支（`v1.3.0`），主线不再提供或维护。
+当前主要维护 **AstRedux**。AstMod 已归档至 `archive/astmod-legacy` 分支（`v1.3.0`），主线不再提供或维护。
 
-当前保留 ZoneMod 与 ZoneHunters 的 1v1～4v4、ZoneRetro 4v4，以及 AstRedux、冻结的 AstFlex，共 11 个模式入口。纯 Hunter 1v1 使用 ZoneHunters；不再提供 NextMod、NeoMod、Promod／Deadman、Acemod、EQ 和 Apex 模式。竞技通用实现以 ZoneMod 为维护基准，PVE 通用实现以 AstRedux 为维护基准。
+当前保留 ZoneMod 与 ZoneHunters 的 1v1～4v4、ZoneRetro 4v4，以及 AstRedux，共 10 个模式入口。不再提供 NextMod、NeoMod、Promod／Deadman、Acemod、EQ 和 Apex 模式。
 
 ## 常用入口
 

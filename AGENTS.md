@@ -3,7 +3,7 @@
 ## Project Identity
 
 * Maintain this repository as an L4D2 server configuration built on L4D2 Competitive Rework.
-* AstRedux is the actively maintained Coop/PVE mainline. AstMod is archived on `archive/astmod-legacy` at `v1.3.0`; main no longer ships or maintains AstMod compatibility. AstFlex is frozen unless explicitly reopened by the maintainer.
+* AstRedux is the actively maintained Coop/PVE mainline. AstMod is archived on `archive/astmod-legacy` at `v1.3.0`; main no longer ships or maintains AstMod compatibility.
 * Read `README.md` for current project positioning and priorities. Do not duplicate the roadmap or current implementation inventory here.
 * Do not broadly rewrite Competitive Rework core without a concrete project need and review.
 
@@ -13,7 +13,6 @@
 * `docs/ROADMAP.md`: planned work; `docs/CHANGELOG.md`: completed repository changes and version history.
 * `docs/architecture.md`: 只记录框架级别的产品设计思路，不负责记录任何具体模式的决策、路径等。
 * `docs/server-operations.md`: deployment and server operations.
-* `docs/plugin-sources.md`: uncertain SMX provenance and rebuild status.
 * Actual cfgs, SourcePawn, VScript, Stripper, and plugin-load files: runtime behavior.
 
 Keep routine CHANGELOG entries concise and focused on outcomes; major releases may include fuller explanations. Concrete mode rules belong in configuration and relevant release notes, not README or architecture notes.
@@ -30,13 +29,6 @@ Keep each document in its own lane. AGENTS contains durable Agent maintenance ru
 * Keep component responsibilities narrow. A manager observing a state change does not automatically own all gameplay policy related to that state.
 * Treat upstream author comments that explain intent, engine quirks, compatibility, or deliberately disabled behavior as maintenance evidence. Move or update them with the code rather than deleting them for brevity.
 * Third-party campaign compatibility is first-class; do not suppress map-authored behavior without a specific reason and runtime verification.
-
-## AstFlex Freeze
-
-* AstFlex is out of scope.
-* Do not modify, repair, migrate, rename, shim, or otherwise maintain AstFlex unless the maintainer explicitly reopens it.
-* If unrelated work breaks AstFlex, report that consequence and leave it unresolved.
-* AstFlex must not influence current architecture decisions while frozen.
 
 ## Player-Facing Text
 

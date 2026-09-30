@@ -131,3 +131,13 @@ Redux 默认禁用投掷物，以及油桶、烟花、煤气罐和氧气瓶。�
 已有地图专属 Stripper 修改作为完整设计保留，包括随机补给改固定补给、终局修复和弹药堆布局。药箱最多2药的上限、药品密度修正也继续保留，后续结合实际问题逐项审视。
 
 第三方地图可能依赖特殊实体或脚本机制，例如《伦理问题 Alpha 测试》需要榴弹触发机关。遇到兼容问题时，应连同地图脚本和 Stripper 一起检查：资源投票负责放行，已被 Stripper 删除的实体则需要在地图修改层处理。
+
+## fakelag 模拟延迟
+
+`player_fakelag` 提供 `!fakelag` 等命令，依赖 `custom_fakelag` 扩展；本仓库只维护 `addons/sourcemod/scripting/optional/player_fakelag.sp` 包装层，扩展需从 [上游源码](https://github.com/ProdigySim/custom_fakelag) 修改和构建。
+
+## 客户端教学过滤
+
+AstRedux 通过 `instructor_filter_support` 允许玩家自行安装教学过滤 VPK，只解除 `scripts/instructor_lessons.txt` 的逐文件一致性检查，保留其他一致性设置。未安装的玩家继续使用原版教学；客户端需开启游戏指导，必要时执行 `gameinstructor_reload_lessons`。
+
+该例外允许修改整个教学脚本，包括提示目标与可见性，因此对抗玩法模式不加载此插件。卸载时恢复当前地图原始校验数据；过滤脚本安装在客户端，不由服务端统一下发。
