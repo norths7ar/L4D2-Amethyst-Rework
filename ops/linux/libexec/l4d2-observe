@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-set -Eeuo pipefail
-source "${L4D2_RESTART_CONFIG:-/etc/l4d2-restart.conf}"
-export SERVICE_NAME="${SERVICE_NAME:-l4d2.service}"
-export OBSERVE_INTERVAL_SECONDS="${OBSERVE_INTERVAL_SECONDS:-5}"
-export OBSERVE_RETENTION_DAYS="${OBSERVE_RETENTION_DAYS:-7}"
-exec python3 "$(dirname -- "${BASH_SOURCE[0]}")/observe.py" "$@"

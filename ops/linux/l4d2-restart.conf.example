@@ -23,9 +23,3 @@ HEALTH_STARTUP_TIMEOUT_SECONDS=60
 # srcds_run writes its report here after a non-zero srcds_linux exit.
 SRCDS_DEBUG=1
 SRCDS_DEBUG_LOG=$SERVER_ROOT/debug.log
-
-# Low-overhead host/process baseline collected by l4d2-observe.service.
-OBSERVE_INTERVAL_SECONDS=5
-OBSERVE_RETENTION_DAYS=7
-# Full daily host-YYYY-MM-DD.jsonl files; no size-based truncation.
-# Requires cgroup v2 system.slice/SERVICE_NAME and Python 3.10+ (stdlib only).
