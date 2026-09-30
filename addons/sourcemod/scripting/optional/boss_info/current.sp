@@ -1,26 +1,8 @@
-#pragma semicolon 1
-#pragma newdecls required
-
-#include <sourcemod>
-#include <left4dhooks>
-#include <colors>
-
-#define TEAM_SURVIVORS 2
-
 ConVar g_hVsBossBuffer;
 
-public Plugin myinfo =
-{
-	name = "L4D2 Survivor Progress",
-	author = "CanadaRox, Visor",
-	description = "Print survivor progress in flow percents ",
-	version = "2.0.8",
-	url = "https://github.com/SirPlease/L4D2-Competitive-Rework"
-};
 
-public void OnPluginStart()
+void Cur_OnPluginStart()
 {
-	LoadTranslation("current.phrases");
 	g_hVsBossBuffer = FindConVar("versus_boss_buffer");
 
 	RegConsoleCmd("sm_cur", CurrentCmd);
@@ -35,11 +17,11 @@ Action CurrentCmd(int client, int args)
 	float proximity;
 	if (!GetBossProximity(proximity))
 	{
-		CPrintToChat(client, "%t %t", "Tag", "Unavailable");
+		CPrintToChat(client, "%t %t", "Cur_Tag", "Cur_Unavailable");
 		return Plugin_Handled;
 	}
 	int boss_proximity = RoundToNearest(proximity * 100.0);
-	CPrintToChat(client, "%t %t", "Tag", "Current", boss_proximity);
+	CPrintToChat(client, "%t %t", "Cur_Tag", "Cur_Current", boss_proximity);
 	return Plugin_Handled;
 }
 

@@ -54,7 +54,7 @@ int
 
 public Plugin myinfo =
 {
-	name = "EQ2 Finale Tank Manager",
+	name = "Finale Tank Rules",
 	author = "Visor, Electr0",
 	description = "Either two event tanks or one flow and one (second) event tank",
 	version = "2.5.2",

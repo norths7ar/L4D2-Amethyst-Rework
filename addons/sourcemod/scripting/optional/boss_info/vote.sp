@@ -1,28 +1,3 @@
-#pragma semicolon 1
-#pragma newdecls required
-
-#include <sourcemod>
-#include <builtinvotes>
-#include <vote_policy>
-#include <colors>
-#define L4D2UTIL_STOCKS_ONLY
-#include <l4d2util_rounds>
-#undef REQUIRE_PLUGIN
-#include <readyup>
-#include <l4d2_boss_percents>
-#include <witch_and_tankifier>
-
-#define PLUGIN_VERSION "3.2.8"
-
-public Plugin myinfo =
-{
-	name = "[L4D2] Vote Boss",
-	author = "Spoon, Forgetest",
-	version = PLUGIN_VERSION,
-	description = "Votin for boss change.",
-	url = "https://github.com/spoon-l4d2"
-};
-
 Handle
 	g_forwardUpdateBosses;
 
@@ -37,45 +12,44 @@ int
 	bv_iTank,
 	bv_iWitch;
 
-public void OnPluginStart()
+void BV_OnPluginStart()
 {
-	LoadTranslations("l4d_boss_vote.phrases");
 	g_forwardUpdateBosses = CreateGlobalForward("OnUpdateBosses", ET_Ignore, Param_Cell, Param_Cell);
-	
+
 	g_hCvarBossVoting = CreateConVar("l4d_boss_vote", "1", "Enable boss voting", FCVAR_NOTIFY, true, 0.0, true, 1.0); // Sets if boss voting is enabled or disabled
-	
+
 	RegConsoleCmd("sm_voteboss", VoteBossCmd); // Allows players to vote for custom boss spawns
 	RegConsoleCmd("sm_bossvote", VoteBossCmd); // Allows players to vote for custom boss spawns
-	
-	RegAdminCmd("sm_ftank", ForceTankCommand, ADMFLAG_BAN);
-	RegAdminCmd("sm_fwitch", ForceWitchCommand, ADMFLAG_BAN);
+
+	RegAdminCmd("sm_forcetank", ForceTankCommand, ADMFLAG_BAN);
+	RegAdminCmd("sm_forcewitch", ForceWitchCommand, ADMFLAG_BAN);
 }
 
 bool RunVoteChecks(int client)
 {
-	if (IsDarkCarniRemix())
+	if (g_bIsRemix)
 	{
-		CPrintToChat(client, "%t %t", "Tag", "NotAvailable");
+		CPrintToChat(client, "%t %t", "BV_Tag", "BV_NotAvailable");
 		return false;
 	}
-	if (!IsInReady())
+	if (!g_ReadyUpAvailable || !IsInReady())
 	{
-		CPrintToChat(client, "%t %t", "Tag", "Available");
+		CPrintToChat(client, "%t %t", "BV_Tag", "BV_Available");
 		return false;
 	}
 	if (InSecondHalfOfRound())
 	{
-		CPrintToChat(client, "%t %t", "Tag", "FirstRound");
+		CPrintToChat(client, "%t %t", "BV_Tag", "BV_FirstRound");
 		return false;
 	}
 	if (GetClientTeam(client) == 1)
 	{
-		CPrintToChat(client, "%t %t", "Tag", "NotAvailableForSpec");
+		CPrintToChat(client, "%t %t", "BV_Tag", "BV_NotAvailableForSpec");
 		return false;
 	}
 	if (!IsNewBuiltinVoteAllowed())
 	{
-		CPrintToChat(client, "%t %t", "Tag", "CannotBeCalled");
+		CPrintToChat(client, "%t %t", "BV_Tag", "BV_CannotBeCalled");
 		return false;
 	}
 	return true;
@@ -92,18 +66,18 @@ Action VoteBossCmd(int client, int args)
 	if (!GetConVarBool(g_hCvarBossVoting)) {
 		return Plugin_Handled;
 	}
-	
+
 	if (!RunVoteChecks(client)) {
 		return Plugin_Handled;
 	}
 
 	if (args != 2)
 	{
-		CReplyToCommand(client, "%t", "Usage");
-		CReplyToCommand(client, "%t", "Usage2");
+		CReplyToCommand(client, "%t", "BV_Usage");
+		CReplyToCommand(client, "%t", "BV_Usage2");
 		return Plugin_Handled;
 	}
-	
+
 	// Get all non-spectating players
 	if (!VotePolicy_CheckCaller(client)) return Plugin_Handled;
 
@@ -117,24 +91,24 @@ Action VoteBossCmd(int client, int args)
 		}
 		iPlayers[iNumPlayers++] = i;
 	}
-	
+
 	// Get Requested Boss Percents
-	char bv_sTank[8];
-	char bv_sWitch[8];
-	GetCmdArg(1, bv_sTank, 8);
-	GetCmdArg(2, bv_sWitch, 8);
-	
+	char bv_sTank[32];
+	char bv_sWitch[32];
+	GetCmdArg(1, bv_sTank, sizeof(bv_sTank));
+	GetCmdArg(2, bv_sWitch, sizeof(bv_sWitch));
+
 	int tankPercent = -1;
 	int witchPercent = -1;
 	bool changeTank, changeWitch;
-	
+
 	// Make sure the args are actual numbers
 	if (!IsInteger(bv_sTank) || !IsInteger(bv_sWitch))
 	{
-		CReplyToCommand(client, "%t %t", "Tag", "Invalid");
+		CReplyToCommand(client, "%t %t", "BV_Tag", "BV_Invalid");
 		return Plugin_Handled;
 	}
-	
+
 	// Check to make sure static bosses don't get changed
 	if (!IsStaticTankMap())
 	{
@@ -143,9 +117,9 @@ Action VoteBossCmd(int client, int args)
 	else
 	{
 		changeTank = false;
-		CReplyToCommand(client, "%t %t", "Tag", "TankStatic");
+		CReplyToCommand(client, "%t %t", "BV_Tag", "BV_TankStatic");
 	}
-	
+
 	if (!IsStaticWitchMap())
 	{
 		changeWitch = (witchPercent = StringToInt(bv_sWitch)) > 0;
@@ -153,71 +127,73 @@ Action VoteBossCmd(int client, int args)
 	else
 	{
 		changeWitch = false;
-		CReplyToCommand(client, "%t %t", "Tag", "WitchStatic");
+		CReplyToCommand(client, "%t %t", "BV_Tag", "BV_WitchStatic");
 	}
-	
+
 	// Check if percent is within limits
 	if (changeTank && !IsTankPercentValid(tankPercent))
 	{
 		changeTank = false;
-		CReplyToCommand(client, "%t %t", "Tag", "TankBanned");
+		tankPercent = -1;
+		CReplyToCommand(client, "%t %t", "BV_Tag", "BV_TankBanned");
 	}
-	
+
 	if (changeWitch && !IsWitchPercentValid(witchPercent, true))
 	{
 		changeWitch = false;
-		CReplyToCommand(client, "%t %t", "Tag", "WitchBanned");
+		witchPercent = -1;
+		CReplyToCommand(client, "%t %t", "BV_Tag", "BV_WitchBanned");
 	}
-	
+
 	char bv_voteTitle[64];
-	
+
 	// Set vote title
 	if (changeTank && changeWitch)	// Both Tank and Witch can be changed
 	{
-		FormatEx(bv_voteTitle, 64, "%T", "SetBosses", LANG_SERVER, bv_sTank, bv_sWitch);
+		FormatEx(bv_voteTitle, 64, "%T", "BV_SetBosses", LANG_SERVER, bv_sTank, bv_sWitch);
 	}
 	else if (changeTank)	// Only Tank can be changed
 	{
 		if (witchPercent == 0)
 		{
-			FormatEx(bv_voteTitle, 64, "%T", "SetTank", LANG_SERVER, bv_sTank);
+			FormatEx(bv_voteTitle, 64, "%T", "BV_SetTank", LANG_SERVER, bv_sTank);
 		}
 		else
 		{
-			FormatEx(bv_voteTitle, 64, "%T", "SetOnlyTank", LANG_SERVER, bv_sTank);
+			FormatEx(bv_voteTitle, 64, "%T", "BV_SetOnlyTank", LANG_SERVER, bv_sTank);
 		}
 	}
 	else if (changeWitch) // Only Witch can be changed
 	{
 		if (tankPercent == 0)
 		{
-			FormatEx(bv_voteTitle, 64, "%T", "SetWitch", LANG_SERVER, bv_sWitch);
+			FormatEx(bv_voteTitle, 64, "%T", "BV_SetWitch", LANG_SERVER, bv_sWitch);
 		}
 		else
 		{
-			FormatEx(bv_voteTitle, 64, "%T", "SetOnlyWitch", LANG_SERVER, bv_sWitch);
+			FormatEx(bv_voteTitle, 64, "%T", "BV_SetOnlyWitch", LANG_SERVER, bv_sWitch);
 		}
 	}
 	else // Neither can be changed... ok...
 	{
 		if (tankPercent == 0 && witchPercent == 0)
 		{
-			FormatEx(bv_voteTitle, 64, "%T", "SetBossesDisabled", LANG_SERVER);
+			FormatEx(bv_voteTitle, 64, "%T", "BV_SetBossesDisabled", LANG_SERVER);
 		}
 		else if (tankPercent == 0)
 		{
-			FormatEx(bv_voteTitle, 64, "%T", "SetTankDisabled", LANG_SERVER);
+			FormatEx(bv_voteTitle, 64, "%T", "BV_SetTankDisabled", LANG_SERVER);
 		}
 		else if (witchPercent == 0)
 		{
-			FormatEx(bv_voteTitle, 64, "%T", "SetWitchDisabled", LANG_SERVER);
+			FormatEx(bv_voteTitle, 64, "%T", "BV_SetWitchDisabled", LANG_SERVER);
 		}
 		else // Probably not.
 		{
 			return Plugin_Handled;
 		}
 	}
-	
+
 	// Start the vote!
 	Handle bv_hVote = CreateBuiltinVote(BossVoteActionHandler, BuiltinVoteType_Custom_YesNo, BuiltinVoteAction_Cancel | BuiltinVoteAction_VoteEnd | BuiltinVoteAction_End);
 	if (bv_hVote == null) return Plugin_Handled;
@@ -262,66 +238,57 @@ void BossVoteResultHandler(Handle vote, int num_votes, int num_clients, const in
 		{
 			if (item_info[i][BUILTINVOTEINFO_ITEM_VOTES] > (num_clients / 2))
 			{
-			
+
 				// One last ready-up check.
-				if (!IsInReady())  {
+				if (!g_ReadyUpAvailable || !IsInReady())  {
 					DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
-					CPrintToChatAll("%t", "OnlyReadyUp");
+					CPrintToChatAll("%t", "BV_OnlyReadyUp");
 					return;
 				}
-				
+
+				if (!g_hCvarBossVoting.BoolValue || g_bIsRemix || InSecondHalfOfRound()
+					|| (bv_iTank >= 0 && IsStaticTankMap())
+					|| (bv_iWitch >= 0 && IsStaticWitchMap())
+					|| !ApplyBossChange(bv_iTank, bv_iWitch))
+				{
+					DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
+					CPrintToChatAll("%t %t", "BV_Tag", "BV_Invalid");
+					return;
+				}
+
 				if (bv_bTank && bv_bWitch)	// Both Tank and Witch can be changed
 				{
 					char buffer[64];
-					FormatEx(buffer, sizeof(buffer), "%T", "SettingBoss", LANG_SERVER);
+					FormatEx(buffer, sizeof(buffer), "%T", "BV_SettingBoss", LANG_SERVER);
 					DisplayBuiltinVotePass(vote, buffer);
 				}
 				else if (bv_bTank)	// Only Tank can be changed -- Witch must be static
 				{
 					char buffer[64];
-					FormatEx(buffer, sizeof(buffer), "%T", "SettingTank", LANG_SERVER);
+					FormatEx(buffer, sizeof(buffer), "%T", "BV_SettingTank", LANG_SERVER);
 					DisplayBuiltinVotePass(vote, buffer);
 				}
 				else if (bv_bWitch) // Only Witch can be changed -- Tank must be static
 				{
 					char buffer[64];
-					FormatEx(buffer, sizeof(buffer), "%T", "SettingWitch", LANG_SERVER);
+					FormatEx(buffer, sizeof(buffer), "%T", "BV_SettingWitch", LANG_SERVER);
 					DisplayBuiltinVotePass(vote, buffer);
 				}
 				else // Neither can be changed... ok...
 				{
 					char buffer[64];
-					FormatEx(buffer, sizeof(buffer), "%T", "SettingBossDisabled", LANG_SERVER);
+					FormatEx(buffer, sizeof(buffer), "%T", "BV_SettingBossDisabled", LANG_SERVER);
 					DisplayBuiltinVotePass(vote, buffer);
 				}
-				
-				SetWitchPercent(bv_iWitch);
-				SetTankPercent(bv_iTank);
-				
-				if (bv_iWitch == 0)
-				{
-					SetWitchDisabled(true);
-				}
-				
-				if (bv_iTank == 0)
-				{
-					SetTankDisabled(true);
-				}
-				
-				// Update our shiz yo
-				UpdateBossPercents();
-				
-				// Forward da message man :)
-				Call_StartForward(g_forwardUpdateBosses);
-				Call_PushCell(bv_iTank);
-				Call_PushCell(bv_iWitch);
-				Call_Finish();
-				
+
+				// Forward da message man :) Publish the applied values, never rejected requests.
+				PublishBossChange();
+
 				return;
 			}
 		}
 	}
-	
+
 	// Vote Failed
 	DisplayBuiltinVoteFail(vote, BuiltinVoteFail_Loses);
 	return;
@@ -329,18 +296,53 @@ void BossVoteResultHandler(Handle vote, int num_votes, int num_clients, const in
 
 bool IsInteger(const char[] buffer)
 {
-	// negative check
-	if ( !IsCharNumeric(buffer[0]) && buffer[0] != '-' )
-		return false;
-	
+	// Negative values mean unchanged. Reject empty, bare minus and overflow.
+	int start = buffer[0] == '-' ? 1 : 0;
 	int len = strlen(buffer);
-	for (int i = 1; i < len; i++)
+	if (len == start || len > 10) return false;
+	int value;
+	for (int i = start; i < len; i++)
 	{
-		if ( !IsCharNumeric(buffer[i]) )
-			return false;
+		if (!IsCharNumeric(buffer[i])) return false;
+		int digit = buffer[i] - '0';
+		if (value > (2147483647 - digit) / 10) return false;
+		value = value * 10 + digit;
 	}
-
 	return true;
+}
+
+int g_iAppliedTank, g_iAppliedWitch;
+
+bool ApplyBossChange(int tankPercent, int witchPercent)
+{
+	int round = InSecondHalfOfRound() ? 1 : 0;
+	bool oldWitchEnabled = L4D2Direct_GetVSWitchToSpawnThisRound(round);
+	float oldWitchFlow = GetWitchFlow(round);
+	if (!SetBossPercents(tankPercent, witchPercent)) return false;
+
+	// A Tank-only change can relocate or disable an existing conflicting Witch.
+	bool witchChanged = witchPercent >= 0
+		|| oldWitchEnabled != L4D2Direct_GetVSWitchToSpawnThisRound(round)
+		|| oldWitchFlow != GetWitchFlow(round);
+	if (tankPercent >= 0)
+		g_bTankDisabled = !L4D2Direct_GetVSTankToSpawnThisRound(round);
+	if (witchChanged)
+		g_bWitchDisabled = !L4D2Direct_GetVSWitchToSpawnThisRound(round);
+	GetBossPercents(null);
+	UpdateReadyUpFooter();
+
+	// Keep -1 for untouched bosses; otherwise publish the actual final value.
+	g_iAppliedTank = tankPercent < 0 ? -1 : g_fTankPercent;
+	g_iAppliedWitch = witchChanged ? g_fWitchPercent : -1;
+	return true;
+}
+
+void PublishBossChange()
+{
+	Call_StartForward(g_forwardUpdateBosses);
+	Call_PushCell(g_iAppliedTank);
+	Call_PushCell(g_iAppliedWitch);
+	Call_Finish();
 }
 
 /* ========================================================
@@ -360,22 +362,22 @@ Action ForceTankCommand(int client, int args)
 	if (!GetConVarBool(g_hCvarBossVoting)) {
 		return Plugin_Handled;
 	}
-	
-	if (IsDarkCarniRemix())
+
+	if (g_bIsRemix)
 	{
-		CReplyToCommand(client, "%t", "CommandNotAvailable");
+		CReplyToCommand(client, "%t", "BV_CommandNotAvailable");
 		return Plugin_Handled;
 	}
 
 	if (IsStaticTankMap())
 	{
-		CReplyToCommand(client, "%t", "TankSpawnStatic");
+		CReplyToCommand(client, "%t", "BV_TankSpawnStatic");
 		return Plugin_Handled;
 	}
 
-	if (!IsInReady())
+	if (!g_ReadyUpAvailable || !IsInReady())
 	{
-		CReplyToCommand(client, "%t", "OnlyReadyUp");
+		CReplyToCommand(client, "%t", "BV_OnlyReadyUp");
 		return Plugin_Handled;
 	}
 
@@ -392,33 +394,26 @@ Action ForceTankCommand(int client, int args)
 
 	if (p_iRequestedPercent < 0)
 	{
-		CReplyToCommand(client, "%t", "PercentageInvalid");
+		CReplyToCommand(client, "%t", "BV_PercentageInvalid");
 		return Plugin_Handled;
 	}
 
 	// Check if percent is within limits
-	if (!IsTankPercentValid(p_iRequestedPercent))
+	if (!ApplyBossChange(p_iRequestedPercent, -1))
 	{
-		CReplyToCommand(client, "%t", "Percentagebanned");
+		CReplyToCommand(client, "%t", "BV_Percentagebanned");
 		return Plugin_Handled;
 	}
-	
-	// Set the boss
-	SetTankPercent(p_iRequestedPercent);
-	
+
+
 	// Let everybody know
 	char clientName[32];
-	GetClientName(client, clientName, sizeof(clientName));
-	CPrintToChatAll("%t", "TankSpawnAdmin", p_iRequestedPercent, clientName);
-	
-	// Update our shiz yo
-	UpdateBossPercents();
-	
+	if (client) GetClientName(client, clientName, sizeof(clientName));
+	else strcopy(clientName, sizeof(clientName), "Console");
+	CPrintToChatAll("%t", "BV_TankSpawnAdmin", g_fTankPercent, clientName);
+
 	// Forward da message man :)
-	Call_StartForward(g_forwardUpdateBosses);
-	Call_PushCell(p_iRequestedPercent);
-	Call_PushCell(-1);
-	Call_Finish();
+	PublishBossChange();
 
 	return Plugin_Handled;
 }
@@ -431,22 +426,22 @@ Action ForceWitchCommand(int client, int args)
 	if (!GetConVarBool(g_hCvarBossVoting)) {
 		return Plugin_Handled;
 	}
-	
-	if (IsDarkCarniRemix())
+
+	if (g_bIsRemix)
 	{
-		CReplyToCommand(client, "%t", "CommandNotAvailable");
+		CReplyToCommand(client, "%t", "BV_CommandNotAvailable");
 		return Plugin_Handled;
 	}
 
 	if (IsStaticWitchMap())
 	{
-		CReplyToCommand(client, "%t", "WitchSpawnStatic");
+		CReplyToCommand(client, "%t", "BV_WitchSpawnStatic");
 		return Plugin_Handled;
 	}
 
-	if (!IsInReady())
+	if (!g_ReadyUpAvailable || !IsInReady())
 	{
-		CReplyToCommand(client, "%t", "OnlyReadyUp");
+		CReplyToCommand(client, "%t", "BV_OnlyReadyUp");
 		return Plugin_Handled;
 	}
 
@@ -463,33 +458,26 @@ Action ForceWitchCommand(int client, int args)
 
 	if (p_iRequestedPercent < 0)
 	{
-		CReplyToCommand(client, "%t", "PercentageInvalid");
+		CReplyToCommand(client, "%t", "BV_PercentageInvalid");
 		return Plugin_Handled;
 	}
 
 	// Check if percent is within limits
-	if (!IsWitchPercentValid(p_iRequestedPercent))
+	if (!ApplyBossChange(-1, p_iRequestedPercent))
 	{
-		CReplyToCommand(client, "%t", "Percentagebanned");
+		CReplyToCommand(client, "%t", "BV_Percentagebanned");
 		return Plugin_Handled;
 	}
-	
-	// Set the boss
-	SetWitchPercent(p_iRequestedPercent);
-	
+
+
 	// Let everybody know
 	char clientName[32];
-	GetClientName(client, clientName, sizeof(clientName));
-	CPrintToChatAll("%t", "WitchSpawnAdmin", p_iRequestedPercent, clientName);
-	
-	// Update our shiz yo
-	UpdateBossPercents();
-	
+	if (client) GetClientName(client, clientName, sizeof(clientName));
+	else strcopy(clientName, sizeof(clientName), "Console");
+	CPrintToChatAll("%t", "BV_WitchSpawnAdmin", g_fWitchPercent, clientName);
+
 	// Forward da message man :)
-	Call_StartForward(g_forwardUpdateBosses);
-	Call_PushCell(-1);
-	Call_PushCell(p_iRequestedPercent);
-	Call_Finish();
+	PublishBossChange();
 
 	return Plugin_Handled;
 }

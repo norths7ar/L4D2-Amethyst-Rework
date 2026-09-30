@@ -17,7 +17,7 @@
 #include <l4d2_health_temp_bonus>
 #include <l4d_tank_control_eq>
 #include <lerpmonitor>
-#include <witch_and_tankifier>
+#include <boss_spawn_rules>
 
 #define PLUGIN_VERSION "3.9.1"
 
@@ -56,7 +56,7 @@ char sReadyCfgName[64], sHostname[64];
 bool bRoundLive;
 
 // Boss Spawn Scheme
-StringMap hFirstTankSpawningScheme, hSecondTankSpawningScheme;		// eq_finale_tanks (Zonemod, Acemod, etc.)
+StringMap hFirstTankSpawningScheme, hSecondTankSpawningScheme;		// finale_tank_rules (Zonemod, Acemod, etc.)
 StringMap hFinaleExceptionMaps;										// finale_tank_blocker (Promod and older?)
 StringMap hCustomTankScriptMaps;									// Handled by this plugin
 
@@ -200,7 +200,7 @@ void FindTankSelection()
 
 void FindTankifier()
 {
-	bTankifier = LibraryExists("witch_and_tankifier");
+	bTankifier = LibraryExists("boss_spawn_rules");
 }
 
 void LoadPluginTranslations()

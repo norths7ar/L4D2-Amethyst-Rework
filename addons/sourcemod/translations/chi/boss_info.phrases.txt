@@ -1,140 +1,194 @@
 "Phrases"
 {
-    "Tag"
+
+	"BP_TagTank"
+	{
+		"chi"		"<{olive}Tank{default}>"
+	}
+	"BP_TagWitch"
+	{
+		"chi"		"<{olive}Witch{default}>"
+	}
+	"BP_TankOn"
+	{
+		"chi"		"Tank：%d%%"
+	}
+	"BP_WitchOn"
+	{
+		"chi"		"Witch：%d%%"
+	}
+	"BP_Disabled"
+	{
+		"chi"		"已禁用"
+	}
+	"BP_StaticSpawn"
+	{
+		"chi"		"固定刷新"
+	}
+	"BP_None"
+	{
+		"chi"		"无"
+	}
+	"BP_TankDisabled"
+	{
+		"chi"		"Tank：已禁用"
+	}
+	"BP_TankStatic"
+	{
+		"chi"		"Tank：固定刷新"
+	}
+	"BP_TankNone"
+	{
+		"chi"		"Tank：无"
+	}
+	"BP_WitchDisabled"
+	{
+		"chi"		"Witch：已禁用"
+	}
+	"BP_WitchStatic"
+	{
+		"chi"		"Witch：固定刷新"
+	}
+	"BP_WitchNone"
+	{
+		"chi"		"Witch：无"
+	}
+
+    "BV_Tag"
     {
         "chi"		"{blue}<{green}Boss 投票{blue}>{default}"
     }
     // RunVoteChecks
-    "NotAvailable"
+    "BV_NotAvailable"
     {
         "chi"		"此地图不支持 Boss 投票。"
     }
-    "Available"
+    "BV_Available"
     {
         "chi"		"只能在准备阶段发起 Boss 投票。"
     }
-    "FirstRound"
+    "BV_FirstRound"
     {
         "chi"		"只能在地图的第一回合发起 Boss 投票。"
     }
-    "NotAvailableForSpec"
+    "BV_NotAvailableForSpec"
     {
         "chi"		"旁观者不能发起 Boss 投票。"
     }
-    "CannotBeCalled"
+    "BV_CannotBeCalled"
     {
         "chi"		"当前无法发起 Boss 投票……"
     }
     // VoteBossCmd
-    "Usage"
+    "BV_Usage"
     {
         "chi"		"用法：!voteboss {olive}<{default}tank{olive}> <{default}witch{olive}>{default}。"
     }
-    "Usage2"
+    "BV_Usage2"
     {
         "chi"		"使用 {default}\"{blue}0{default}\" 表示{olive}不刷新{default}，\"{blue}-1{default}\" 表示{olive}保持不变。"
     }
-    "Invalid"
+    "BV_Invalid"
     {
         "chi"		"刷新进度{olive}无效{default}。"
     }
-    "TankStatic"
+    "BV_TankStatic"
     {
         "chi"		"此地图的 Tank 刷新点固定，无法更改。"
     }
-    "WitchStatic"
+    "BV_WitchStatic"
     {
         "chi"		"此地图的 Witch 刷新点固定，无法更改。"
     }
-    "TankBanned"
+    "BV_TankBanned"
     {
         "chi"		"该 Tank 刷新进度{blue}不允许使用{default}。"
     }
-    "WitchBanned"
+    "BV_WitchBanned"
     {
         "chi"		"该 Witch 刷新进度{blue}不允许使用{default}。"
     }
-    "SetBosses"
+    "BV_SetBosses"
     {
         "chi"		"将 Tank 刷新设为 %s，Witch 刷新设为 %s？"
     }
-    "SetTank"
+    "BV_SetTank"
     {
         "chi"		"将 Tank 刷新设为 %s，并禁用 Witch？"
     }
-    "SetOnlyTank"
+    "BV_SetOnlyTank"
     {
         "chi"		"将 Tank 刷新设为 %s？"
     }
-    "SetWitch"
+    "BV_SetWitch"
     {
         "chi"		"禁用 Tank，并将 Witch 刷新设为 %s？"
     }
-    "SetOnlyWitch"
+    "BV_SetOnlyWitch"
     {
         "chi"		"将 Witch 刷新设为 %s？"
     }
-    "SetBossesDisabled"
+    "BV_SetBossesDisabled"
     {
         "chi"		"禁用 Tank 和 Witch？"
     }
-    "SetTankDisabled"
+    "BV_SetTankDisabled"
     {
         "chi"		"禁用 Tank？"
     }
-    "SetWitchDisabled"
+    "BV_SetWitchDisabled"
     {
         "chi"		"禁用 Witch？"
     }
     // BossVoteResultHandler
-    "OnlyReadyUp"
+    "BV_OnlyReadyUp"
     {
         "chi"		"只能在准备阶段设置刷新。"
     }
-    "SettingBoss"
+    "BV_SettingBoss"
     {
         "chi"		"正在设置 Boss 刷新……"
     }
-    "SettingTank"
+    "BV_SettingTank"
     {
         "chi"		"正在设置 Tank 刷新……"
     }
-    "SettingWitch"
+    "BV_SettingWitch"
     {
         "chi"		"正在设置 Witch 刷新……"
     }
-    "SettingBossDisabled"
+    "BV_SettingBossDisabled"
     {
         "chi"		"正在禁用 Boss 刷新……"
     }
     // ForceTankCommand
-    "CommandNotAvailable"
+    "BV_CommandNotAvailable"
     {
         "chi"		"此地图不支持该命令。"
     }
-    "TankSpawnStatic"
+    "BV_TankSpawnStatic"
     {
         "chi"		"此地图的 Tank 刷新点固定，无法更改。"
     }
-    "PercentageInvalid"
+    "BV_PercentageInvalid"
     {
         "chi"		"刷新进度{blue}无效{default}。"
     }
-    "Percentagebanned"
+    "BV_Percentagebanned"
     {
         "chi"		"该刷新进度{blue}不允许使用{default}。"
     }
-    "TankSpawnAdmin"
+    "BV_TankSpawnAdmin"
     {
 		"#format"   "{1:i},{2:s}" // 1:p_iRequestedPercent 2:clientName
         "chi"		"Tank 刷新进度已设为 {olive}{1}%{default}，操作管理员：{blue}{2}{default}。"
     }
     // ForceWitchCommand
-    "WitchSpawnStatic"
+    "BV_WitchSpawnStatic"
     {
         "chi"		"此地图的 Witch 刷新点固定，无法更改。"
     }
-    "WitchSpawnAdmin"
+    "BV_WitchSpawnAdmin"
     {
 		"#format"   "{1:i},{2:s}" // 1:p_iRequestedPercent 2:clientName
         "chi"		"Witch 刷新进度已设为 {olive}{1}%{default}，操作管理员：{blue}{2}{default}。"

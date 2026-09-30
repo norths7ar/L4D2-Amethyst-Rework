@@ -1,140 +1,208 @@
 "Phrases"
 {
-    "Tag"
+
+	"Cur_Tag"
+	{
+		"en"		"<{olive}Current{default}>"
+	}
+	"Cur_Current"
+	{
+		"en"		"{green}%d%%{default}"
+	}
+	"Cur_Unavailable"
+	{
+		"en" "Progress unavailable"
+		"chi" "路程不可用"
+	}
+
+	"BP_TagTank"
+	{
+		"en"	"<{olive}Tank{default}>"
+	}
+	"BP_TagWitch"
+	{
+		"en"	"<{olive}Witch{default}>"
+	}
+	"BP_TankOn"
+	{
+		"en"	"Tank: %d%%"
+	}
+	"BP_WitchOn"
+	{
+		"en"	"Witch: %d%%"
+	}
+	"BP_Disabled"
+	{
+		"en"	"Disabled"
+	}
+	"BP_StaticSpawn"
+	{
+		"en"	"Static Spawn"
+	}
+	"BP_None"
+	{
+		"en"	"None"
+	}
+	"BP_TankDisabled"
+	{
+		"en"	"Tank: Disabled"
+	}
+	"BP_TankStatic"
+	{
+		"en"	"Tank: Static Spawn"
+	}
+	"BP_TankNone"
+	{
+		"en"	"Tank: None"
+	}
+	"BP_WitchDisabled"
+	{
+		"en"	"Witch: Disabled"
+	}
+	"BP_WitchStatic"
+	{
+		"en"	"Witch: Static Spawn"
+	}
+	"BP_WitchNone"
+	{
+		"en"	"Witch: None"
+	}
+
+    "BV_Tag"
     {
         "en"        "{blue}<{green}BossVote{blue}>{default}"
     }
     // RunVoteChecks
-    "NotAvailable"
+    "BV_NotAvailable"
     {
         "en"        "Boss voting is not available on this map."
     }
-    "Available"
+    "BV_Available"
     {
         "en"        "Boss voting is only available during ready up."
     }
-    "FirstRound"
+    "BV_FirstRound"
     {
         "en"        "Boss voting is only available during the first round of a map."
     }
-    "NotAvailableForSpec"
+    "BV_NotAvailableForSpec"
     {
         "en"        "Boss voting is not available for spectators."
     }
-    "CannotBeCalled"
+    "BV_CannotBeCalled"
     {
         "en"        "Boss Vote cannot be called right now..."
     }
     // VoteBossCmd
-    "Usage"
+    "BV_Usage"
     {
         "en"        "Usage: !voteboss {olive}<{default}tank{olive}> <{default}witch{olive}>{default}."
     }
-    "Usage2"
+    "BV_Usage2"
     {
         "en"        "Use {default}\"{blue}0{default}\" for {olive}No Spawn{default}, \"{blue}-1{default}\" for {olive}Ignorance."
     }
-    "Invalid"
+    "BV_Invalid"
     {
         "en"        "Percentages are {olive}invalid{default}."
     }
-    "TankStatic"
+    "BV_TankStatic"
     {
         "en"        "Tank spawn is static and can not be changed on this map."
     }
-    "WitchStatic"
+    "BV_WitchStatic"
     {
         "en"        "Witch spawn is static and can not be changed on this map."
     }
-    "TankBanned"
+    "BV_TankBanned"
     {
         "en"        "Tank percentage is {blue}banned{default}."
     }
-    "WitchBanned"
+    "BV_WitchBanned"
     {
         "en"        "Witch percentage is {blue}banned{default}."
     }
-    "SetBosses"
+    "BV_SetBosses"
     {
         "en"        "Set Tank to: %s and Witch to: %s?"
     }
-    "SetTank"
+    "BV_SetTank"
     {
         "en"        "Set Tank to: %s and Witch to: Disabled?"
     }
-    "SetOnlyTank"
+    "BV_SetOnlyTank"
     {
         "en"        "Set Tank to: %s?"
     }
-    "SetWitch"
+    "BV_SetWitch"
     {
         "en"        "Set Tank to: Disabled and Witch to: %s?"
     }
-    "SetOnlyWitch"
+    "BV_SetOnlyWitch"
     {
         "en"        "Set Witch to: %s?"
     }
-    "SetBossesDisabled"
+    "BV_SetBossesDisabled"
     {
         "en"        "Set Bosses to: Disabled?"
     }
-    "SetTankDisabled"
+    "BV_SetTankDisabled"
     {
         "en"        "Set Tank to: Disabled?"
     }
-    "SetWitchDisabled"
+    "BV_SetWitchDisabled"
     {
         "en"        "Set Witch to: Disabled?"
     }
     // BossVoteResultHandler
-    "OnlyReadyUp"
+    "BV_OnlyReadyUp"
     {
         "en"        "Spawns can only be set during ready up."
     }
-    "SettingBoss"
+    "BV_SettingBoss"
     {
         "en"        "Setting Boss Spawns..."
     }
-    "SettingTank"
+    "BV_SettingTank"
     {
         "en"        "Setting Tank Spawn..."
     }
-    "SettingWitch"
+    "BV_SettingWitch"
     {
         "en"        "Setting Witch Spawn..."
     }
-    "SettingBossDisabled"
+    "BV_SettingBossDisabled"
     {
         "en"        "Setting Boss Disabled..."
     }
     // ForceTankCommand
-    "CommandNotAvailable"
+    "BV_CommandNotAvailable"
     {
         "en"        "Command not available on this map."
     }
-    "TankSpawnStatic"
+    "BV_TankSpawnStatic"
     {
         "en"        "Tank spawn is static and can not be changed on this map."
     }
-    "PercentageInvalid"
+    "BV_PercentageInvalid"
     {
         "en"        "Percentage is {blue}invalid{default}."
     }
-    "Percentagebanned"
+    "BV_Percentagebanned"
     {
         "en"        "Percentage is {blue}banned{default}."
     }
-    "TankSpawnAdmin"
+    "BV_TankSpawnAdmin"
     {
 		"#format"   "{1:i},{2:s}" // 1:p_iRequestedPercent 2:clientName
         "en"        "Tank spawn set to {olive}{1}%{default} by Admin {blue}{2}{default}."
     }
     // ForceWitchCommand
-    "WitchSpawnStatic"
+    "BV_WitchSpawnStatic"
     {
         "en"        "Witch spawn is static and can not be changed on this map."
     }
-    "WitchSpawnAdmin"
+    "BV_WitchSpawnAdmin"
     {
 		"#format"   "{1:i},{2:s}" // 1:p_iRequestedPercent 2:clientName
         "en"        "Witch spawn set to {olive}{1}%{default} by Admin {blue}{2}{default}."

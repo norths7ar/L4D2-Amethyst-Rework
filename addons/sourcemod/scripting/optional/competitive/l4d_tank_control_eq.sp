@@ -40,6 +40,8 @@ int dcedTankFrustration = -1;
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
     CreateNative("GetTankSelection", Native_GetTankSelection);
+    CreateNative("TankControl_PrintSelection", Native_PrintSelection);
+    RegPluginLibrary("l4d_tank_control_eq");
 
     hForwardOnTryOfferingTankBot = new GlobalForward("TankControl_OnTryOfferingTankBot", ET_Ignore, Param_String);
     hForwardOnTankSelection = new GlobalForward("TankControl_OnTankSelection", ET_Ignore, Param_String);
@@ -78,10 +80,7 @@ public void OnPluginStart()
     RegAdminCmd("sm_tankshuffle", TankShuffle_Cmd, ADMFLAG_SLAY, "Re-picks at random someone to become tank.");
     RegAdminCmd("sm_givetank", GiveTank_Cmd, ADMFLAG_SLAY, "Gives the tank to a selected player");
 
-    // Register the boss commands
-    RegConsoleCmd("sm_tank", Tank_Cmd, "Shows who is becoming the tank.");
-    RegConsoleCmd("sm_boss", Tank_Cmd, "Shows who is becoming the tank.");
-    RegConsoleCmd("sm_witch", Tank_Cmd, "Shows who is becoming the tank.");
+    // Boss query commands are owned by boss_info; selection output stays here.
     
     // Cvars
     hTankPrint  = CreateConVar("tankcontrol_print_all", "0", "Who gets to see who will become the tank? (0 = Infected, 1 = Everyone)");
@@ -413,11 +412,17 @@ void PlayerDeath_Event(Event hEvent, const char[] eName, bool dontBroadcast)
  * When a player wants to find out whos becoming tank,
  * output to them.
  */
-Action Tank_Cmd(int client, int args)
+int Native_PrintSelection(Handle plugin, int numParams)
+{
+    PrintTankSelection(GetNativeCell(1));
+    return 0;
+}
+
+void PrintTankSelection(int client)
 {
     // Only output if client is in-game and we have a queued tank
-    if (!client || !IsClientInGame(client) || StrEqual(queuedTankSteamId, ""))
-        return Plugin_Handled;
+    if (client < 1 || client > MaxClients || !IsClientInGame(client) || StrEqual(queuedTankSteamId, ""))
+        return;
     
     int tankClientId = getInfectedPlayerBySteamId(queuedTankSteamId);
 
@@ -429,7 +434,7 @@ Action Tank_Cmd(int client, int args)
             CPrintToChat(client, "%t %t", "TagSelection", "BecomeTank", tankClientId);
     }
     
-    return Plugin_Handled;
+    return;
 }
 
 /**

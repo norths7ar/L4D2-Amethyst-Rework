@@ -1,0 +1,9 @@
+"Phrases"
+{
+	"Tank_ConfirmedControl"
+	{
+		"#format" "{1:s},{2:s}"
+		"en" "{olive}Tank {default}({red}{1}{default}) is now controlled by {red}{2}{default}."
+		"chi" "{olive}Tank {default}（{red}{1}{default}）的控制权已交给 {red}{2}{default}。"
+	}
+}

@@ -1,7 +1,7 @@
-#if defined _witch_and_tankifier_included
+#if defined _boss_spawn_rules_included
  #endinput
 #endif
-#define _witch_and_tankifier_included
+#define _boss_spawn_rules_included
 
 /**
  * @brief Check if the current map contains a static witch spawn.
@@ -75,10 +75,18 @@ native bool SetTankPercent(int percent);
  */
 native bool SetWitchPercent(int percent);
 
-public SharedPlugin __pl_witch_and_tankifier =
+/**
+ * Apply a Tank/Witch pair atomically against map and new Tank avoidance rules.
+ * Negative values leave that boss unchanged; zero disables it. A Tank-only
+ * change may relocate an enabled Witch that would overlap the new Tank.
+ * Returns false without changing either boss when the requested pair is invalid.
+ */
+native bool SetBossPercents(int tankPercent, int witchPercent);
+
+public SharedPlugin __pl_boss_spawn_rules =
 {
-	name = "witch_and_tankifier",
-	file = "witch_and_tankifier.smx",
+	name = "boss_spawn_rules",
+	file = "boss_spawn_rules.smx",
 #if defined REQUIRE_PLUGIN
 	required = 1,
 #else
@@ -87,7 +95,7 @@ public SharedPlugin __pl_witch_and_tankifier =
 };
 
 #if !defined REQUIRE_PLUGIN
-public void __pl_witch_and_tankifier_SetNTVOptional()
+public void __pl_boss_spawn_rules_SetNTVOptional()
 {
 	MarkNativeAsOptional("IsStaticWitchMap");
 	MarkNativeAsOptional("IsStaticTankMap");
@@ -95,5 +103,7 @@ public void __pl_witch_and_tankifier_SetNTVOptional()
 	MarkNativeAsOptional("IsWitchPercentValid");
 	MarkNativeAsOptional("SetTankPercent");
 	MarkNativeAsOptional("SetWitchPercent");
+	MarkNativeAsOptional("SetBossPercents");
+	MarkNativeAsOptional("IsWitchPercentBlockedForTank");
 }
 #endif

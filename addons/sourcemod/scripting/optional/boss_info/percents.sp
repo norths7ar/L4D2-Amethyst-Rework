@@ -13,29 +13,9 @@ out what's going on :D Kinda makes my other plugins look bad huh :/
 
 */
 
-#pragma semicolon 1
-#pragma newdecls required
 
-#include <colors>
-#include <left4dhooks>
-#include <sourcemod>
-#define L4D2UTIL_STOCKS_ONLY
-#include <l4d2util_rounds>
-#undef REQUIRE_PLUGIN
-#include <confogl>
-#include <readyup>
-#include <witch_and_tankifier>
 
-#define PLUGIN_VERSION "3.2.7"
 
-public Plugin myinfo =
-{
-	name        = "[L4D2] Boss Percents/Vote Boss Hybrid",
-	author      = "Spoon, Forgetest",
-	version     = PLUGIN_VERSION,
-	description = "Displays Boss Flows on Ready-Up and via command. Remade for NextMod.",
-	url         = "https://github.com/spoon-l4d2"
-};
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
@@ -49,6 +29,8 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("IsDarkCarniRemix", Native_IsDarkCarniRemix);              // Used for other plugins to check if the current map is Dark Carnival: Remix (It tends to break things when it comes to bosses)
 
 	RegPluginLibrary("l4d_boss_percent");
+	RegPluginLibrary("l4d_boss_vote");
+	RegPluginLibrary("boss_info");
 	return APLRes_Success;
 }
 
@@ -86,9 +68,8 @@ int  g_fTankPercent;     // Stores current Tank Percent
 char g_sWitchString[32]; // Stores current Witch "State"
 char g_sTankString[32];  // Stores current Tank "State"
 
-public void OnPluginStart()
+void BP_OnPluginStart()
 {
-	LoadTranslations("l4d_boss_percent.phrases");
 
 	// ConVars
 	g_hCvarGlobalPercent = CreateConVar("l4d_global_percent", "0", "Display boss percentages to entire team when using commands");    // Sets if Percents will be displayed to entire team when boss percentage command is used
@@ -155,6 +136,7 @@ int Native_IsDarkCarniRemix(Handle plugin, int numParams)
 int Native_SetWitchDisabled(Handle plugin, int numParams)
 {
 	g_bWitchDisabled = view_as<bool>(GetNativeCell(1));
+	ProcessBossString();
 	UpdateReadyUpFooter();
 
 	return 1;
@@ -165,6 +147,7 @@ int Native_SetWitchDisabled(Handle plugin, int numParams)
 int Native_SetTankDisabled(Handle plugin, int numParams)
 {
 	g_bTankDisabled = view_as<bool>(GetNativeCell(1));
+	ProcessBossString();
 	UpdateReadyUpFooter();
 
 	return 1;
@@ -350,13 +333,13 @@ int GetPercentageFromText(const char[] text)
 		char sBuffer[12];    // Where our percentage will be kept.
 
 		// If the 3rd character before the '%' symbol is a number it's 100%.
-		if (IsCharNumeric(text[index - 3]))
+		if (index >= 3 && IsCharNumeric(text[index - 3]))
 		{
 			return 100;
 		}
 
 		// Check to see if the characters that are 1 and 2 characters before our '%' symbol are numbers
-		if (IsCharNumeric(text[index - 2]) && IsCharNumeric(text[index - 1]))
+		if (index >= 2 && IsCharNumeric(text[index - 2]) && IsCharNumeric(text[index - 1]))
 		{
 			// If both characters are numbers combine them into 1 string
 			FormatEx(sBuffer, sizeof(sBuffer), "%c%c", text[index - 2], text[index - 1]);
@@ -533,39 +516,13 @@ Action GetBossPercents(Handle timer)
 	}
 	else
 	{
-		// This will be any map besides Remix
-		if (InSecondHalfOfRound())
-		{
-			// We're in the second round
-
-			// If the witch flow isn't already 0 from the first round then get the round 2 witch flow
-			if (g_fWitchPercent != 0)
-				g_fWitchPercent = RoundToNearest(GetWitchFlow(1) * 100.0);
-
-			// If the tank flow isn't already 0 from the first round then get the round 2 tank flow
-			if (g_fTankPercent != 0)
-				g_fTankPercent = RoundToNearest(GetTankFlow(1) * 100.0);
-		}
-		else
-		{
-			// We're in the first round.
-
-			// Set our boss percents to 0 - If bosses are not set to spawn this round, they will remain 0
-			g_fWitchPercent = 0;
-			g_fTankPercent  = 0;
-
-			// If the Witch is set to spawn this round. Find the witch flow and set it as our witch percent
-			if (L4D2Direct_GetVSWitchToSpawnThisRound(0))
-			{
-				g_fWitchPercent = RoundToNearest(GetWitchFlow(0) * 100.0);
-			}
-
-			// If the Tank is set to spawn this round. Find the witch flow and set it as our witch percent
-			if (L4D2Direct_GetVSTankToSpawnThisRound(0))
-			{
-				g_fTankPercent = RoundToNearest(GetTankFlow(0) * 100.0);
-			}
-		}
+		// This will be any map besides Remix. Read the active half directly: a
+		// previously disabled boss may have been re-enabled since the last refresh.
+		int round = InSecondHalfOfRound() ? 1 : 0;
+		g_fWitchPercent = L4D2Direct_GetVSWitchToSpawnThisRound(round)
+			? RoundToNearest(GetWitchFlow(round) * 100.0) : 0;
+		g_fTankPercent = L4D2Direct_GetVSTankToSpawnThisRound(round)
+			? RoundToNearest(GetTankFlow(round) * 100.0) : 0;
 	}
 
 	// Finally build up our string for effiency, yea.
@@ -621,37 +578,37 @@ Action Timer_UpdateReadyUpFooter(Handle timer)
 		// Format our Tank String
 		if (g_fTankPercent > 0)    // If Tank percent is not 0
 		{
-			FormatEx(p_sTankString, sizeof(p_sTankString), "%T", "TankOn", LANG_SERVER, g_fTankPercent);
+			FormatEx(p_sTankString, sizeof(p_sTankString), "%T", "BP_TankOn", LANG_SERVER, g_fTankPercent);
 		}
 		else if (g_bTankDisabled)    // If another plugin has disabled the tank
 		{
-			FormatEx(p_sTankString, sizeof(p_sTankString), "%T", "TankDisabled", LANG_SERVER);
+			FormatEx(p_sTankString, sizeof(p_sTankString), "%T", "BP_TankDisabled", LANG_SERVER);
 		}
 		else if (p_bStaticTank)    // If current map contains static Tank
 		{
-			FormatEx(p_sTankString, sizeof(p_sTankString), "%T", "TankStatic", LANG_SERVER);
+			FormatEx(p_sTankString, sizeof(p_sTankString), "%T", "BP_TankStatic", LANG_SERVER);
 		}
 		else    // There is no Tank (Flow = 0)
 		{
-			FormatEx(p_sTankString, sizeof(p_sTankString), "%T", "TankNone", LANG_SERVER);
+			FormatEx(p_sTankString, sizeof(p_sTankString), "%T", "BP_TankNone", LANG_SERVER);
 		}
 
 		// Format our Witch String
 		if (g_fWitchPercent > 0)    // If Witch percent is not 0
 		{
-			FormatEx(p_sWitchString, sizeof(p_sWitchString), "%T", "WitchOn", LANG_SERVER, g_fWitchPercent);
+			FormatEx(p_sWitchString, sizeof(p_sWitchString), "%T", "BP_WitchOn", LANG_SERVER, g_fWitchPercent);
 		}
 		else if (g_bWitchDisabled)    // If another plugin has disabled the witch
 		{
-			FormatEx(p_sWitchString, sizeof(p_sWitchString), "%T", "WitchDisabled", LANG_SERVER);
+			FormatEx(p_sWitchString, sizeof(p_sWitchString), "%T", "BP_WitchDisabled", LANG_SERVER);
 		}
 		else if (p_bStaticWitch)    // If current map contains static Witch
 		{
-			FormatEx(p_sWitchString, sizeof(p_sWitchString), "%T", "WitchStatic", LANG_SERVER);
+			FormatEx(p_sWitchString, sizeof(p_sWitchString), "%T", "BP_WitchStatic", LANG_SERVER);
 		}
 		else    // There is no Witch (Flow = 0)
 		{
-			FormatEx(p_sWitchString, sizeof(p_sWitchString), "%T", "WitchNone", LANG_SERVER);
+			FormatEx(p_sWitchString, sizeof(p_sWitchString), "%T", "BP_WitchNone", LANG_SERVER);
 		}
 
 		// Combine our Tank and Witch strings together
@@ -697,9 +654,11 @@ Action Timer_UpdateReadyUpFooter(Handle timer)
 Action BossCmd(int client, int args)
 {
 	// Show our boss percents
-	if (client)
+	if (client > 0 && client <= MaxClients && IsClientInGame(client))
 	{
 		PrintBossPercents(client);
+		if (GetFeatureStatus(FeatureType_Native, "TankControl_PrintSelection") == FeatureStatus_Available)
+			TankControl_PrintSelection(client);
 		RequestFrame(PrintCurrent, GetClientUserId(client));
 	}
 
@@ -709,7 +668,7 @@ Action BossCmd(int client, int args)
 void PrintCurrent(int userid)
 {
 	int client = GetClientOfUserId(userid);
-	if (client) FakeClientCommand(client, "sm_current");
+	if (client) CurrentCmd(client, 0);
 }
 
 void ProcessBossString()
@@ -730,20 +689,20 @@ void ProcessBossString()
 	if (g_fTankPercent > 0)
 		g_sTankString[0] = '\0';
 	else if (g_bTankDisabled)
-		strcopy(g_sTankString, sizeof(g_sTankString), "Disabled");
+		strcopy(g_sTankString, sizeof(g_sTankString), "BP_Disabled");
 	else if (p_bStaticTank)
-		strcopy(g_sTankString, sizeof(g_sTankString), "StaticSpawn");
+		strcopy(g_sTankString, sizeof(g_sTankString), "BP_StaticSpawn");
 	else
-		strcopy(g_sTankString, sizeof(g_sTankString), "None");
+		strcopy(g_sTankString, sizeof(g_sTankString), "BP_None");
 
 	if (g_fWitchPercent > 0)
 		g_sWitchString[0] = '\0';
 	else if (g_bWitchDisabled)
-		strcopy(g_sWitchString, sizeof(g_sWitchString), "Disabled");
+		strcopy(g_sWitchString, sizeof(g_sWitchString), "BP_Disabled");
 	else if (p_bStaticWitch)
-		strcopy(g_sWitchString, sizeof(g_sWitchString), "StaticSpawn");
+		strcopy(g_sWitchString, sizeof(g_sWitchString), "BP_StaticSpawn");
 	else
-		strcopy(g_sWitchString, sizeof(g_sWitchString), "None");
+		strcopy(g_sWitchString, sizeof(g_sWitchString), "BP_None");
 }
 
 void PrintBossPercents(int client = 0)
@@ -772,18 +731,18 @@ void PrintBossPercents(int client = 0)
 				if (IsClientInGame(i) && !IsFakeClient(i) && (teamflag & (1 << GetClientTeam(i))))
 				{
 					if (g_sTankString[0] == '\0')
-						CPrintToChat(i, "%t {red}%d%%", "TagTank", g_fTankPercent);
+						CPrintToChat(i, "%t {red}%d%%", "BP_TagTank", g_fTankPercent);
 					else
-						CPrintToChat(i, "%t {red}%t", "TagTank", g_sTankString);
+						CPrintToChat(i, "%t {red}%t", "BP_TagTank", g_sTankString);
 				}
 			}
 		}
 		else
 		{
 			if (g_sTankString[0] == '\0')
-				CPrintToChat(client, "%t {red}%d%%", "TagTank", g_fTankPercent);
+				CPrintToChat(client, "%t {red}%d%%", "BP_TagTank", g_fTankPercent);
 			else
-				CPrintToChat(client, "%t {red}%t", "TagTank", g_sTankString);
+				CPrintToChat(client, "%t {red}%t", "BP_TagTank", g_sTankString);
 		}
 	}
 	if (g_bCvarWitchPercent)
@@ -795,18 +754,18 @@ void PrintBossPercents(int client = 0)
 				if (IsClientInGame(i) && !IsFakeClient(i) && (teamflag & (1 << GetClientTeam(i))))
 				{
 					if (g_sWitchString[0] == '\0')
-						CPrintToChat(i, "%t {red}%d%%", "TagWitch", g_fWitchPercent);
+						CPrintToChat(i, "%t {red}%d%%", "BP_TagWitch", g_fWitchPercent);
 					else
-						CPrintToChat(i, "%t {red}%t", "TagWitch", g_sWitchString);
+						CPrintToChat(i, "%t {red}%t", "BP_TagWitch", g_sWitchString);
 				}
 			}
 		}
 		else
 		{
 			if (g_sWitchString[0] == '\0')
-				CPrintToChat(client, "%t {red}%d%%", "TagWitch", g_fWitchPercent);
+				CPrintToChat(client, "%t {red}%d%%", "BP_TagWitch", g_fWitchPercent);
 			else
-				CPrintToChat(client, "%t {red}%t", "TagWitch", g_sWitchString);
+				CPrintToChat(client, "%t {red}%t", "BP_TagWitch", g_sWitchString);
 		}
 	}
 }

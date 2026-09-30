@@ -76,7 +76,7 @@ native bool IsDarkCarniRemix();
 public SharedPlugin __pl_l4d2_boss_percents = 
 {
 	name = "l4d_boss_percent",
-	file = "l4d_boss_percent.smx",
+	file = "boss_info.smx",
 #if defined REQUIRE_PLUGIN
 	required = 1,
 #else
