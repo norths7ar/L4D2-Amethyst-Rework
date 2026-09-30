@@ -18,14 +18,13 @@ public Plugin myinfo =
     name = "Profile Controller",
     author = "norths7ar",
     description = "Validates, selects, and applies declarative player-count profiles.",
-    version = "0.4.0"
+    version = "0.5.0"
 };
 
 CachedProfile g_profiles[MAX_PROFILES + 1];
 ArrayList g_defaultCvarNames;
 ArrayList g_defaultCvarValues;
 ConVar g_cvCurrentProfile;
-ConVar g_cvForcedProfile;
 ConVar g_cvProfileConfig;
 GlobalForward g_fwdProfileApplied;
 GlobalForward g_fwdProfilePreApply;
@@ -37,15 +36,12 @@ bool g_bProfilesLoaded;
 public void OnPluginStart()
 {
     LoadTranslations("profile_controller.phrases");
-    CreateConVar("profile_controller_version", "0.4.0", "Profile Controller version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
+    CreateConVar("profile_controller_version", "0.5.0", "Profile Controller version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
     g_cvCurrentProfile = CreateConVar("profile_current", "1", "Currently applied player profile.", FCVAR_NOTIFY, true, 1.0, true, 4.0);
-    g_cvForcedProfile = CreateConVar("profile_forced", "0", "Force a profile; 0 follows human survivor count.", FCVAR_NOTIFY, true, 0.0, true, 4.0);
     g_cvProfileConfig = CreateConVar("profile_controller_config", "", "Path_SM-relative KeyValues profile configuration.", FCVAR_DONTRECORD);
     HookConVarChange(g_cvProfileConfig, OnProfileConfigChanged);
 
     RegServerCmd("sm_profile_reapply", Command_ReapplyProfile);
-    RegAdminCmd("sm_profile_status", Command_ProfileStatus, ADMFLAG_CONFIG, "Show the active profile.");
-    RegAdminCmd("sm_profile_force", Command_ForceProfile, ADMFLAG_CONFIG, "Force profile 1-4, or 0 for automatic selection.");
 
     HookEvent("player_team", Event_PlayerTeam, EventHookMode_Post);
     g_fwdProfileApplied = new GlobalForward("ProfileController_OnProfileApplied", ET_Ignore, Param_Cell);
@@ -148,49 +144,6 @@ public Action Command_ReapplyProfile(int args)
     return Plugin_Handled;
 }
 
-public Action Command_ProfileStatus(int client, int args)
-{
-    char label[32] = "unavailable";
-    if (g_iCurrentProfile >= 1 && g_iCurrentProfile <= MAX_PROFILES)
-    {
-        strcopy(label, sizeof(label), g_profiles[g_iCurrentProfile].label);
-    }
-
-    ReplyToCommand(
-        client,
-        "[%t] %t",
-        "ProfileTag",
-        "Status",
-        g_iCurrentProfile,
-        label,
-        g_cvForcedProfile.IntValue,
-        CountHumanSurvivors()
-    );
-    return Plugin_Handled;
-}
-
-public Action Command_ForceProfile(int client, int args)
-{
-    if (args != 1)
-    {
-        ReplyToCommand(client, "[%t] %t", "ProfileTag", "Usage");
-        return Plugin_Handled;
-    }
-
-    char argument[8];
-    GetCmdArg(1, argument, sizeof(argument));
-    int profile;
-    if (StringToIntEx(argument, profile) != strlen(argument) || profile < 0 || profile > MAX_PROFILES)
-    {
-        ReplyToCommand(client, "[%t] %t", "ProfileTag", "InvalidProfile");
-        return Plugin_Handled;
-    }
-
-    g_cvForcedProfile.IntValue = profile;
-    ApplyEffectiveProfile("manual_force", true);
-    return Plugin_Handled;
-}
-
 void ApplyEffectiveProfile(const char[] reason, bool force)
 {
     if (!g_bProfilesLoaded)
@@ -198,18 +151,14 @@ void ApplyEffectiveProfile(const char[] reason, bool force)
         return;
     }
 
-    int profile = g_cvForcedProfile.IntValue;
-    if (profile == 0)
+    int profile = CountHumanSurvivors();
+    if (profile < 1)
     {
-        profile = CountHumanSurvivors();
-        if (profile < 1)
-        {
-            profile = 1;
-        }
-        else if (profile > MAX_PROFILES)
-        {
-            profile = MAX_PROFILES;
-        }
+        profile = 1;
+    }
+    else if (profile > MAX_PROFILES)
+    {
+        profile = MAX_PROFILES;
     }
 
     if (!force && profile == g_iCurrentProfile)
