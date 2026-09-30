@@ -11,7 +11,8 @@ import sys
 import zlib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO, Iterator, TypeAlias
+from typing import BinaryIO, TypeAlias
+from collections.abc import Iterator
 
 
 VPK_SIGNATURE = 0x55AA1234
@@ -62,9 +63,7 @@ def read_entry_data(
             if vpk_path.name.lower().endswith("_dir.vpk")
             else vpk_path.stem
         )
-        archive_path = vpk_path.with_name(
-            f"{base_name}_{entry.archive_index:03d}.vpk"
-        )
+        archive_path = vpk_path.with_name(f"{base_name}_{entry.archive_index:03d}.vpk")
         try:
             with archive_path.open("rb") as archive:
                 archive.seek(entry.offset)
@@ -117,9 +116,7 @@ def iter_vpk_entries(vpk_path: Path) -> Iterator[tuple[VpkEntry, bytes]]:
                         struct.unpack("<IHHIIH", raw_entry)
                     )
                     if terminator != 0xFFFF:
-                        raise VpkError(
-                            f"{vpk_path.name}: invalid VPK entry terminator"
-                        )
+                        raise VpkError(f"{vpk_path.name}: invalid VPK entry terminator")
                     preload = stream.read(preload_size)
                     if len(preload) != preload_size:
                         raise VpkError(f"{vpk_path.name}: truncated preload data")
@@ -307,9 +304,7 @@ def collapse_versus_aliases(
         duplicate_alias = False
         for index, existing in enumerate(collapsed):
             existing_id = str(existing["mission_id"])
-            existing_maps = tuple(
-                str(item).casefold() for item in existing["maps"]
-            )
+            existing_maps = tuple(str(item).casefold() for item in existing["maps"])
             if str(existing["source"]).casefold() != source or existing_maps != maps:
                 continue
             if mission_id.casefold() == f"{existing_id}_vs".casefold():
@@ -326,7 +321,9 @@ def collapse_versus_aliases(
     return collapsed
 
 
-def inspect_directory(directory: Path, cache_path: Path | None = None) -> dict[str, object]:
+def inspect_directory(
+    directory: Path, cache_path: Path | None = None
+) -> dict[str, object]:
     if not directory.is_dir():
         raise VpkError(f"VPK directory does not exist: {directory}")
 
@@ -445,17 +442,30 @@ def inspect_directory(directory: Path, cache_path: Path | None = None) -> dict[s
     if errors:
         details = "\n".join(f"  - {error}" for error in errors)
         print(f"VPK warnings (affected campaigns skipped):\n{details}", file=sys.stderr)
-    campaigns = [campaign for campaign in campaigns
-                 if f"{campaign['source']}:{campaign['mission']}" not in conflicting]
+    campaigns = [
+        campaign
+        for campaign in campaigns
+        if f"{campaign['source']}:{campaign['mission']}" not in conflicting
+    ]
 
     if cache_path:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         temporary = cache_path.with_suffix(".tmp")
-        temporary.write_text(json.dumps({
-            "directory": str(directory.resolve()), "entries": updated,
-        }, ensure_ascii=False), encoding="utf-8")
+        temporary.write_text(
+            json.dumps(
+                {
+                    "directory": str(directory.resolve()),
+                    "entries": updated,
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
         temporary.replace(cache_path)
-        print(f"VPK scan: {len(primary_vpks) - reused} scanned, {reused} cached; {len(errors)} warning(s).", file=sys.stderr)
+        print(
+            f"VPK scan: {len(primary_vpks) - reused} scanned, {reused} cached; {len(errors)} warning(s).",
+            file=sys.stderr,
+        )
 
     campaigns.sort(
         key=lambda item: (
@@ -463,7 +473,11 @@ def inspect_directory(directory: Path, cache_path: Path | None = None) -> dict[s
             str(item["first_map"]).casefold(),
         )
     )
-    return {"files": [path.name for path in all_vpks], "campaigns": campaigns, "warnings": errors}
+    return {
+        "files": [path.name for path in all_vpks],
+        "campaigns": campaigns,
+        "warnings": errors,
+    }
 
 
 def escape_keyvalues(value: str) -> str:
@@ -485,7 +499,10 @@ def render_keyvalues(pairs: list[tuple[str, KVValue]], indent: int = 0) -> str:
 
 
 def reconcile_missioncycle(
-    source_path: Path, inventory_path: Path, output_path: Path, section: str,
+    source_path: Path,
+    inventory_path: Path,
+    output_path: Path,
+    section: str,
     policy_path: Path | None = None,
 ) -> None:
     root = parse_keyvalues(source_path.read_text(encoding="utf-8-sig"))
@@ -580,7 +597,11 @@ def parse_args() -> argparse.Namespace:
         "reconcile", help="replace only the managed mission-cycle section"
     )
     reconcile.add_argument("--source", required=True, type=Path)
-    reconcile.add_argument("--policy", type=Path, help="repository mission cycle with curated names and order")
+    reconcile.add_argument(
+        "--policy",
+        type=Path,
+        help="repository mission cycle with curated names and order",
+    )
     reconcile.add_argument("--inventory", required=True, type=Path)
     reconcile.add_argument("--output", required=True, type=Path)
     reconcile.add_argument("--section", default="第三方战役")
