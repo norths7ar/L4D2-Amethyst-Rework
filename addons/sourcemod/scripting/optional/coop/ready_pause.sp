@@ -81,7 +81,7 @@ public Plugin myinfo =
 	name = "Coop ready and pause",
 	author = "CanadaRox, 海洋空氣, norths7ar",
 	description = "Per-player readiness, loading gate and start/resume countdowns",
-	version = "1.2.3"
+	version = "1.2.4"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -160,6 +160,9 @@ public void OnPluginStart()
 
 public void OnMapStart()
 {
+	// round_start can precede OnMapStart. OnMapEnd clears the previous map,
+	// so an observed boundary here belongs to this map and must survive setup.
+	bool roundInitialized = g_roundInitialized || g_lateLoad;
 	g_configsExecuted = false;
 	g_roundInitialized = false;
 	g_readyPhase = false;
@@ -184,7 +187,7 @@ public void OnMapStart()
 	// Mode loads and the first map must also enter ready-up, not only restarts.
 	// A plugin loaded into a running map missed round_start. Ordinary map loads
 	// must observe the real round boundary before allowing a start countdown.
-	BeginReadyPhase(g_lateLoad);
+	BeginReadyPhase(roundInitialized);
 	g_lateLoad = false;
 }
 
