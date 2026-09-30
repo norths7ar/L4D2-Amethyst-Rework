@@ -32,7 +32,77 @@
     }
     "TagSelected"
     {
-        "chi" "[称号] 已保存选择；未选择时普通玩家无称号，管理员显示“管理员”。"
-        "en" "[Tag] Selection saved. Players have no tag by default; admins use Administrator."
+        "chi" "[称号] 已保存并显示所选称号。"
+        "en" "[Tag] Your selection is saved and visible."
+    }
+    "TagCustomOption"
+    {
+        "chi" "使用已保存的自定义称号"
+        "en" "Use saved custom tag"
+    }
+    "TagClearOption"
+    {
+        "chi" "清除自定义称号"
+        "en" "Clear custom tag"
+    }
+    "TagManageOption"
+    {
+        "chi" "管理玩家称号"
+        "en" "Manage player tags"
+    }
+    "TagBanOption"
+    {
+        "chi" "禁用自定义称号（同时清除）"
+        "en" "Ban custom tags (also clears saved text)"
+    }
+    "TagRestoreOption"
+    {
+        "chi" "恢复自定义称号权限"
+        "en" "Restore custom tag permission"
+    }
+    "TagLoading"
+    {
+        "chi" "[称号] 称号信息尚未加载完成，请稍后再试。"
+        "en" "[Tag] Tag preferences are still loading. Please try again shortly."
+    }
+    "TagInvalidCustom"
+    {
+        "chi" "[称号] 用法：!tag 称号。请输入1～12个字符的纯文本；不能全为空格，也不能含控制符、换行、花括号或管理员专用称号。"
+        "en" "[Tag] Usage: !tag text. Use 1-12 plain-text characters, not only spaces. Controls, newlines, braces and the reserved administrator tag are not allowed."
+    }
+    "TagCustomBanned"
+    {
+        "chi" "[称号] 你的自定义称号权限已被禁用；仍可选择预设称号。"
+        "en" "[Tag] Your custom tag permission is disabled. Preset tags remain available."
+    }
+    "TagCustomUnavailable"
+    {
+        "chi" "[称号] 当前没有可用的自定义称号。可用 !tag 称号 设置。"
+        "en" "[Tag] No saved custom tag is available. Use !tag text to set one."
+    }
+    "TagCustomCleared"
+    {
+        "chi" "[称号] 已清除自定义称号；拥有权限时可用 !tag 称号 重新设置。"
+        "en" "[Tag] Custom tag cleared. If permitted, use !tag text to set another."
+    }
+    "TagCustomRestored"
+    {
+        "chi" "[称号] 已恢复自定义称号权限。可用 !tag 称号 重新设置。"
+        "en" "[Tag] Custom tag permission restored. Use !tag text to set a new tag."
+    }
+    "TagManageDenied"
+    {
+        "chi" "[称号] 你没有管理玩家称号的权限。"
+        "en" "[Tag] You do not have permission to manage player tags."
+    }
+    "TagTargetUnavailable"
+    {
+        "chi" "[称号] 该玩家已离线，或你无权管理其称号。"
+        "en" "[Tag] That player has left or cannot be targeted by you."
+    }
+    "TagManageDone"
+    {
+        "chi" "[称号] 已更新该玩家的称号设置。"
+        "en" "[Tag] The player's tag settings have been updated."
     }
 }
