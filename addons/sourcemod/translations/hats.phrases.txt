@@ -6,41 +6,6 @@
 		"en"		"You are now wearing the {ORANGE}[{1}] {DEFAULT}hat."
         "chi" "已戴上{ORANGE}{1}{DEFAULT}。"
 	}
-	"Hat_Changed"
-	{
-		"#format"	"{1:s}"
-		"en"		"Changed hat on {ORANGE}{1}{DEFAULT}."
-        "chi" "已为{ORANGE}{1}{DEFAULT}更换帽子。"
-	}
-	"Hat_No_Index"
-	{
-		"#format"	"{1:d}{2:d}"
-		"en"		"Cannot find the hat index {ORANGE}{1}{DEFAULT}, values between {ORANGE}1{DEFAULT} and {ORANGE}{2}{DEFAULT}."
-        "chi" "找不到编号{ORANGE}{1}{DEFAULT}的帽子，可用编号为 1 至{ORANGE}{2}{DEFAULT}。"
-	}
-	"Hat_Not_Found"
-	{
-		"#format"	"{1:s}"
-		"en"		"Cannot find the hat {ORANGE}{1}{DEFAULT}."
-        "chi" "找不到帽子{ORANGE}{1}{DEFAULT}。"
-	}
-	"Hat_Invalid"
-	{
-		"en"		"Invalid player selected."
-        "chi" "请选择有效玩家。"
-	}
-	"Hat_Unblocked"
-	{
-		"#format"	"{1:s}"
-		"en"		"Unblocked hats for {ORANGE}{1}{DEFAULT}."
-        "chi" "已允许{ORANGE}{1}{DEFAULT}戴帽子。"
-	}
-	"Hat_Blocked"
-	{
-		"#format"	"{1:s}"
-		"en"		"Blocked hats for {ORANGE}{1}{DEFAULT}."
-        "chi" "已禁止{ORANGE}{1}{DEFAULT}戴帽子。"
-	}
 	"Hat_View"
 	{
 		"#format"	"{1:s}"
@@ -82,36 +47,6 @@
 	{
 		"en"		"Can't use this command at the moment."
         "chi" "当前状态不能使用此命令。"
-	}
-	"ADMIN_DISABLE_HAT"
-	{
-		"en"		"Select player to disable hats:"
-        "chi" "选择要禁止戴帽子的玩家"
-	}
-	"ADMIN_CHANGE_HAT"
-	{
-		"en"		"Select player to change hat:"
-        "chi" "选择要更换帽子的玩家"
-	}
-	"ADMIN_VISIBILITY"
-	{
-		"en"		"Select player to set hat visibility:"
-        "chi" "选择要调整显示的玩家"
-	}
-	"HAT_SET_ANGLE"
-	{
-		"en"		"Set Angle:"
-        "chi" "调整角度"
-	}
-	"HAT_SET_POSITION"
-	{
-		"en"		"Set Position:"
-        "chi" "调整位置"
-	}
-	"HAT_SET_SIZE"
-	{
-		"en"		"Set Size:"
-        "chi" "调整大小"
 	}
 	"HAT_MAIN"
 	{
@@ -158,12 +93,6 @@
 		"#format"	"{1:s}"
 		"en"		"Third person hat view has been turned {ORANGE}{1}{DEFAULT}."
         "chi" "第三人称帽子显示已{ORANGE}{1}{DEFAULT}。"
-	}
-	"Hat_ViewSet"
-	{
-		"#format"	"{1:s}{2:s}"
-		"en"		"General hat visibility for {ORANGE}{1}{DEFAULT} has been turned {ORANGE}{2}{DEFAULT}."
-        "chi" "已将{ORANGE}{1}{DEFAULT}的帽子显示设为{ORANGE}{2}{DEFAULT}。"
 	}
 	"Hat_Visibility_Set"
 	{

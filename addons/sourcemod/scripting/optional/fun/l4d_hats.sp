@@ -332,7 +332,7 @@ bool g_bHatViewTP[MAXPLAYERS+1];		// View on TP
 ConVar g_hCvarAllow, g_hCvarBots, g_hCvarChange, g_hCvarDetect, g_hCvarMake, g_hCvarMenu, g_hCvarModes, g_hCvarModesOff, g_hCvarModesTog, g_hCvarOpaq, g_hCvarPrecache, g_hCvarRand, g_hCvarSave, g_hCvarThird, g_hCvarWall;
 ConVar g_hCvarMPGameMode, g_hPluginReadyUp;
 Handle g_hCookie_Hat, g_hCookie_All;
-Menu g_hMenu, g_hMenus[MAXPLAYERS+1];
+Menu g_hMenu;
 bool g_bCvarAllow, g_bMapStarted, g_bCvarBots, g_bCvarWall, g_bLeft4Dead2, g_bTranslation, g_bViewHooked, g_bValidMap;
 int g_iCount, g_iCvarMake, g_iCvarMenu, g_iCvarOpaq, g_iCvarRand, g_iCvarSave, g_iCvarThird;
 float g_fCvarChange, g_fCvarDetect;
@@ -341,17 +341,12 @@ float g_fSize[MAX_HATS], g_vAng[MAX_HATS][3], g_vPos[MAX_HATS][3];
 char g_sModels[MAX_HATS][64], g_sNames[MAX_HATS][64];
 char g_sFlagsMake[32];
 char g_sFlagsMenu[32];
-char g_sSteamID[MAXPLAYERS+1][32];		// Stores client user id to determine if the blocked player is the same
 int g_iHatIndex[MAXPLAYERS+1];			// Player hat entity reference
 int g_iHatWalls[MAXPLAYERS+1];			// Hidden hat entity reference
-int g_iSelected[MAXPLAYERS+1];			// The selected hat index (0 to MAX_HATS)
-int g_iTarget[MAXPLAYERS+1];			// For admins to change clients hats
 int g_iType[MAXPLAYERS+1];				// Stores selected hat to give players
-int g_iMenuType[MAXPLAYERS+1];			// Admin var for menu
 bool g_bHatAll[MAXPLAYERS+1] = {true, ...};			// Visibility of everyones hats (personal setting)
 bool g_bHatView[MAXPLAYERS+1];			// Player view of hat on/off (personal setting)
 bool g_bHatOff[MAXPLAYERS+1];			// Lets players turn their hats on/off
-bool g_bBlocked[MAXPLAYERS+1];			// Determines if the player is blocked from hats
 bool g_bExternalCvar[MAXPLAYERS+1];		// If thirdperson view was detected (thirdperson_shoulder cvar)
 bool g_bExternalProp[MAXPLAYERS+1];		// If thirdperson view was detected (netprop or revive actions)
 bool g_bExternalState[MAXPLAYERS+1];	// If thirdperson view was detected
@@ -360,8 +355,8 @@ bool g_bCookieAuth[MAXPLAYERS+1];		// When cookies cached and client is authoriz
 bool g_bHatTypeExternal[MAXPLAYERS+1];	// Hat type restored by Hats_SetClientHat; ignore late cookies
 bool g_bHatPrefsExternal[MAXPLAYERS+1];	// Prefs restored by Hats_SetClientPrefs; ignore late cookies
 bool g_bHatCookiesReady[MAXPLAYERS+1];	// clientprefs resolved for this connection
-bool g_bHatTypeDirtyLocal[MAXPLAYERS+1];	// Player/admin changed type before cookies resolved
-bool g_bHatPrefsDirtyLocal[MAXPLAYERS+1];	// Player/admin changed prefs before cookies resolved
+bool g_bHatTypeDirtyLocal[MAXPLAYERS+1];	// Player changed type before cookies resolved
+bool g_bHatPrefsDirtyLocal[MAXPLAYERS+1];	// Player changed prefs before cookies resolved
 Handle g_hTimerView[MAXPLAYERS+1];		// Thirdperson view when selecting hat
 Handle g_hTimerDetect;
 
@@ -452,8 +447,6 @@ int HatsPackPrefs(int client)
 void HatsResetClientState(int client)
 {
 	g_iType[client] = 0;
-	g_iSelected[client] = 0;
-	g_iTarget[client] = 0;
 	g_iHatIndex[client] = 0;
 	g_iHatWalls[client] = 0;
 	g_bHatAll[client] = true;
@@ -635,7 +628,7 @@ any Native_SetClientHat(Handle plugin, int numParams)
 	g_iType[client] = index + 1;
 	HatsWriteHatTypeCookie(client);
 
-	if( g_bHatOff[client] || g_bBlocked[client] )
+	if( g_bHatOff[client] )
 		return true;
 
 	return CreateHat(client, index, false);
@@ -817,27 +810,6 @@ public void OnPluginStart()
 
 	// Commands
 	RegConsoleCmd("sm_hats",		CmdHatMain,							"Displays a menu to customize various settings for hats.");
-	RegConsoleCmd("sm_hat",			CmdHat,								"Displays a menu of hats allowing players to change what they are wearing. Optional args: [0 - 128 or hat name or \"random\"]");
-	RegConsoleCmd("sm_hatoff",		CmdHatOff,							"Toggle to turn on or off the ability of wearing hats.");
-	RegConsoleCmd("sm_hatshow",		CmdHatShow,							"Toggle to see or hide your own hat. Applies to first person view or third person using the optional command argument \"tp\" e.g. \"sm_hatshow tp\"");
-	RegConsoleCmd("sm_hatview",		CmdHatShow,							"Toggle to see or hide your own hat. Applies to first person view or third person using the optional command argument \"tp\" e.g. \"sm_hatview tp\"");
-	RegConsoleCmd("sm_hatshowon",	CmdHatShowOn,						"See your own hat. Applies to first person view or third person using the optional command argument \"tp\" e.g. \"sm_hatshowon tp\"");
-	RegConsoleCmd("sm_hatshowoff",	CmdHatShowOff,						"Hide your own hat. Applies to first person view or third person using the optional command argument \"tp\" e.g. \"sm_hatshowoff tp\"");
-	RegConsoleCmd("sm_hatall",		CmdHatsToggle,						"Toggles the visibility of everyone's hats.");
-	RegAdminCmd("sm_hatclient",		CmdHatClient,		ADMFLAG_ROOT,	"Set a clients hat. Usage: sm_hatclient <#userid|name> [hat name or hat index: 0-128 (MAX_HATS)].");
-	RegAdminCmd("sm_hatoffc",		CmdHatOffTarget,	ADMFLAG_ROOT,	"Toggle the ability of wearing hats on specific players.");
-	RegAdminCmd("sm_hatallc",		CmdHatAllTarget,	ADMFLAG_ROOT,	"Toggle the visibility of all hats on specific players.");
-	RegAdminCmd("sm_hatc",			CmdHatTarget,		ADMFLAG_ROOT,	"Displays a menu listing players, select one to change their hat.");
-	RegAdminCmd("sm_hatrandom",		CmdHatRand,			ADMFLAG_ROOT,	"Randomizes all players hats.");
-	RegAdminCmd("sm_hatrand",		CmdHatRand,			ADMFLAG_ROOT,	"Randomizes all players hats.");
-	RegAdminCmd("sm_hatadd",		CmdHatAdd,			ADMFLAG_ROOT,	"Adds specified model to the config (must be the full model path).");
-	RegAdminCmd("sm_hatdel",		CmdHatDel,			ADMFLAG_ROOT,	"Removes a model from the config (either by index or partial name matching).");
-	RegAdminCmd("sm_hatlist",		CmdHatList,			ADMFLAG_ROOT,	"Displays a list of all the hat models (for use with sm_hatdel).");
-	RegAdminCmd("sm_hatsave",		CmdHatSave,			ADMFLAG_ROOT,	"Saves the hat position and angels to the hat config.");
-	RegAdminCmd("sm_hatload",		CmdHatLoad,			ADMFLAG_ROOT,	"Changes all players hats to the one you have.");
-	RegAdminCmd("sm_hatang",		CmdAng,				ADMFLAG_ROOT,	"Shows a menu allowing you to adjust the hat angles (affects all hats/players).");
-	RegAdminCmd("sm_hatpos",		CmdPos,				ADMFLAG_ROOT,	"Shows a menu allowing you to adjust the hat position (affects all hats/players).");
-	RegAdminCmd("sm_hatsize",		CmdHatSize,			ADMFLAG_ROOT,	"Shows a menu allowing you to adjust the hat size (affects all hats/players).");
 
 	g_hCookie_Hat = RegClientCookie("l4d_hats", "Hat Type", CookieAccess_Protected);
 	g_hCookie_All = RegClientCookie("l4d_hats_all", "General Hats Visibility", CookieAccess_Protected);
@@ -904,11 +876,6 @@ void IsAllowed()
 			HookViewEvents();
 		HookEvents();
 		SpectatorHatHooks();
-
-		for( int i = 1; i <= MaxClients; i++ )
-		{
-			g_iSelected[i] = GetRandomInt(0, g_iCount -1);
-		}
 
 		int clientID;
 		for( int i = 1; i <= MaxClients; i++ )
@@ -1090,26 +1057,9 @@ public void OnMapEnd()
 
 public void OnClientPutInServer(int client)
 {
-	g_iMenuType[client] = 0;
 	HatsResetClientState(client);
 	if( AreClientCookiesCached(client) )
 		HatsLoadCookies(client);
-}
-
-public void OnClientAuthorized(int client, const char[] sSteamID)
-{
-	if( g_bBlocked[client] )
-	{
-		if( IsFakeClient(client) )
-		{
-			g_bBlocked[client] = false;
-		}
-		else if( strcmp(sSteamID, g_sSteamID[client]) )
-		{
-			strcopy(g_sSteamID[client], sizeof(g_sSteamID[]), sSteamID);
-			g_bBlocked[client] = false;
-		}
-	}
 }
 
 public void OnClientPostAdminCheck(int client)
@@ -1173,14 +1123,6 @@ KeyValues OpenConfig()
 		SetFailState("Cannot load the file: \"%s\"", CONFIG_SPAWNS);
 	}
 	return hFile;
-}
-
-void SaveConfig(KeyValues hFile)
-{
-	char sPath[PLATFORM_MAX_PATH];
-	BuildPath(Path_SM, sPath, sizeof(sPath), CONFIG_SPAWNS);
-	hFile.Rewind();
-	hFile.ExportToFile(sPath);
 }
 
 void GetHatName(char sTemp[64], int index)
@@ -1387,7 +1329,7 @@ Action TimerDelayCreate(Handle timer, any client)
 {
 	client = GetClientOfUserId(client);
 
-	if( HatsValidClient(client) && !g_bBlocked[client] )
+	if( HatsValidClient(client) )
 	{
 		bool fake = IsFakeClient(client);
 		if( !g_bCvarBots && fake )
@@ -1617,7 +1559,6 @@ Action CmdHatMain(int client, int args)
 	}
 	SetReadyUpPlugin(client, false);
 
-	g_iMenuType[client] = 0;
 
 	Menu menu = new Menu(HandleCmdHatMain);
 	menu.SetTitle("%T", "HAT_MAIN", client);
@@ -1648,7 +1589,7 @@ Action CmdHatMain(int client, int args)
 	return Plugin_Handled;
 }
 
-// Handles callbacks from a client using the director commands menu.
+// Handles the existing personal hat settings.
 int HandleCmdHatMain(Handle menu, MenuAction action, int client, int itemNum)
 {
 	if( action == MenuAction_Select )
@@ -1657,13 +1598,13 @@ int HandleCmdHatMain(Handle menu, MenuAction action, int client, int itemNum)
 		{
 			case 0:
 			{
-				CmdHat(client, 0);
+				OpenHatMenu(client);
 				return 0;
 			}
-			case 1: CmdHatOff(client, 0);
-			case 2: CmdHatShow(client, 0);
-			case 3: FakeClientCommand(client, "sm_hatshow tp");
-			case 4: CmdHatsToggle(client, 0);
+			case 1: ToggleHatWear(client);
+			case 2: ToggleHatView(client, false);
+			case 3: ToggleHatView(client, true);
+			case 4: ToggleOtherHats(client);
 		}
 
 		CmdHatMain(client, 0);
@@ -1684,97 +1625,24 @@ int HandleCmdHatMain(Handle menu, MenuAction action, int client, int itemNum)
 }
 
 // ====================================================================================================
-//					sm_hat
+//					HAT SELECTION
 // ====================================================================================================
-Action CmdHat(int client, int args)
+void OpenHatMenu(int client)
 {
 	if( !g_bCvarAllow || !HatsValidClient(client) )
 	{
 		CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "HAT_NOT_RIGHT_NOW", client);
-		return Plugin_Handled;
+		return;
 	}
 
 	if( g_iCvarMenu != 0 && !HatsClientHasMenuAccess(client) )
 	{
 		CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "No Access", client);
-		return Plugin_Handled;
+		return;
 	}
 
-	g_iMenuType[client] = 0;
-	g_iTarget[client] = 0;
-
-	if( args == 1 )
-	{
-		char sTemp[64];
-		GetCmdArg(1, sTemp, sizeof(sTemp));
-
-		int len = strlen(sTemp);
-		if( len < 4 && IsCharNumeric(sTemp[0]) && (len == 1 || IsCharNumeric(sTemp[1])) && (len == 2 || IsCharNumeric(sTemp[2])) )
-		{
-			int index = StringToInt(sTemp);
-			if( index < 0 || index >= (g_iCount + 1) )
-			{
-				CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "Hat_No_Index", client, index, g_iCount);
-			}
-			else
-			{
-				RemoveHat(client);
-
-				if( index == 0 )
-				{
-					HatsCommitHatType(client, -1);
-
-					CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "Hat_Off", client);
-				}
-				else
-				{
-					HatsEnableWear(client);
-					if( CreateHat(client, index - 1) )
-						ExternalView(client);
-				}
-			}
-		}
-		else if( strncmp(sTemp, "rand", 4, false) == 0 )
-		{
-			HatsEnableWear(client);
-			RemoveHat(client);
-
-			if( CreateHat(client, GetRandomInt(1, g_iCount) - 1) )
-			{
-				ExternalView(client);
-				return Plugin_Handled;
-			}
-		}
-		else
-		{
-			ReplaceString(sTemp, sizeof(sTemp), " ", "_");
-
-			for( int i = 0; i < g_iCount; i++ )
-			{
-				if( StrContains(g_sModels[i], sTemp) != -1 || StrContains(g_sNames[i], sTemp) != -1 )
-				{
-					HatsEnableWear(client);
-					RemoveHat(client);
-
-					if( CreateHat(client, i) )
-					{
-						ExternalView(client);
-					}
-					return Plugin_Handled;
-				}
-			}
-
-			CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "Hat_Not_Found", client, sTemp);
-		}
-	}
-	else
-	{
-		SetReadyUpPlugin(client, false);
-
-		ShowMenu(client);
-	}
-
-	return Plugin_Handled;
+	SetReadyUpPlugin(client, false);
+	ShowMenu(client);
 }
 
 int HatMenuHandler(Menu menu, MenuAction action, int client, int index)
@@ -1785,56 +1653,19 @@ int HatMenuHandler(Menu menu, MenuAction action, int client, int index)
 	}
 	else if( action == MenuAction_Select )
 	{
-		int target = g_iTarget[client];
-		if( !target && index != 0 )
+		if( index != 0 )
 			HatsEnableWear(client);
 
-		if( target )
+		RemoveHat(client);
+
+		if( index == 0 )
 		{
-			target = GetClientOfUserId(target);
-			if( HatsValidClient(target) )
-			{
-				char name[MAX_NAME_LENGTH];
-				GetClientName(target, name, sizeof(name));
-
-				CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "Hat_Changed", client, name);
-				RemoveHat(target);
-
-				if( index == 0 )
-				{
-					HatsCommitHatType(target, -1);
-				}
-				else
-				{
-					HatsEnableWear(target);
-					if( CreateHat(target, index - 1) )
-						ExternalView(target);
-				}
-
-				ShowMenu(client);
-			}
-			else
-			{
-				CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "Hat_Invalid", client);
-
-				ShowMenu(client);
-			}
-
-			return 0;
+			HatsCommitHatType(client, -1);
+			CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "Hat_Off", client);
 		}
-		else
+		else if( CreateHat(client, index - 1) )
 		{
-			RemoveHat(client);
-
-			if( index == 0 )
-			{
-				HatsCommitHatType(client, -1);
-				CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "Hat_Off", client);
-			}
-			else if( CreateHat(client, index - 1) )
-			{
-				ExternalView(client);
-			}
+			ExternalView(client);
 		}
 
 		int menupos = menu.Selection;
@@ -1844,14 +1675,7 @@ int HatMenuHandler(Menu menu, MenuAction action, int client, int index)
 	{
 		if( index == MenuCancel_ExitBack )
 		{
-			if( g_iMenuType[client] == 0 )
-			{
-				CmdHatMain(client, 0);
-			}
-			else
-			{
-				CmdHatTarget(client, 0);
-			}
+			CmdHatMain(client, 0);
 		}
 		else if( index == MenuCancel_Exit )
 		{
@@ -1902,19 +1726,18 @@ void ShowMenu(int client)
 		hTemp.ExitBackButton = true;
 		hTemp.Display(client, MENU_TIME_FOREVER);
 
-		g_hMenus[client] = hTemp;
 	}
 }
 
 // ====================================================================================================
-//					sm_hatoff
+//					WEAR PREFERENCE
 // ====================================================================================================
-Action CmdHatOff(int client, int args)
+void ToggleHatWear(int client)
 {
-	if( !g_bCvarAllow || g_bBlocked[client] || !HatsClientPrefsReady(client) )
+	if( !g_bCvarAllow || !HatsClientPrefsReady(client) )
 	{
 		CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "HAT_NOT_RIGHT_NOW", client);
-		return Plugin_Handled;
+		return;
 	}
 
 	g_bHatOff[client] = !g_bHatOff[client];
@@ -1934,69 +1757,40 @@ Action CmdHatOff(int client, int args)
 	FormatEx(sTemp, sizeof(sTemp), "%T", g_bHatOff[client] ? "Hat_Off" : "Hat_On", client);
 	CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "Hat_Ability", client, sTemp);
 
-	return Plugin_Handled;
+	return;
 }
 
 // ====================================================================================================
-//					sm_hatshow
+//					OWN HAT VISIBILITY
 // ====================================================================================================
-Action CmdHatShowOn(int client, int args)
+void ToggleHatView(int client, bool thirdPerson)
 {
-	if( !HatsClientPrefsReady(client) )
-		return CmdHatShow(client, args);
-
-	g_bHatView[client] = false;
-	CmdHatShow(client, args);
-	return Plugin_Handled;
-}
-
-Action CmdHatShowOff(int client, int args)
-{
-	if( !HatsClientPrefsReady(client) )
-		return CmdHatShow(client, args);
-
-	g_bHatView[client] = true;
-	CmdHatShow(client, args);
-	return Plugin_Handled;
-}
-
-Action CmdHatShow(int client, int args)
-{
-	if( !g_bCvarAllow || g_bBlocked[client] || !HatsClientPrefsReady(client) )
+	if( !g_bCvarAllow || !HatsClientPrefsReady(client) )
 	{
 		CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "HAT_NOT_RIGHT_NOW", client);
-		return Plugin_Handled;
+		return;
 	}
 
-	///////////////////////////////////////////
-	// Updated by pan0s
-	if( args == 1 )
+	if( thirdPerson )
 	{
-		char sVar[3];
+		g_bHatViewTP[client] = !g_bHatViewTP[client];
 
-		GetCmdArgString(sVar, sizeof(sVar));
-		if( strcmp(sVar, "tp", false) == 0 )
+		if( g_bIsThirdPerson[client] )
 		{
-			g_bHatViewTP[client] = !g_bHatViewTP[client];
-
-			if( g_bIsThirdPerson[client] )
-			{
-				if( !g_bHatViewTP[client] )
-					SetHatView(client, false);
-				else
-					SetHatView(client, true);
-			}
-
-			HatsCommitPrefs(client, true);
-
-			char sTemp[64];
-			Format(sTemp, sizeof(sTemp), "%T", g_bHatViewTP[client] ? "Hat_On" : "Hat_Off", client);
-			CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "Hat_ViewTP", client, sTemp);
-
-			return Plugin_Handled;
+			if( !g_bHatViewTP[client] )
+				SetHatView(client, false);
+			else
+				SetHatView(client, true);
 		}
+
+		HatsCommitPrefs(client, true);
+
+		char sTemp[64];
+		Format(sTemp, sizeof(sTemp), "%T", g_bHatViewTP[client] ? "Hat_On" : "Hat_Off", client);
+		CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "Hat_ViewTP", client, sTemp);
+
+		return;
 	}
-	///////////////////////////////////////////
 
 	g_bHatView[client] = !g_bHatView[client];
 
@@ -2011,18 +1805,18 @@ Action CmdHatShow(int client, int args)
 	FormatEx(sTemp, sizeof(sTemp), "%T", g_bHatView[client] ? "Hat_On" : "Hat_Off", client);
 	CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "Hat_View", client, sTemp);
 
-	return Plugin_Handled;
+	return;
 }
 
 // ====================================================================================================
-//					sm_hatall
+//					OTHER HAT VISIBILITY
 // ====================================================================================================
-Action CmdHatsToggle(int client, int args)
+void ToggleOtherHats(int client)
 {
 	if( !g_bCvarAllow || !HatsClientPrefsReady(client) )
 	{
 		CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "HAT_NOT_RIGHT_NOW", client);
-		return Plugin_Handled;
+		return;
 	}
 
 	g_bHatAll[client] = !g_bHatAll[client];
@@ -2033,408 +1827,10 @@ Action CmdHatsToggle(int client, int args)
 	FormatEx(sTemp, sizeof(sTemp), "%T", g_bHatAll[client] ? "Hat_On" : "Hat_Off", client);
 	CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "Hat_Visibility_Set", client, sTemp);
 
-	return Plugin_Handled;
+	return;
 }
 
 
-
-// ====================================================================================================
-//					ADMIN COMMANDS
-// ====================================================================================================
-//					sm_hatrand / sm_ratrandom
-// ====================================================================================================
-Action CmdHatRand(int client, int args)
-{
-	if( g_bCvarAllow )
-	{
-		for( int i = 1; i <= MaxClients; i++ )
-		{
-			RemoveHat(i);
-		}
-
-		int last = g_iCvarRand;
-		g_iCvarRand = 1;
-
-		for( int i = 1; i <= MaxClients; i++ )
-		{
-			if( HatsValidClient(i) )
-			{
-				CreateHat(i, -1);
-			}
-		}
-
-		g_iCvarRand = last;
-	}
-	return Plugin_Handled;
-}
-
-// ====================================================================================================
-//					sm_hatclient
-// ====================================================================================================
-Action CmdHatClient(int client, int args)
-{
-	if( args == 0 )
-	{
-		ReplyToCommand(client, "Usage: sm_hatclient <#userid|name> [hat name or hat index: 0-128 (MAX_HATS)].");
-		return Plugin_Handled;
-	}
-
-	char sArg[32], target_name[MAX_TARGET_LENGTH];
-	GetCmdArg(1, sArg, sizeof(sArg));
-
-	int target_list[MAXPLAYERS], target_count;
-	bool tn_is_ml;
-
-	if( (target_count = ProcessTargetString(
-		sArg,
-		client,
-		target_list,
-		MAXPLAYERS,
-		COMMAND_FILTER_ALIVE, /* Only allow alive players */
-		target_name,
-		sizeof(target_name),
-		tn_is_ml)) <= 0 )
-	{
-		ReplyToTargetError(client, target_count);
-		return Plugin_Handled;
-	}
-
-	int index = -1;
-	if( args == 2 )
-	{
-		GetCmdArg(2, sArg, sizeof(sArg));
-
-		if( strlen(sArg) > 3 )
-		{
-			for( int i = 0; i < g_iCount; i++ )
-			{
-				if( strcmp(g_sNames[i], sArg, false) == 0 )
-				{
-					index = i;
-					break;
-				}
-			}
-		} else {
-			index = StringToInt(sArg);
-		}
-	}
-	else
-	{
-		index = GetRandomInt(0, g_iCount - 1);
-	}
-
-	for( int i = 0; i < target_count; i++ )
-	{
-		if( GetClientTeam(target_list[i]) == 2 )
-		{
-			HatsEnableWear(target_list[i]);
-			RemoveHat(target_list[i]);
-			CreateHat(target_list[i], index);
-			ReplyToCommand(client, "[Hat] Set '%N' to '%s'", target_list[i], g_sNames[index]);
-		}
-	}
-
-	return Plugin_Handled;
-}
-
-// ====================================================================================================
-//					sm_hatc / sm_hatoffc / sm_hatallc
-// ====================================================================================================
-Action CmdHatTarget(int client, int args)
-{
-	if( g_bCvarAllow )
-	{
-		g_iMenuType[client] = 1;
-		ShowPlayerList(client);
-	}
-	return Plugin_Handled;
-}
-
-Action CmdHatOffTarget(int client, int args)
-{
-	if( g_bCvarAllow )
-	{
-		g_iMenuType[client] = 2;
-		ShowPlayerList(client);
-	}
-	return Plugin_Handled;
-}
-
-Action CmdHatAllTarget(int client, int args)
-{
-	if( g_bCvarAllow )
-	{
-		g_iMenuType[client] = 3;
-		ShowPlayerList(client);
-	}
-	return Plugin_Handled;
-}
-
-void ShowPlayerList(int client)
-{
-	if( client && IsClientInGame(client) )
-	{
-		SetReadyUpPlugin(client, false);
-
-		char sTempA[8], sTempB[MAX_NAME_LENGTH];
-		Menu menu = new Menu(PlayerListMenu);
-
-		for( int i = 1; i <= MaxClients; i++ )
-		{
-			if( HatsValidClient(i) )
-			{
-				IntToString(GetClientUserId(i), sTempA, sizeof(sTempA));
-				GetClientName(i, sTempB, sizeof(sTempB));
-				menu.AddItem(sTempA, sTempB);
-			}
-		}
-
-		switch( g_iMenuType[client] )
-		{
-			case 1: menu.SetTitle("%T", "ADMIN_CHANGE_HAT", client);
-			case 2: menu.SetTitle("%T", "ADMIN_DISABLE_HAT", client);
-			case 3: menu.SetTitle("%T", "ADMIN_VISIBILITY", client);
-		}
-
-		menu.ExitButton = true;
-		menu.Display(client, MENU_TIME_FOREVER);
-	}
-}
-
-int PlayerListMenu(Menu menu, MenuAction action, int client, int index)
-{
-	if( action == MenuAction_End )
-	{
-		delete menu;
-	}
-	else if( action == MenuAction_Cancel )
-	{
-		if( index == MenuCancel_Exit )
-		{
-			SetReadyUpPlugin(client, true);
-		}
-	}
-	else if( action == MenuAction_Select )
-	{
-		char sTemp[64];
-		menu.GetItem(index, sTemp, sizeof(sTemp));
-		int target = StringToInt(sTemp);
-		target = GetClientOfUserId(target);
-
-		switch( g_iMenuType[client] )
-		{
-			case 1:
-			{
-				if( HatsValidClient(target) )
-				{
-					g_iTarget[client] = GetClientUserId(target);
-
-					ShowMenu(client);
-				}
-			}
-			case 2:
-			{
-				g_bBlocked[target] = !g_bBlocked[target];
-
-				if( g_bBlocked[target] == false )
-				{
-					if( HatsValidClient(target) )
-					{
-						RemoveHat(target);
-						CreateHat(target);
-
-						char name[MAX_NAME_LENGTH];
-						GetClientName(target, name, sizeof(name));
-						CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "Hat_Unblocked", client, name);
-					}
-				}
-				else
-				{
-					if( HatsValidClient(target) )
-					{
-						char name[MAX_NAME_LENGTH];
-						GetClientName(target, name, sizeof(name));
-						GetClientAuthId(target, AuthId_Steam2, g_sSteamID[target], sizeof(g_sSteamID[]));
-						CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "Hat_Blocked", client, name);
-						RemoveHat(target);
-					}
-				}
-
-				ShowPlayerList(client);
-			}
-			case 3:
-			{
-				if( !HatsClientPrefsReady(target) )
-				{
-					ShowPlayerList(client);
-					return 0;
-				}
-
-				g_bHatAll[target] = !g_bHatAll[target];
-				HatsCommitPrefs(target, true);
-
-				if( HatsValidClient(target) )
-				{
-					char name[MAX_NAME_LENGTH];
-					GetClientName(target, name, sizeof(name));
-					FormatEx(sTemp, sizeof(sTemp), "%T", g_bHatAll[target] ? "Hat_On" : "Hat_Off", client);
-					CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "Hat_ViewSet", client, name, sTemp);
-				}
-
-				ShowPlayerList(client);
-			}
-		}
-	}
-
-	return 0;
-}
-
-// ====================================================================================================
-//					sm_hatadd
-// ====================================================================================================
-Action CmdHatAdd(int client, int args)
-{
-	if( !g_bCvarAllow )
-		return Plugin_Handled;
-
-	if( args == 1 )
-	{
-		if( g_iCount < MAX_HATS )
-		{
-			char sTemp[64], sKey[4];
-			GetCmdArg(1, sTemp, sizeof(sTemp));
-
-			if( FileExists(sTemp, true) )
-			{
-				strcopy(g_sModels[g_iCount], sizeof(g_sModels[]), sTemp);
-				g_vAng[g_iCount] = view_as<float>({ 0.0, 0.0, 0.0 });
-				g_vPos[g_iCount] = view_as<float>({ 0.0, 0.0, 0.0 });
-				g_fSize[g_iCount] = 1.0;
-
-				KeyValues hFile = OpenConfig();
-				IntToString(g_iCount+1, sKey, sizeof(sKey));
-				hFile.JumpToKey(sKey, true);
-				hFile.SetString("mod", sTemp);
-				SaveConfig(hFile);
-				delete hFile;
-				g_iCount++;
-				CPrintToChat(client, "%TAdded hat '{OLIVE}%s{LIGHTGREEN}' %d/%d", "HAT_SYSTEM", client, sTemp, g_iCount, MAX_HATS);
-
-				if( g_bTranslation )
-				{
-					ReplyToCommand(client, "%TYou must add the translation for this hat or the plugin will break.", "HAT_SYSTEM", client);
-				}
-			}
-			else
-				ReplyToCommand(client, "%TCould not find the model '\05%s'. Not adding to config.", "HAT_SYSTEM", client, sTemp);
-		}
-		else
-		{
-			ReplyToCommand(client, "%TReached maximum number of hats (%d)", "HAT_SYSTEM", client, MAX_HATS);
-		}
-	}
-	return Plugin_Handled;
-}
-
-// ====================================================================================================
-//					sm_hatdel
-// ====================================================================================================
-Action CmdHatDel(int client, int args)
-{
-	if( !g_bCvarAllow )
-		return Plugin_Handled;
-
-	if( args == 1 )
-	{
-		char sTemp[64];
-		int index;
-		bool bDeleted;
-
-		GetCmdArg(1, sTemp, sizeof(sTemp));
-		int len = strlen(sTemp);
-		if( len < 4 && IsCharNumeric(sTemp[0]) && (len == 1 || IsCharNumeric(sTemp[1])) && (len == 2 || IsCharNumeric(sTemp[2])) )
-		{
-			index = StringToInt(sTemp);
-			if( index < 1 || index >= (g_iCount + 1) )
-			{
-				ReplyToCommand(client, "%TCannot find the hat index %d, values between 1 and %d", "HAT_SYSTEM", client, index, g_iCount);
-				return Plugin_Handled;
-			}
-			index--;
-			strcopy(sTemp, sizeof(sTemp), g_sModels[index]);
-		}
-		else
-		{
-			index = 0;
-		}
-
-		char sModel[64], sKey[4];
-		KeyValues hFile = OpenConfig();
-
-		for( int i = index; i < MAX_HATS; i++ )
-		{
-			IntToString(i+1, sKey, sizeof(sKey));
-			if( hFile.JumpToKey(sKey) )
-			{
-				if( bDeleted )
-				{
-					IntToString(i, sKey, sizeof(sKey));
-					hFile.SetSectionName(sKey);
-
-					strcopy(g_sModels[i-1], sizeof(g_sModels[]), g_sModels[i]);
-					strcopy(g_sNames[i-1], sizeof(g_sNames[]), g_sNames[i]);
-					g_vAng[i-1] = g_vAng[i];
-					g_vPos[i-1] = g_vPos[i];
-					g_fSize[i-1] = g_fSize[i];
-				}
-				else
-				{
-					hFile.GetString("mod", sModel, sizeof(sModel));
-					if( StrContains(sModel, sTemp) != -1 )
-					{
-					CPrintToChat(client, "%TYou have deleted the hat '{OLIVE}%s{LIGHTGREEN}'", "HAT_SYSTEM", client, sModel);
-						hFile.DeleteThis();
-
-						g_iCount--;
-						bDeleted = true;
-
-						if( g_bTranslation == false )
-						{
-							g_hMenu.RemoveItem(i);
-						}
-						else
-						{
-							for( int x = 1; x <= MAXPLAYERS; x++ )
-							{
-								if( g_hMenus[x] != null )
-								{
-									g_hMenus[x].RemoveItem(i);
-								}
-							}
-						}
-					}
-				}
-			}
-
-			hFile.Rewind();
-			if( i == MAX_HATS - 1 )
-			{
-				if( bDeleted )
-					SaveConfig(hFile);
-				else
-					CPrintToChat(client, "%TCould not delete hat, did not find model '{OLIVE}%s{LIGHTGREEN}'", "HAT_SYSTEM", client, sTemp);
-			}
-		}
-		delete hFile;
-	}
-	else
-	{
-		int index = g_iSelected[client];
-
-		TranslateHatName(client, index);
-	}
-	return Plugin_Handled;
-}
 
 void TranslateHatName(int client, int index)
 {
@@ -2466,378 +1862,6 @@ void TranslateHatName(int client, int index)
 }
 
 // ====================================================================================================
-//					sm_hatlist
-// ====================================================================================================
-Action CmdHatList(int client, int args)
-{
-	for( int i = 0; i < g_iCount; i++ )
-		ReplyToCommand(client, "%d) %s", i+1, g_sModels[i]);
-	return Plugin_Handled;
-}
-
-// ====================================================================================================
-//					sm_hatload
-// ====================================================================================================
-Action CmdHatLoad(int client, int args)
-{
-	if( g_bCvarAllow && HatsValidClient(client) )
-	{
-		int selected = g_iSelected[client];
-		CPrintToChat(client, "%TLoaded hat '{OLIVE}%s{LIGHTGREEN}' on all players.", "HAT_SYSTEM", client, g_sModels[selected]);
-
-		for( int i = 1; i <= MaxClients; i++ )
-		{
-			if( HatsValidClient(i) )
-			{
-				RemoveHat(i);
-				CreateHat(i, selected);
-			}
-		}
-	}
-	return Plugin_Handled;
-}
-
-// ====================================================================================================
-//					sm_hatsave
-// ====================================================================================================
-Action CmdHatSave(int client, int args)
-{
-	if( g_bCvarAllow && HatsValidClient(client) )
-	{
-		int entity = g_bCvarWall ? g_iHatWalls[client] : g_iHatIndex[client];
-		if( IsValidEntRef(entity) )
-		{
-			KeyValues hFile = OpenConfig();
-			int index = g_iSelected[client];
-
-			char sTemp[4];
-			IntToString(index+1, sTemp, sizeof(sTemp));
-			if( hFile.JumpToKey(sTemp) )
-			{
-				float vAng[3], vPos[3];
-				float fSize;
-
-				GetEntPropVector(entity, Prop_Send, "m_angRotation", vAng);
-				GetEntPropVector(entity, Prop_Send, "m_vecOrigin", vPos);
-				hFile.SetVector("ang", vAng);
-				hFile.SetVector("loc", vPos);
-				g_vAng[index] = vAng;
-				g_vPos[index] = vPos;
-
-				if( g_bLeft4Dead2 )
-				{
-					entity = g_iHatIndex[client];
-					if( IsValidEntRef(entity) )
-					{
-						fSize = GetEntPropFloat(entity, Prop_Send, "m_flModelScale");
-						if( fSize == 1.0 )
-						{
-							if( hFile.GetFloat("size", 999.9) != 999.9 )
-								hFile.DeleteKey("size");
-						}
-						else
-							hFile.SetFloat("size", fSize);
-
-						g_fSize[index] = fSize;
-					}
-				}
-
-				SaveConfig(hFile);
-				CPrintToChat(client, "%TSaved '{OLIVE}%s{LIGHTGREEN}' hat origin and angles.", "HAT_SYSTEM", client, g_sModels[index]);
-			}
-			else
-			{
-				CPrintToChat(client, "%T{GREEN}Warning: {LIGHTGREEN}Could not save '{OLIVE}%s{LIGHTGREEN}' hat origin and angles.", "HAT_SYSTEM", client, g_sModels[index]);
-			}
-			delete hFile;
-		}
-	}
-
-	return Plugin_Handled;
-}
-
-// ====================================================================================================
-//					sm_hatang
-// ====================================================================================================
-Action CmdAng(int client, int args)
-{
-	if( g_bCvarAllow )
-		ShowAngMenu(client);
-	return Plugin_Handled;
-}
-
-void ShowAngMenu(int client)
-{
-	if( !HatsValidClient(client) )
-	{
-		CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "HAT_NOT_RIGHT_NOW", client);
-		return;
-	}
-
-	SetReadyUpPlugin(client, false);
-
-	Menu menu = new Menu(AngMenuHandler);
-
-	menu.AddItem("", "X + 10.0");
-	menu.AddItem("", "Y + 10.0");
-	menu.AddItem("", "Z + 10.0");
-	menu.AddItem("", "Reset");
-	menu.AddItem("", "X - 10.0");
-	menu.AddItem("", "Y - 10.0");
-	menu.AddItem("", "Z - 10.0");
-
-	menu.SetTitle("%T", "HAT_SET_ANGLE", client);
-	menu.ExitButton = true;
-	menu.Display(client, MENU_TIME_FOREVER);
-}
-
-int AngMenuHandler(Menu menu, MenuAction action, int client, int index)
-{
-	if( action == MenuAction_End )
-	{
-		delete menu;
-	}
-	else if( action == MenuAction_Cancel )
-	{
-		if( index == MenuCancel_ExitBack )
-		{
-			ShowAngMenu(client);
-		}
-		else if( index == MenuCancel_Exit )
-		{
-			SetReadyUpPlugin(client, true);
-		}
-	}
-	else if( action == MenuAction_Select )
-	{
-		if( HatsValidClient(client) )
-		{
-			ShowAngMenu(client);
-
-			float vAng[3];
-			int entity;
-			for( int i = 1; i <= MaxClients; i++ )
-			{
-				if( HatsValidClient(i) )
-				{
-					entity = g_bCvarWall ? g_iHatWalls[i] : g_iHatIndex[i];
-					if( IsValidEntRef(entity) )
-					{
-						GetEntPropVector(entity, Prop_Send, "m_angRotation", vAng);
-
-						switch( index )
-						{
-							case 0: vAng[0] += 10.0;
-							case 1: vAng[1] += 10.0;
-							case 2: vAng[2] += 10.0;
-							case 3: vAng = view_as<float>({0.0,0.0,0.0});
-							case 4: vAng[0] -= 10.0;
-							case 5: vAng[1] -= 10.0;
-							case 6: vAng[2] -= 10.0;
-						}
-
-						TeleportEntity(entity, NULL_VECTOR, vAng, NULL_VECTOR);
-					}
-				}
-			}
-
-			CPrintToChat(client, "%TNew hat angles: %f %f %f", "HAT_SYSTEM", client, vAng[0], vAng[1], vAng[2]);
-		}
-	}
-
-	return 0;
-}
-
-// ====================================================================================================
-//					sm_hatpos
-// ====================================================================================================
-Action CmdPos(int client, int args)
-{
-	if( g_bCvarAllow )
-		ShowPosMenu(client);
-	return Plugin_Handled;
-}
-
-void ShowPosMenu(int client)
-{
-	if( !HatsValidClient(client) )
-	{
-		CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "HAT_NOT_RIGHT_NOW", client);
-		return;
-	}
-
-	SetReadyUpPlugin(client, false);
-
-	Menu menu = new Menu(PosMenuHandler);
-
-	menu.AddItem("", "X + 0.5");
-	menu.AddItem("", "Y + 0.5");
-	menu.AddItem("", "Z + 0.5");
-	menu.AddItem("", "Reset");
-	menu.AddItem("", "X - 0.5");
-	menu.AddItem("", "Y - 0.5");
-	menu.AddItem("", "Z - 0.5");
-
-	menu.SetTitle("%T", "HAT_SET_POSITION", client);
-	menu.ExitButton = true;
-	menu.Display(client, MENU_TIME_FOREVER);
-}
-
-int PosMenuHandler(Menu menu, MenuAction action, int client, int index)
-{
-	if( action == MenuAction_End )
-	{
-		delete menu;
-	}
-	else if( action == MenuAction_Cancel )
-	{
-		if( index == MenuCancel_ExitBack )
-		{
-			ShowPosMenu(client);
-		}
-		else if( index == MenuCancel_Exit )
-		{
-			SetReadyUpPlugin(client, true);
-		}
-	}
-	else if( action == MenuAction_Select )
-	{
-		if( HatsValidClient(client) )
-		{
-			ShowPosMenu(client);
-
-			float vPos[3];
-			int entity;
-			for( int i = 1; i <= MaxClients; i++ )
-			{
-				if( HatsValidClient(i) )
-				{
-					entity = g_bCvarWall ? g_iHatWalls[i] : g_iHatIndex[i];
-					if( IsValidEntRef(entity) )
-					{
-						GetEntPropVector(entity, Prop_Send, "m_vecOrigin", vPos);
-
-						switch( index )
-						{
-							case 0: vPos[0] += 0.5;
-							case 1: vPos[1] += 0.5;
-							case 2: vPos[2] += 0.5;
-							case 3: vPos = view_as<float>({0.0,0.0,0.0});
-							case 4: vPos[0] -= 0.5;
-							case 5: vPos[1] -= 0.5;
-							case 6: vPos[2] -= 0.5;
-						}
-
-						TeleportEntity(entity, vPos, NULL_VECTOR, NULL_VECTOR);
-					}
-				}
-			}
-
-			CPrintToChat(client, "%TNew hat origin: %f %f %f", "HAT_SYSTEM", client, vPos[0], vPos[1], vPos[2]);
-		}
-	}
-
-	return 0;
-}
-
-// ====================================================================================================
-//					sm_hatsize
-// ====================================================================================================
-Action CmdHatSize(int client, int args)
-{
-	if( g_bCvarAllow )
-		ShowSizeMenu(client);
-	return Plugin_Handled;
-}
-
-void ShowSizeMenu(int client)
-{
-	if( !HatsValidClient(client) )
-	{
-		CPrintToChat(client, "%T%T", "HAT_SYSTEM", client, "HAT_NOT_RIGHT_NOW", client);
-		return;
-	}
-
-	if( !g_bLeft4Dead2 )
-	{
-		CPrintToChat(client, "%TCannot set hat size in L4D1.", "HAT_SYSTEM", client);
-		return;
-	}
-
-	SetReadyUpPlugin(client, false);
-
-	Menu menu = new Menu(SizeMenuHandler);
-
-	menu.AddItem("", "+ 0.1");
-	menu.AddItem("", "- 0.1");
-	menu.AddItem("", "+ 0.5");
-	menu.AddItem("", "- 0.5");
-	menu.AddItem("", "+ 1.0");
-	menu.AddItem("", "- 1.0");
-	menu.AddItem("", "Reset");
-
-	menu.SetTitle("%T", "HAT_SET_SIZE", client);
-	menu.ExitButton = true;
-	menu.Display(client, MENU_TIME_FOREVER);
-}
-
-int SizeMenuHandler(Menu menu, MenuAction action, int client, int index)
-{
-	if( action == MenuAction_End )
-	{
-		delete menu;
-	}
-	else if( action == MenuAction_Cancel )
-	{
-		if( index == MenuCancel_ExitBack )
-		{
-			ShowSizeMenu(client);
-		}
-		else if( index == MenuCancel_Exit )
-		{
-			SetReadyUpPlugin(client, true);
-		}
-	}
-	else if( action == MenuAction_Select )
-	{
-		if( HatsValidClient(client) )
-		{
-			ShowSizeMenu(client);
-
-			float fSize;
-			int entity;
-			for( int i = 1; i <= MaxClients; i++ )
-			{
-				entity = g_iHatIndex[i];
-				if( IsValidEntRef(entity) )
-				{
-					fSize = GetEntPropFloat(entity, Prop_Send, "m_flModelScale");
-
-					switch( index )
-					{
-						case 0: fSize += 0.1;
-						case 1: fSize -= 0.1;
-						case 2: fSize += 0.5;
-						case 3: fSize -= 0.5;
-						case 4: fSize += 1.0;
-						case 5: fSize -= 1.0;
-						case 6: fSize = 1.0;
-					}
-
-					SetEntPropFloat(entity, Prop_Send, "m_flModelScale", fSize);
-				}
-			}
-
-			CPrintToChat(client, "%TNew hat scale: %f", "HAT_SYSTEM", client, fSize);
-		}
-	}
-
-	return 0;
-}
-
-
-
-// ====================================================================================================
 //					HAT STUFF
 // ===================================================================================================
 void RemoveHat(int client)
@@ -2861,7 +1885,7 @@ void RemoveHat(int client)
 
 bool CreateHat(int client, int index = -1, bool notify = true)
 {
-	if( g_bBlocked[client] || g_bHatOff[client] || IsValidEntRef(g_iHatIndex[client]) == true || HatsValidClient(client) == false )
+	if( g_bHatOff[client] || IsValidEntRef(g_iHatIndex[client]) == true || HatsValidClient(client) == false )
 		return false;
 
 	int requested = index;
@@ -2990,7 +2014,6 @@ bool CreateHat(int client, int index = -1, bool notify = true)
 			SetEntityRenderColor(entity, 255, 255, 255, g_iCvarOpaq);
 		}
 
-		g_iSelected[client] = index;
 		g_iHatIndex[client] = EntIndexToEntRef(entity);
 		SDKHook(entity, SDKHook_SetTransmit, Hook_SetTransmit);
 		g_bExternalState[client] = HatsShouldShowOwnHat(client);
