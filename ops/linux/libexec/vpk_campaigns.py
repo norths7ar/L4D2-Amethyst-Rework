@@ -412,41 +412,52 @@ def inspect_directory(
 
     seen_maps: dict[str, str] = {}
     seen_missions: dict[str, str] = {}
+    chapter_sequences: dict[str, tuple[str, ...]] = {}
     conflicting: set[str] = set()
     for campaign in campaigns:
         origin = f"{campaign['source']}:{campaign['mission']}"
+        maps = tuple(str(item).casefold() for item in campaign["maps"])
+        chapter_sequences[origin] = maps
         mission_id = str(campaign["mission_id"])
         normalized_id = mission_id.casefold()
         previous_mission = seen_missions.get(normalized_id)
-        if previous_mission:
+        if previous_mission and chapter_sequences[previous_mission] != maps:
             conflicting.update((previous_mission, origin))
             errors.append(
                 f"mission ID {mission_id!r} is declared by both "
                 f"{previous_mission!r} and {origin!r}"
             )
-        else:
+        elif previous_mission is None:
             seen_missions[normalized_id] = origin
         for map_name_value in campaign["maps"]:
             map_name = str(map_name_value)
             normalized_map = map_name.casefold()
             previous_map = seen_maps.get(normalized_map)
-            if previous_map:
+            if previous_map and (
+                previous_map == origin or chapter_sequences[previous_map] != maps
+            ):
                 conflicting.update((previous_map, origin))
                 errors.append(
                     f"map {map_name!r} is declared more than once by "
                     f"{previous_map!r} and {origin!r}"
                 )
-            else:
+            elif previous_map is None:
                 seen_maps[normalized_map] = origin
 
     if errors:
         details = "\n".join(f"  - {error}" for error in errors)
         print(f"VPK warnings (affected campaigns skipped):\n{details}", file=sys.stderr)
-    campaigns = [
-        campaign
-        for campaign in campaigns
-        if f"{campaign['source']}:{campaign['mission']}" not in conflicting
-    ]
+    # Workshop multipart VPKs can repeat the same versus chapter sequence.
+    # Check every declaration before collapsing so a conflicting third package
+    # cannot be hidden by an earlier identical declaration.
+    conflicting_sequences = {chapter_sequences[origin] for origin in conflicting}
+    unique_campaigns: dict[tuple[str, ...], dict[str, object]] = {}
+    for campaign in campaigns:
+        origin = f"{campaign['source']}:{campaign['mission']}"
+        maps = chapter_sequences[origin]
+        if maps not in conflicting_sequences:
+            unique_campaigns.setdefault(maps, campaign)
+    campaigns = list(unique_campaigns.values())
 
     if cache_path:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
