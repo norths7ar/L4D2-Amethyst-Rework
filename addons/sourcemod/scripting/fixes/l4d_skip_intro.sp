@@ -18,7 +18,7 @@
 
 
 
-#define PLUGIN_VERSION		"1.13"
+#define PLUGIN_VERSION		"1.14.0"
 
 /*======================================================================================
 	Plugin Info:
@@ -91,6 +91,13 @@
 
 
 ConVar g_hCvarAllow, g_hCvarMPGameMode, g_hCvarModes, g_hCvarModesOff, g_hCvarModesTog;
+ConVar g_readyPolicy, g_playCount;
+Handle g_watchTimer;
+ArrayList g_skippedCameras;
+char g_chapter[64];
+int g_attempts;
+bool g_roundOpen, g_roundLive, g_lateLoad, g_directorReleased;
+
 bool g_bCvarAllow, g_bMapStarted, g_bLeft4DHooks, g_bFaded, g_bOutput1, g_bOutput2;
 
 
@@ -98,13 +105,14 @@ bool g_bCvarAllow, g_bMapStarted, g_bLeft4DHooks, g_bFaded, g_bOutput1, g_bOutpu
 // ====================================================================================================
 //					PLUGIN INFO / START
 // ====================================================================================================
+native bool IsInReady();
 native bool L4D_IsFirstMapInScenario(); // So it compiles on forum, optional native.
 
 public Plugin myinfo =
 {
-	name = "[L4D & L4D2] First Map - Skip Intro Cutscenes",
+	name = "[L4D & L4D2] Skip Intro Cutscenes",
 	author = "SilverShot",
-	description = "Makes players skip seeing the intro cutscene on first maps, so they can move right away.",
+	description = "Skips intros, with optional per-chapter attempt policy during ready-up.",
 	version = PLUGIN_VERSION,
 	url = "https://forums.alliedmods.net/showthread.php?t=321993"
 }
@@ -119,6 +127,8 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	}
 
 	MarkNativeAsOptional("L4D_IsFirstMapInScenario");
+	MarkNativeAsOptional("IsInReady");
+	g_lateLoad = late;
 
 	return APLRes_Success;
 }
@@ -130,6 +140,13 @@ public void OnAllPluginsLoaded()
 
 public void OnPluginStart()
 {
+	g_skippedCameras = new ArrayList();
+	g_readyPolicy = CreateConVar("l4d_skip_intro_ready", "0", "Use per-chapter attempt policy during ready-up; 0 retains legacy first-map behavior.", CVAR_FLAGS, true, 0.0, true, 1.0);
+	g_playCount = CreateConVar("l4d_skip_intro_play_count", "0", "Ready policy: attempts to play before skipping; -1 always plays, 0 always skips.", CVAR_FLAGS, true, -1.0);
+	g_readyPolicy.AddChangeHook(ConVarChanged_Allow);
+	g_playCount.AddChangeHook(ConVarChanged_Allow);
+	HookEvent("round_start", Event_RoundStart, EventHookMode_PostNoCopy);
+	HookEvent("round_end", Event_RoundEnd, EventHookMode_PostNoCopy);
 	g_hCvarAllow = CreateConVar(	"l4d_skip_intro_allow",			"1",			"0=Plugin off, 1=Plugin on.", CVAR_FLAGS );
 	g_hCvarModes = CreateConVar(	"l4d_skip_intro_modes",			"",				"Turn on the plugin in these game modes, separate by commas (no spaces). (Empty = all).", CVAR_FLAGS );
 	g_hCvarModesOff = CreateConVar(	"l4d_skip_intro_modes_off",		"",				"Turn off the plugin in these game modes, separate by commas (no spaces). (Empty = none).", CVAR_FLAGS );
@@ -155,21 +172,28 @@ public void OnPluginStart()
 public void OnConfigsExecuted()
 {
 	IsAllowed();
+	if (g_lateLoad) { BeginAttempt(); g_lateLoad = false; }
+	StartReadyWatch();
 }
 
 public void OnMapStart()
 {
 	g_bMapStarted = true;
+	UpdateChapter();
 }
 
 public void OnMapEnd()
 {
 	g_bMapStarted = false;
+	StopReadyWatch();
+	g_roundOpen = false;
+	g_roundLive = false;
 }
 
 void ConVarChanged_Allow(Handle convar, const char[] oldValue, const char[] newValue)
 {
 	IsAllowed();
+	StartReadyWatch();
 }
 
 void IsAllowed()
@@ -265,6 +289,7 @@ void OnGamemode(const char[] output, int caller, int activator, float delay)
 // ====================================================================================================
 void Event_NoDraw(Event event, const char[] name, bool dontBroadcast)
 {
+	if (g_readyPolicy.BoolValue) { StartReadyWatch(); return; }
 	if( g_bCvarAllow && (!g_bLeft4DHooks || L4D_IsFirstMapInScenario()) )
 	{
 		// Block finale
@@ -276,17 +301,18 @@ void Event_NoDraw(Event event, const char[] name, bool dontBroadcast)
 		g_bOutput2 = false;
 
 		// Multiple times to make sure it works
-		CreateTimer(1.0, TimerStart);
-		CreateTimer(5.0, TimerStart);
-		CreateTimer(6.0, TimerStart);
-		CreateTimer(6.5, TimerStart);
-		CreateTimer(7.0, TimerStart);
-		CreateTimer(8.0, TimerStart);
+		CreateTimer(1.0, TimerStart, _, TIMER_FLAG_NO_MAPCHANGE);
+		CreateTimer(5.0, TimerStart, _, TIMER_FLAG_NO_MAPCHANGE);
+		CreateTimer(6.0, TimerStart, _, TIMER_FLAG_NO_MAPCHANGE);
+		CreateTimer(6.5, TimerStart, _, TIMER_FLAG_NO_MAPCHANGE);
+		CreateTimer(7.0, TimerStart, _, TIMER_FLAG_NO_MAPCHANGE);
+		CreateTimer(8.0, TimerStart, _, TIMER_FLAG_NO_MAPCHANGE);
 	}
 }
 
 Action TimerStart(Handle timer)
 {
+	if (!g_bCvarAllow || g_readyPolicy.BoolValue) return Plugin_Stop;
 	char buffer[128]; // 128 should be long enough, 3rd party maps could be longer than Valves ~52 chars (including OnUser1 below)?
 
 	char director[32];
@@ -359,5 +385,142 @@ Action TimerStart(Handle timer)
 		}
 	}
 
+	return Plugin_Continue;
+}
+// Ready policy is opt-in so shared competitive configurations retain the
+// upstream first-map behavior. Round boundaries, not ready forwards, count.
+void UpdateChapter()
+{
+	char map[64];
+	GetCurrentMap(map, sizeof(map));
+	if (!StrEqual(map, g_chapter))
+	{
+		strcopy(g_chapter, sizeof(g_chapter), map);
+		g_attempts = 0;
+		g_roundOpen = false;
+		g_roundLive = false;
+	}
+}
+
+void BeginAttempt()
+{
+	UpdateChapter();
+	if (g_roundOpen) return;
+	g_roundOpen = true;
+	g_roundLive = false;
+	g_attempts++;
+	g_directorReleased = false;
+	g_skippedCameras.Clear();
+}
+
+void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
+{
+	BeginAttempt();
+	StartReadyWatch();
+}
+
+void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
+{
+	StopReadyWatch();
+	g_roundOpen = false;
+	g_roundLive = true;
+}
+
+public void OnReadyUpInitiate()
+{
+	// May fire several times during one round, or before round_start.
+	StartReadyWatch();
+}
+
+public void OnRoundIsLive()
+{
+	g_roundLive = true;
+	StopReadyWatch();
+}
+
+public void OnPluginEnd()
+{
+	StopReadyWatch();
+}
+
+bool CanWatchReadyIntro()
+{
+	return g_bCvarAllow && g_readyPolicy.BoolValue && g_roundOpen && !g_roundLive
+		&& g_playCount.IntValue >= 0 && g_attempts > g_playCount.IntValue
+		&& GetFeatureStatus(FeatureType_Native, "IsInReady") == FeatureStatus_Available
+		&& IsInReady();
+}
+
+void StopReadyWatch()
+{
+	delete g_watchTimer;
+	g_watchTimer = null;
+}
+
+void StartReadyWatch()
+{
+	if (!CanWatchReadyIntro()) { StopReadyWatch(); return; }
+	if (g_watchTimer == null)
+		g_watchTimer = CreateTimer(0.5, TimerReadyIntro, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+}
+
+Action TimerReadyIntro(Handle timer)
+{
+	if (!CanWatchReadyIntro()) { g_watchTimer = null; return Plugin_Stop; }
+	bool found;
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (!IsClientInGame(client) || GetClientTeam(client) != 2 || !IsPlayerAlive(client)) continue;
+		int camera = GetEntPropEnt(client, Prop_Send, "m_hViewEntity");
+		if (camera <= MaxClients || !IsValidEntity(camera)) continue;
+		char classname[64];
+		GetEntityClassname(camera, classname, sizeof(classname));
+		bool survivorCamera = StrEqual(classname, "point_viewcontrol_survivor");
+		if (!survivorCamera && !StrEqual(classname, "point_viewcontrol_multiplayer")
+			&& !StrEqual(classname, "point_viewcontrol")) continue;
+		found = true;
+		int reference = EntIndexToEntRef(camera);
+		if (g_skippedCameras.FindValue(reference) == -1)
+		{
+			g_skippedCameras.Push(reference);
+			// Keep the map's existing camera output, but never repeatedly fire it.
+			AcceptEntityInput(camera, "FireUser1");
+		}
+		camera = EntRefToEntIndex(reference);
+		if (camera <= MaxClients) continue;
+		// Preserve upstream survivor-camera movement/finish handling. Other
+		// cameras expose Disable. Never delete cameras reused later by the map.
+		if (survivorCamera)
+		{
+			SetVariantString("!self");
+			AcceptEntityInput(camera, "StartMovement");
+		}
+		else AcceptEntityInput(camera, "Disable");
+	}
+	if (found && !g_directorReleased)
+	{
+		g_directorReleased = true;
+		int director = FindEntityByClassname(-1, "info_director");
+		if (director != -1)
+		{
+			AcceptEntityInput(director, "ReleaseSurvivorPositions");
+			AcceptEntityInput(director, "FinishIntro");
+		}
+		// Do not clear player flags: ready-up owns its own movement protection.
+		int fade = CreateEntityByName("env_fade");
+		if (fade != -1)
+		{
+			DispatchKeyValue(fade, "spawnflags", "1");
+			DispatchKeyValue(fade, "rendercolor", "0 0 0");
+			DispatchKeyValue(fade, "renderamt", "255");
+			DispatchKeyValue(fade, "holdtime", "0");
+			DispatchKeyValue(fade, "duration", "0.5");
+			DispatchSpawn(fade);
+			AcceptEntityInput(fade, "Fade");
+			SetVariantString("OnUser1 !self:Kill::1:-1");
+			AcceptEntityInput(fade, "AddOutput");
+			AcceptEntityInput(fade, "FireUser1");
+		}
+	}
 	return Plugin_Continue;
 }

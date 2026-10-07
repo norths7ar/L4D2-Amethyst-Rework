@@ -1,0 +1,17 @@
+"Games"
+{
+	"left4dead2"
+	{
+		"Offsets"
+		{
+			// Relative to datamap m_nUseTime, not an absolute entity offset.
+			// CButtonTimed::UseThink reads integer use_time + this float start.
+			// Verified: Linux 0x598 -> 0x5A0; Windows 0x584 -> 0x58C.
+			"CButtonTimed::StartTimeFromUseTime"
+			{
+				"linux" "8"
+				"windows" "8"
+			}
+		}
+	}
+}

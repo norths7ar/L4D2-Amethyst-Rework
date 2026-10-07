@@ -40,7 +40,7 @@ public Plugin myinfo =
 	name = "Coop item glow",
 	author = "norths7ar",
 	description = "Team-shared discovered supplies with per-player distance limits.",
-	version = "1.2.0"
+	version = "1.2.1"
 };
 
 public void OnPluginStart()
@@ -259,12 +259,27 @@ bool CanView(int client)
 
 Action UpdateGlows(Handle timer)
 {
+	// Sweep proxies independently of the source list: an invalid source entry
+	// cannot be used to find its proxies by entity index after slot reuse.
+	for (int glow = MaxClients + 1; glow < ENTITY_LIMIT; glow++)
+	{
+		if (!g_viewerSerial[glow] || !IsValidEntity(glow)) continue;
+		int item = EntRefToEntIndex(g_itemRef[glow]);
+		int client = GetClientFromSerial(g_viewerSerial[glow]);
+		if (item <= MaxClients || !client || !g_mode.IntValue
+			|| EntRefToEntIndex(g_glowRef[item][client]) != glow)
+			RemoveEntity(glow);
+	}
 	if (!g_mode.IntValue) return Plugin_Continue;
 	for (int i = g_tracked.Length - 1; i >= 0; i--)
 	{
 		int item = EntRefToEntIndex(g_tracked.Get(i));
 		if (item <= MaxClients) { g_tracked.Erase(i); continue; }
-		bool available = !(GetEntProp(item, Prop_Send, "m_fEffects") & 32);
+		bool available = !(GetEntProp(item, Prop_Send, "m_fEffects") & 32)
+			&& (g_itemTypes & GetGlowItemType(item)) != 0;
+		// A depleted spawn point can remain alive after its last pickup.
+		if (HasEntProp(item, Prop_Data, "m_itemCount") && GetEntProp(item, Prop_Data, "m_itemCount") <= 0)
+			available = false;
 		if (HasEntProp(item, Prop_Send, "m_hOwnerEntity") && GetEntPropEnt(item, Prop_Send, "m_hOwnerEntity") != -1)
 		{
 			available = false;
