@@ -20,7 +20,7 @@ public Plugin myinfo =
     name = "Coop Wave Spawner",
     author = "海洋空氣, norths7ar",
     description = "Runs the single wave-based Special Infected spawn model for Coop.",
-    version = "1.0.2",
+    version = "1.1.0",
     url = "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
 };
 
@@ -63,10 +63,18 @@ int g_iSlotLimits[5][6];
 int g_iSlotDirection[5];
 int g_iSlotOverrideMask[5];
 
+// Small waves rotate the base pool, not the VScript's random extra slots.
+// Living bots occupy pool slots outside this FIFO; duplicate classes are
+// separate entries. Settings are updated only with the prepared wave.
+ArrayList g_RotationQueue;
+bool g_bRotation;
+int g_iRotationLimits[ZC_WITCH];
+
 public void OnPluginStart()
 {
     LoadTranslations("wave_spawner.phrases");
-    CreateConVar("wave_spawner_version", "1.0.2", "Coop Wave Spawner version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
+    CreateConVar("wave_spawner_version", "1.1.0", "Coop Wave Spawner version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
+    g_RotationQueue = new ArrayList();
     g_cvInterval = CreateConVar("wave_interval", "8.0", "Interval selected for the next SI wave; running timers keep their snapshot.", FCVAR_NOTIFY, true, 0.0, true, 10000.0);
     g_cvSize = CreateConVar("wave_size", "3", "Size selected for the next SI wave; a spawning wave keeps its snapshot.", FCVAR_NOTIFY, true, 1.0, true, 32.0);
     g_cvOverrideActive = CreateConVar("wave_override_active", "0", "Whether effective wave parameters are a player override.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
@@ -113,7 +121,13 @@ public void OnConfigsExecuted()
     ResetWaveNow();
 }
 
-public void OnMapStart() { g_bMapReady = false; g_bRoundEnded = false; }
+public void OnMapStart()
+{
+    g_bMapReady = false;
+    g_bRoundEnded = false;
+    g_bRotation = false;
+    g_RotationQueue.Clear();
+}
 
 public void OnMapEnd()
 {
@@ -162,7 +176,75 @@ void PrepareWaveSettings()
     if (!ApplyDirectorSettings()) return;
     g_fPreparedInterval = g_cvInterval.FloatValue;
     g_iPreparedSize = g_cvSize.IntValue;
+    PrepareRotation();
     g_bWaveSettingsPending = false;
+}
+
+void CountRotationAlive(int counts[ZC_WITCH], int skipClient = 0)
+{
+    for (int client = 1; client <= MaxClients; client++)
+    {
+        if (client == skipClient || !IsClientInGame(client) || !IsFakeClient(client)
+            || !IsPlayerAlive(client) || GetClientTeam(client) != TEAM_INFECTED) continue;
+        int zombieClass = GetEntProp(client, Prop_Send, "m_zombieClass");
+        if (zombieClass > 0 && zombieClass < ZC_WITCH) counts[zombieClass]++;
+    }
+}
+
+void PrepareRotation()
+{
+    // CVar order differs from the engine's Smoker/Boomer/Hunter/... IDs.
+    static const int classes[] = {3, 1, 2, 4, 5, 6};
+    int total;
+    for (int i = 0; i < sizeof(classes); i++)
+    {
+        g_iRotationLimits[classes[i]] = g_cvWaveFields[i + 2].IntValue;
+        total += g_iRotationLimits[classes[i]];
+    }
+    g_bRotation = g_iPreparedSize < total;
+    if (!g_bRotation) g_RotationQueue.Clear();
+    else ReconcileRotation();
+}
+
+void ReconcileRotation()
+{
+    int occupied[ZC_WITCH];
+    CountRotationAlive(occupied);
+    // Keep the oldest valid entries when limits shrink. Live bots are never
+    // removed, including extra classes carried over from a larger wave.
+    for (int i = 0; i < g_RotationQueue.Length;)
+    {
+        int zombieClass = g_RotationQueue.Get(i);
+        if (occupied[zombieClass] >= g_iRotationLimits[zombieClass]) g_RotationQueue.Erase(i);
+        else
+        {
+            occupied[zombieClass]++;
+            i++;
+        }
+    }
+    int firstNew = g_RotationQueue.Length;
+    for (int zombieClass = 1; zombieClass < ZC_WITCH; zombieClass++)
+        for (int count = occupied[zombieClass]; count < g_iRotationLimits[zombieClass]; count++)
+            g_RotationQueue.Push(zombieClass);
+    // Randomize only new slots (initial pool, increased limits, missing bots),
+    // never the existing death order. This also recovers non-death removals.
+    for (int i = g_RotationQueue.Length - 1; i > firstNew; i--)
+    {
+        int other = GetRandomInt(firstNew, i);
+        int zombieClass = g_RotationQueue.Get(i);
+        g_RotationQueue.Set(i, g_RotationQueue.Get(other));
+        g_RotationQueue.Set(other, zombieClass);
+    }
+}
+
+void ReturnRotationClass(int zombieClass, int deadClient)
+{
+    if (!g_bRotation || zombieClass <= 0 || zombieClass >= ZC_WITCH) return;
+    int occupied[ZC_WITCH];
+    CountRotationAlive(occupied, deadClient);
+    for (int i = 0; i < g_RotationQueue.Length; i++) occupied[g_RotationQueue.Get(i)]++;
+    // Do not turn surplus survivors from a previous large wave into pool slots.
+    if (occupied[zombieClass] < g_iRotationLimits[zombieClass]) g_RotationQueue.Push(zombieClass);
 }
 
 public void Event_RoundBoundary(Event event, const char[] name, bool dontBroadcast)
@@ -198,6 +280,14 @@ public Action L4D_OnSpawnSpecial(int &zombieClass, const float vecPos[3], const 
         {
             return Plugin_Handled;
         }
+        if (g_bRotation)
+        {
+            ReconcileRotation();
+            if (!g_RotationQueue.Length) return Plugin_Handled;
+            zombieClass = g_RotationQueue.Get(0);
+            // Peek only. A blocked/failed spawn must not consume its turn.
+            return Plugin_Changed;
+        }
     }
     return Plugin_Continue;
 }
@@ -210,6 +300,13 @@ void PrepareWaveNextFrame(any data)
 public void L4D_OnSpawnSpecial_Post(int client, int zombieClass, const float vecPos[3], const float vecAng[3])
 {
     if (client <= 0 || zombieClass >= ZC_WITCH || !g_bMapReady || g_bRoundEnded) return;
+    if (g_bRotation)
+    {
+        // Account for the actual class if another spawn hook changed it.
+        int actualClass = GetEntProp(client, Prop_Send, "m_zombieClass");
+        int index = g_RotationQueue.FindValue(actualClass);
+        if (index != -1) g_RotationQueue.Erase(index);
+    }
     if (!g_bWaveStarted)
     {
         g_fWaveInterval = g_fPreparedInterval;
@@ -231,6 +328,7 @@ public void Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast
     int zombieClass = GetEntProp(client, Prop_Send, "m_zombieClass");
     if (event.GetBool("victimisbot") && zombieClass < ZC_WITCH)
     {
+        if (!g_bRoundEnded) ReturnRotationClass(zombieClass, client);
         g_iAliveSICount--;
         float now = GetEngineTime();
         if (!g_bHasFirstDeath)
@@ -570,6 +668,8 @@ bool ApplyDirectorSettings()
 
 void ResetWaveState()
 {
+    g_bRotation = false;
+    g_RotationQueue.Clear();
     g_bWaveStarted = false;
     g_bWaveSettingsPending = true;
     g_fWaveInterval = g_cvInterval.FloatValue;

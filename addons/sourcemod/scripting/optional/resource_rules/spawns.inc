@@ -128,7 +128,8 @@ void NormalizePickupFlags(int entity)
 	// Bit 8 means Infinite Items only on weapon resource spawners. It is not
 	// a generic entity flag, and ammo piles retain their normal refill behavior.
 	if (strncmp(classname, "weapon_", 7) != 0 || StrContains(classname, "_spawn") == -1
-		|| StrEqual(classname, "weapon_ammo_spawn") || !HasEntProp(entity, Prop_Data, "m_spawnflags")) return;
+		|| StrEqual(classname, "weapon_ammo_spawn") || StrEqual(classname, "weapon_scavenge_item_spawn")
+		|| !HasEntProp(entity, Prop_Data, "m_spawnflags")) return;
 	int flags = GetEntProp(entity, Prop_Data, "m_spawnflags");
 	if (flags & 8)
 	{

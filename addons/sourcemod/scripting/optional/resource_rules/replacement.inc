@@ -1,7 +1,20 @@
 void GetResourceName(int entity, char[] name, int maxlen)
 {
+	name[0] = '\0';
 	char classname[64];
 	GetEntityClassname(entity, classname, sizeof(classname));
+	// Scavenge spawners belong to the map objective, not the supply pool.
+	if (StrEqual(classname, "weapon_scavenge_item_spawn")) return;
+	// Their spawned cans share weapon_gascan with ordinary fuel cans. The
+	// standard objective skin is 1; physics-form cans use the same marker.
+	if (StrEqual(classname, "weapon_gascan") || StrEqual(classname, "weapon_gascan_spawn")
+		|| strncmp(classname, "prop_physics", 12) == 0)
+	{
+		char model[PLATFORM_MAX_PATH];
+		GetEntPropString(entity, Prop_Data, "m_ModelName", model, sizeof(model));
+		if (StrEqual(model, "models/props_junk/gascan001a.mdl", false)
+			&& GetEntProp(entity, Prop_Send, "m_nSkin") == 1) return;
+	}
 	// Ammo piles have no normal weapon ID, but participate in point limits.
 	if (StrEqual(classname, "weapon_ammo_spawn"))
 	{
