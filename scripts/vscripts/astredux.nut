@@ -1,3 +1,13 @@
+// Load once per VM: wave-setting reloads must not reset particles or diagnostics.
+if (!("AcidVisual" in getroottable()))
+{
+    IncludeScript("acid_visual", getroottable());
+}
+else if (::AcidVisual.Reason == "mode_inactive")
+{
+    ::AcidVisual.Start();
+}
+
 //-----------------------------------------------------------------------------------------------------------------------------
 // SETTINGS loaded at the start of the game
 //-----------------------------------------------------------------------------------------------------------------------------

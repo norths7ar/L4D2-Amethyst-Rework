@@ -33,6 +33,22 @@ Windows 通过本机 SSH 配置中的 `l4d2-coreyun` 连接服务器：
 
 整批 VPK 上传完成后，先运行 01 检查，再执行 `sudo l4d2-content-apply` 应用地图清单并重启；若同时需要部署仓库改动，则运行 02。VPK 使用简短 ASCII 文件名，例如 `blackmist_re_v13.vpk`。第三方战役需提供 AstRedux 所需的 Versus 章节定义；坏包或冲突战役会被跳过，应查看输出确认结果。
 
+## AstRedux 口水补充特效
+
+`scripts/vscripts/astredux.nut` 加载 `acid_visual.nut`，沿用 Kiop [AcidVisual 0.4](https://steamcommunity.com/sharedfiles/filedetails/?id=3806318059) 的节点读取、补画算法、限制和诊断命令。波次设置引起的模式脚本重载不会重复初始化；回合结束清理，回合开始重建，检测到离开 AstRedux 时停止。现有口水扩散和伤害修复保持不变。服务器不安装原始 VPK，也不覆盖 `director_base_addon.nut`。
+
+客户端配套包为仓库 `client-addons/astredux_acid_visual_client.vpk`：放入本机游戏的 `left4dead2/addons/`，启用后完全退出并重启游戏。禁用原始 Acid Visual VPK 及其他覆盖 `particles/spitter_fx.pcf` 的包，避免资源竞争。该包只有 addon 元数据和原始 PCF，不含脚本；不要部署到服务器的 addons 目录。未安装配套包的玩家仍可能看到服务端补画的原版粒子，不能保证与安装者画面一致。客户端 PCF 也会影响其他允许加载它的服务器，需恢复原版时禁用并重启。
+
+PCF 原样保留，上游脚本标注地面粒子放大 1.5 倍；补画不改变伤害，视觉边界不是精确伤害边界。目前完成静态接入和打包校验，未验证游戏内显示、模式切换和多人开销。
+
+游戏聊天 `!acid4status` 可查询状态；上游开关类聊天命令仍只允许本地房主使用。专服管理员可在服务器控制台或已授权的 RCON 执行 `script ::AcidVisual.Stop()` 暂停、`script ::AcidVisual.Start()` 恢复，或 `script printl(::AcidVisual.Status())` 查看状态。暂停只持续到下次回合启动；客户端 PCF 不会随服务端暂停卸载。完整关闭对比需同时禁用客户端包并重启。不要为专服开放 `AllowRemoteDiagnostics`，否则任意玩家都能控制全服特效。
+
+重建客户端包（仓库根目录，PowerShell 7）：
+
+```powershell
+./tools/build_astredux_vpk.ps1 -SourceRoot ./assets/acid_visual_client -OutputPath ./client-addons/astredux_acid_visual_client.vpk
+```
+
 ## 地图管理
 
 `!mapvote`、`!chaptervote`、`!nextmap` 和终章战役衔接由全局 `campaign_switcher` 提供，不依赖 AstRedux。地图清单由内容应用工具生成，具体合并规则见 [地图内容处理](../ops/README.md#地图内容处理)。

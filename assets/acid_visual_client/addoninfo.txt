@@ -1,0 +1,11 @@
+"AddonInfo"
+{
+    "addonSteamAppID" "550"
+    "addonTitle" "AstRedux Acid Visual - Client Particles"
+    "addonVersion" "0.4"
+    "addonAuthor" "Kiop; AstRedux client-only packaging"
+    "addonURL0" "https://steamcommunity.com/sharedfiles/filedetails/?id=3806318059"
+    "addonDescription" "Client particle companion for AcidVisual. No VScript. Original spitter_fx.pcf preserved."
+    "addonContent_Particle" "1"
+    "addonContent_Script" "0"
+}
