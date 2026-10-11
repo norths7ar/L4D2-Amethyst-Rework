@@ -2,7 +2,8 @@
 // to the administrator. The menu and chat command share permission/live checks.
 static const char g_basicGunClasses[][] = {
 	"weapon_smg_spawn", "weapon_smg_silenced_spawn",
-	"weapon_pumpshotgun_spawn", "weapon_shotgun_chrome_spawn"
+	"weapon_pumpshotgun_spawn", "weapon_shotgun_chrome_spawn",
+	"weapon_smg_mp5_spawn"
 };
 
 Action CommandGuns(int client, int args)
@@ -37,13 +38,13 @@ void SpawnBasicGuns(int client)
 		PrintToChat(client, "[SM] %t", "AdminGunsReadyOnly");
 		return;
 	}
-	float positions[4][3], angles[3];
+	float positions[sizeof(g_basicGunClasses)][3], angles[3];
 	if (!FindBasicGunPositions(client, positions, angles))
 	{
 		PrintToChat(client, "[SM] %t", "AdminGunsNoGround");
 		return;
 	}
-	int spawned[4], count;
+	int spawned[sizeof(g_basicGunClasses)], count;
 	for (int i = 0; i < sizeof(g_basicGunClasses); i++)
 	{
 		int entity = CreateEntityByName(g_basicGunClasses[i]);
@@ -58,15 +59,15 @@ void SpawnBasicGuns(int client)
 	if (count != sizeof(g_basicGunClasses))
 	{
 		for (int i = 0; i < count; i++) RemoveEntity(spawned[i]);
-		LogError("Could not spawn all four basic guns for %L", client);
+		LogError("Could not spawn all basic guns for %L", client);
 		PrintToChat(client, "[SM] %t", "AdminGunsFailed");
 		return;
 	}
-	LogAction(client, -1, "\"%L\" spawned Uzi, MAC-10, pump and chrome shotguns", client);
+	LogAction(client, -1, "\"%L\" spawned Uzi, MAC-10, MP5, pump and chrome shotguns", client);
 	PrintToChat(client, "[SM] %t", "AdminGunsSpawned");
 }
 
-bool FindBasicGunPositions(int client, float positions[4][3], float angles[3])
+bool FindBasicGunPositions(int client, float positions[sizeof(g_basicGunClasses)][3], float angles[3])
 {
 	float eye[3], aim[3], center[3], normal[3];
 	GetClientEyePosition(client, eye);
@@ -86,12 +87,12 @@ bool FindBasicGunPositions(int client, float positions[4][3], float angles[3])
 	float yaw[3], ahead[3], right[3];
 	yaw[1] = aim[1];
 	GetAngleVectors(yaw, ahead, right, NULL_VECTOR);
-	for (int i = 0; i < 4; i++)
+	for (int i = 0; i < sizeof(g_basicGunClasses); i++)
 	{
 		float start[3], end[3];
 		for (int axis = 0; axis < 3; axis++)
-			start[axis] = center[axis] + ahead[axis] * (i < 2 ? -24.0 : 24.0)
-				+ right[axis] * (i % 2 == 0 ? -24.0 : 24.0);
+			start[axis] = center[axis] + ahead[axis] * (i == 4 ? 0.0 : (i < 2 ? -24.0 : 24.0))
+				+ right[axis] * (i == 4 ? 0.0 : (i % 2 == 0 ? -24.0 : 24.0));
 		start[2] += 24.0;
 		end = start;
 		end[2] -= 64.0;

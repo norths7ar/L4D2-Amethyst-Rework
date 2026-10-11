@@ -2,7 +2,7 @@
 {
 	"AdminBasicGuns"
 	{
-		"en" "Spawn four basic guns"
+		"en" "Spawn five basic guns"
 	}
 	"AdminGunsInGame"
 	{
@@ -14,7 +14,7 @@
 	}
 	"AdminGunsNoGround"
 	{
-		"en" "Aim at open ground with room for all four guns."
+		"en" "Aim at open ground with room for all five guns."
 	}
 	"AdminGunsFailed"
 	{
@@ -22,7 +22,7 @@
 	}
 	"AdminGunsSpawned"
 	{
-		"en" "Spawned one Uzi, MAC-10, pump shotgun and chrome shotgun."
+		"en" "Spawned one Uzi, MAC-10, MP5, pump shotgun and chrome shotgun."
 	}
 	"AdminPlayerAssistance"
 	{

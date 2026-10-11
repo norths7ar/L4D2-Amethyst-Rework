@@ -2,7 +2,7 @@
 {
 	"AdminBasicGuns"
 	{
-		"chi" "生成四把基础枪"
+		"chi" "生成五把基础枪"
 	}
 	"AdminGunsInGame"
 	{
@@ -14,7 +14,7 @@
 	}
 	"AdminGunsNoGround"
 	{
-		"chi" "请瞄准能摆下四把枪的空地。"
+		"chi" "请瞄准能摆下五把枪的空地。"
 	}
 	"AdminGunsFailed"
 	{
@@ -22,7 +22,7 @@
 	}
 	"AdminGunsSpawned"
 	{
-		"chi" "已生成 Uzi、MAC-10、木喷、铁喷各一把。"
+		"chi" "已生成 Uzi、MAC-10、MP5、木喷、铁喷各一把。"
 	}
 	"AdminPlayerAssistance"
 	{
