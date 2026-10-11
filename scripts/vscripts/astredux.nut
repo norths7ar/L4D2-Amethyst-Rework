@@ -1,4 +1,4 @@
-// Load once per VM: wave-setting reloads must not reset particles or diagnostics.
+// Load once per VM: wave-setting reloads must not reset particles.
 if (!("AcidVisual" in getroottable()))
 {
     IncludeScript("acid_visual", getroottable());
