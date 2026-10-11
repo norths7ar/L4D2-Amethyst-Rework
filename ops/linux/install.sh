@@ -43,6 +43,8 @@ install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/l4d2-run" \
     "$LIBEXEC_DIR/l4d2-run"
 install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/vpk_campaigns.py" \
     "$LIBEXEC_DIR/vpk_campaigns.py"
+install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/map_rules_merge.py" \
+    "$LIBEXEC_DIR/map_rules_merge.py"
 if [[ ! -e "$CONFIG_PATH" ]]; then
     install -o root -g l4d2 -m 0640 "$SCRIPT_DIR/l4d2-restart.conf.example" \
         "$CONFIG_PATH"

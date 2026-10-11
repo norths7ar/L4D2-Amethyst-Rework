@@ -4,6 +4,8 @@ umask 0007
 
 CONFIG_PATH=${L4D2_RESTART_CONFIG:-/etc/l4d2-restart.conf}
 APPLY_TOOL=${L4D2_CONTENT_APPLY_TOOL:-/usr/local/sbin/l4d2-content-apply}
+LIBEXEC_DIR=${L4D2_LIBEXEC_DIR:-/usr/local/libexec/l4d2}
+MAP_RULES=addons/sourcemod/configs/map_rules.cfg
 
 usage() {
     printf 'Usage: sudo l4d2-update-and-restart\n' >&2
@@ -121,6 +123,7 @@ while IFS= read -r -d '' path; do
     is_database_path "$path" && continue
     [[ "$path" == addons/sourcemod/data/cannounce_messages.txt ]] && continue
     [[ "$path" == addons/sourcemod/configs/missioncycle.txt ]] && continue
+    [[ "$path" == "$MAP_RULES" ]] && continue
     printf '%s\0' "$path" >>"$files"
 done <"$work_dir/tracked"
 
@@ -140,6 +143,22 @@ if [[ "$old_rev" != "$new_rev" ]]; then
     done <"$deleted"
 fi
 
+# Prepare and validate before deploying other files. The baseline is repository
+# content, never the previously merged runtime file.
+if [[ -f "$CHECKOUT_ROOT/$MAP_RULES" ]]; then
+    base_args=()
+    if git_owner cat-file -e "$old_rev:$MAP_RULES" 2>/dev/null; then
+        git_owner show "$old_rev:$MAP_RULES" >"$work_dir/map_rules.base"
+        base_args=(--base "$work_dir/map_rules.base")
+    fi
+    if [[ -e "$CONTENT_ROOT/$MAP_RULES" ]]; then
+        cp -- "$CONTENT_ROOT/$MAP_RULES" "$work_dir/map_rules.current"
+    fi
+    "$LIBEXEC_DIR/map_rules_merge.py" "${base_args[@]}" \
+        --current "$work_dir/map_rules.current" --incoming "$CHECKOUT_ROOT/$MAP_RULES" \
+        --output "$work_dir/map_rules.merged"
+fi
+
 rsync -a --delay-updates --chown="$OWNER_USER:$SERVICE_GROUP" \
     --from0 --files-from="$files" "$CHECKOUT_ROOT/" "$CONTENT_ROOT/"
 if [[ -s "$work_dir/remove" ]]; then
@@ -147,8 +166,23 @@ if [[ -s "$work_dir/remove" ]]; then
         is_database_path "$path" && continue
         [[ "$path" == addons/sourcemod/data/cannounce_messages.txt ]] && continue
         [[ "$path" == addons/sourcemod/configs/missioncycle.txt ]] && continue
+        [[ "$path" == "$MAP_RULES" ]] && continue
         rm -f -- "$CONTENT_ROOT/$path"
     done <"$work_dir/remove"
+fi
+if [[ -f "$work_dir/map_rules.merged" ]]; then
+    if [[ -e "$work_dir/map_rules.current" ]]; then
+        cmp -s -- "$work_dir/map_rules.current" "$CONTENT_ROOT/$MAP_RULES" || {
+            printf 'map_rules.cfg changed during deployment; retry the update.\n' >&2; exit 1;
+        }
+    elif [[ -e "$CONTENT_ROOT/$MAP_RULES" ]]; then
+        printf 'map_rules.cfg appeared during deployment; retry the update.\n' >&2; exit 1
+    fi
+    if ! cmp -s -- "$work_dir/map_rules.merged" "$CONTENT_ROOT/$MAP_RULES"; then
+        candidate=$(mktemp "$CONTENT_ROOT/$MAP_RULES.deploy.XXXXXX")
+        install -o "$OWNER_USER" -g "$SERVICE_GROUP" -m 0660 "$work_dir/map_rules.merged" "$candidate"
+        mv -f -- "$candidate" "$CONTENT_ROOT/$MAP_RULES"
+    fi
 fi
 "$APPLY_TOOL"
 install -d -o root -g "${SERVICE_GROUP:-l4d2}" -m 0770 "$(dirname -- "$MARKER_PATH")"
