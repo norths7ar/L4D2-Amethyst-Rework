@@ -19,6 +19,7 @@
 
 ## 推迟
 
+- 逃亡型救援的 Tank 轮次编辑：保留已有预设，不强行接入普通救援的跳轮方式；L4DHooks 与 gamedata 保持上游版本。
 - PVP的 ready／pause 合并：PVP 与 PVE 的准备逻辑存在实际差异，不需要勉强合并。
 - 暂不合并 Hunter／Jockey skeet 检测、播报与奖励插件。当前只有 PVE 的 AstRedux 使用 Jockey skeet，`l4d2_playstats` 只在 PVP 加载，两者没有需要衔接的场景；保留现有实现，不为合并增加接口。
 - 暂不让 AstRedux 停用 `l4d2_tank_attack_control`：原计划删除 Redux 用不到的真人投石姿势命令（`!underhand`、`!overhand`、`!overonehand`），并把仍需要的出拳／投石相互限制交给 `ai_tank`。退出前需核对两个插件的攻击限制，验证“先启动的动作阻止后启动的动作”，避免删命令时改变 AI 战斗行为；目前保持原样。

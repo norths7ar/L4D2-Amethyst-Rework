@@ -12,7 +12,9 @@
 * `README.md`: project intent, mode positioning, and common user entry points.
 * `docs/ROADMAP.md`: planned work; `docs/CHANGELOG.md`: completed repository changes and version history.
 * `docs/architecture.md`: 只记录框架级别的产品设计思路，不负责记录任何具体模式的决策、路径等。
-* `docs/server-operations.md`: deployment and server operations.
+* `docs/server-operations.md`: daily deployment and server operations; `ops/README.md`: installation and maintenance of operations tooling.
+* `docs/astredux-design.md`: AstRedux 的设计决策及简短功能、参数和使用说明；按内容大块组织，不按插件逐个拆文档。
+* `docs/configuration/`: 仅承载篇幅较大、需要独立查阅的配置说明。归位文档不等于拆分文档，功能说明不放进服务器运维。
 * Actual cfgs, SourcePawn, VScript, Stripper, and plugin-load files: runtime behavior.
 
 Keep routine CHANGELOG entries concise and focused on outcomes; major releases may include fuller explanations. Concrete mode rules belong in configuration and relevant release notes, not README or architecture notes.

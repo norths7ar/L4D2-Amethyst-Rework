@@ -12,15 +12,22 @@ AstMod (Amethyst) 为 海洋空气 开发的药役模式。Ast作为模式统一
 
 - `!match` / `!chmatch` / `!rmatch`：进入、切换或重置模式。
 - `!ast`：玩法调整菜单。
+- `!mset`：管理员地图规则菜单，保存本图路程 Boss、支持的救援轮次与开场动画设置。
 - `!si <时间> <数量>`：调整当前地图的特感波次。
 - `!mapvote` / `!nextmap` / `!chaptervote`：地图与章节投票。
 
 ## 项目文档
 
 - [服务器运维](docs/server-operations.md)
+- [框架配置架构](docs/architecture.md)
 - [更新日志](docs/CHANGELOG.md)
 - [开发计划](docs/ROADMAP.md)
 - [AstRedux 设计决策](docs/astredux-design.md)
+
+### 详细配置文档
+
+- [地图规则配置](docs/configuration/map-rules.md)
+- [资源规则配置](docs/configuration/resource-rules.md)
 
 ## 来源与致谢
 

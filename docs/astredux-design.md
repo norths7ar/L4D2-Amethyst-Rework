@@ -134,18 +134,32 @@ Redux 默认禁用投掷物，以及普通油桶、烟花、煤气罐和氧气�
 
 第三方地图可能依赖特殊实体或脚本机制，例如《伦理问题 Alpha 测试》需要榴弹触发机关。遇到兼容问题时，应连同地图脚本和 Stripper 一起检查：资源投票负责放行，已被 Stripper 删除的实体则需要在地图修改层处理。
 
+### 地图切换
+
+`!mapvote`、`!chaptervote`、`!nextmap` 和终章战役衔接由全局 `campaign_switcher` 提供，不依赖 AstRedux。地图清单由内容应用工具生成，具体合并规则见 [地图内容处理](../ops/README.md#地图内容处理)。
+
+空服时，插件等待真人连接和引擎预留消失，再按 `campaign_empty_switch_delay`（默认 15 秒）切到随机官图；已停在官图且没有新连接时不会反复轮换。该流程只换地图，不切换玩法模式。空服计时的服务器设置见 [服务器运维](server-operations.md#配置与地图维护)。
+
 ## fakelag 模拟延迟
 
 `player_fakelag` 提供 `!fakelag` 等命令，依赖 `custom_fakelag` 扩展；本仓库只维护 `addons/sourcemod/scripting/optional/player_fakelag.sp` 包装层，扩展需从 [上游源码](https://github.com/ProdigySim/custom_fakelag) 修改和构建。
 
+`!fakelag [毫秒]` 设置自身追加延迟；管理员可用 `!fakelag <玩家> <毫秒>` 指定玩家，`!printlag` 查询所有真人玩家的追加延迟。
+
 ## 客户端教学过滤
 
-AstRedux 通过 `instructor_filter_support` 允许玩家自行安装教学过滤 VPK，只解除 `scripts/instructor_lessons.txt` 的逐文件一致性检查，保留其他一致性设置。未安装的玩家继续使用原版教学；客户端需开启游戏指导，必要时执行 `gameinstructor_reload_lessons`。
+配套教学过滤 VPK 独立发布，不在本仓库内：[创意工坊订阅入口](https://steamcommunity.com/sharedfiles/filedetails/?id=3804175935)。它覆盖 `scripts/instructor_lessons.txt`，屏蔽部分新手提示，同时保留第三方地图的自定义内容。
 
-该例外允许修改整个教学脚本，包括提示目标与可见性，因此对抗玩法模式不加载此插件。卸载时恢复当前地图原始校验数据；过滤脚本安装在客户端，不由服务端统一下发。
+客户端需开启游戏提示，必要时执行 `gameinstructor_reload_lessons`。未安装的玩家继续使用原版教学，服务端不统一下发过滤脚本。
 
-### 开场播放次数
+`instructor_filter_support` 在服务器启动时全局加载，只解除该文件的一致性检查，保留其他一致性设置，避免首位玩家需要先完成进服才能触发豁免。AstRedux 在模式重载后继续加载它；Zone 系列通过框架卸载流程恢复原校验数据，不再加载此插件，同时保持 `sv_gameinstructor_disable 1`。
 
-AstRedux 设置 `l4d_skip_intro_ready 1`，在所有章节使用 Ready 阶段的开场检查；`l4d_skip_intro_play_count 2` 表示本章前两次队伍尝试正常播放，第三次起跳过。设为 0 始终跳过，-1 始终播放。计数来自回合边界，同章重开累计，Ready 重初始化和玩家重连不增加；换章节清零，服务器重启或插件重新加载后重新计数。后来加入的玩家沿用队伍次数。
+## 管理员菜单与基础枪补给
 
-跳过仅处理实际接管生还者的开场镜头，不要求全员都绑定摄像机；正式开局后停止检查，不处理后续剧情。地图镜头实体保留，已有 OnUser1 输出每个镜头每次尝试最多触发一次，不清空地图延迟输出。没有启用 Ready 策略的模式保留原插件首关行为。
+`!admin` 在 AstRedux 下分为“管理玩家”“玩家辅助”“服务器命令”。传送和穿墙归入管理玩家；回血、回子弹、复活及五类生成入口在玩家辅助中平铺；取消投票归入服务器命令。原操作权限和玩家目标检查保持不变。
+
+准备阶段，管理员可用 `!guns` 或“玩家辅助 → 生成四把基础枪”，在瞄准的地面附近摆放 Uzi、MAC-10、木喷、铁喷各一把，每把只可拾取一次。命令由 `admin_tools` 提供，使用与生成菜单相同的 `n`（cheats）权限；开局后不可使用，不替换管理员手持武器。用于地图起点缺枪时手动补给，不自动发枪。
+
+## 开场动画
+
+官图默认始终跳过开场，第三方地图可单独设置始终跳过，其余地图按队伍尝试次数处理。同章重开共用队伍次数；只跳过开场镜头，保留正式开局后的剧情。开关、次数和优先级见 [地图规则配置](configuration/map-rules.md#开场动画优先级)。
