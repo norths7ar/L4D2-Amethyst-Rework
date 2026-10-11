@@ -6,8 +6,12 @@
 #include <left4dhooks>
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
+#include <map_rules>
+#include <map_rules_api>
 
 #include "admin_tools/player_actions.inc"
+#include "admin_tools/map_menu.inc"
+#include "admin_tools/guns.inc"
 
 #define TEAM_INFECTED 3
 
@@ -16,15 +20,26 @@ public Plugin myinfo =
 	name = "Coop admin tools",
 	author = "海洋空氣, norths7ar",
 	description = "Administrator player operations and emergency controls for Coop",
-	version = "1.2.1"
+	version = "1.4.0"
 };
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
+{
+	MapRules_MarkAPIsOptional();
+	return APLRes_Success;
+}
 
 public void OnPluginStart()
 {
 	LoadTranslations("admin_tools.phrases");
 	InitPlayerActions();
+	MapRules_Init();
+	RegAdminCmd("sm_mset", CommandMapMenu, ADMFLAG_GENERIC, "本图路程 Boss、救援轮次和开场动画设置。");
+	RegAdminCmd("sm_guns", CommandGuns, ADMFLAG_CHEATS, "准备阶段在瞄准的地面生成四把基础枪。");
 	RegAdminCmd("sm_fuck", CommandCleanup, ADMFLAG_BAN, "清理匹配名称的 AI 特感。");
 }
+
+public void OnRoundIsLive() { MapRules_Lock(); }
 
 public Action CommandCleanup(int client, int args)
 {

@@ -7,12 +7,12 @@
 
 	"Player Commands"
 	{
-		"chi"		"玩家指令"
+		"chi"		"管理玩家"
 	}
 
 	"Server Commands"
 	{
-		"chi"		"服务器指令"
+		"chi"		"服务器命令"
 	}
 
 	"Voting Commands"

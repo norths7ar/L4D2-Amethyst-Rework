@@ -1,5 +1,29 @@
 "Phrases"
 {
+	"AdminBasicGuns"
+	{
+		"chi" "生成四把基础枪"
+	}
+	"AdminGunsInGame"
+	{
+		"chi" "请在游戏内使用此指令。"
+	}
+	"AdminGunsReadyOnly"
+	{
+		"chi" "只能在准备阶段生成基础枪。"
+	}
+	"AdminGunsNoGround"
+	{
+		"chi" "请瞄准能摆下四把枪的空地。"
+	}
+	"AdminGunsFailed"
+	{
+		"chi" "生成失败，请检查服务器日志。"
+	}
+	"AdminGunsSpawned"
+	{
+		"chi" "已生成 Uzi、MAC-10、木喷、铁喷各一把。"
+	}
 	"AdminPlayerAssistance"
 	{
 		"chi" "玩家辅助"

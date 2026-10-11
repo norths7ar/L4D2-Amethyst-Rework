@@ -24,7 +24,7 @@ Copyright 2009 James Richardson
 // Define constants
 #define PLUGIN_NAME					"All4Dead"
 #define PLUGIN_TAG					"[A4D] "
-#define PLUGIN_VERSION			"2.2.0"
+#define PLUGIN_VERSION			"2.3.0"
 #define MENU_DISPLAY_TIME		MENU_TIME_FOREVER
 
 // Include necessary files
@@ -63,6 +63,7 @@ public Plugin:myinfo = {
 // Generation plugin setup.
 public OnPluginStart() {
 	LoadTranslations("all4dead2.phrases");
+	LoadTranslations("admin_tools.phrases");
 	CreateConVar("a4d_version", PLUGIN_VERSION, "The version of All4Dead plugin.", FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_DONTRECORD);
 
 	// If the Admin menu has been loaded start adding stuff to it
@@ -87,7 +88,10 @@ public OnAdminMenuReady(Handle:menu) {
 	if (menu == admin_menu)
 		return;
 	admin_menu = menu;
-	new TopMenuObject:category = AddToTopMenu(admin_menu, "All4Dead Commands", TopMenuObject_Category, Menu_CategoryHandler, INVALID_TOPMENUOBJECT);
+	new TopMenuObject:category = FindTopMenuCategory(admin_menu, "PlayerAssistance");
+	if (category == INVALID_TOPMENUOBJECT)
+		category = AddToTopMenu(admin_menu, "PlayerAssistance", TopMenuObject_Category, Menu_CategoryHandler, INVALID_TOPMENUOBJECT);
+	if (category == INVALID_TOPMENUOBJECT) return;
 	for (new i = 0; i < sizeof(generation_menus); i++)
 		generation_menus[i] = AddToTopMenu(admin_menu, generation_ids[i], TopMenuObject_Item,
 			Menu_TopItemHandler, category, i < 3 ? "a4d_equipment_menu" : "a4d_infected_menu", ADMFLAG_CHEATS);
@@ -115,7 +119,7 @@ public OnEntityCreated(entity, const String:classname[]) {
 // All4Dead owns generation only. Player actions live in admin_tools.
 public Menu_CategoryHandler(Handle:topmenu, TopMenuAction:action, TopMenuObject:object_id, client, String:buffer[], maxlength) {
 	if (action == TopMenuAction_DisplayTitle || action == TopMenuAction_DisplayOption)
-		Format(buffer, maxlength, "%T", "A4DSpawnMenu", client);
+		Format(buffer, maxlength, "%T", "AdminPlayerAssistance", client);
 }
 
 public Menu_TopItemHandler(Handle:topmenu, TopMenuAction:action, TopMenuObject:object_id, client, String:buffer[], maxlength) {

@@ -12,8 +12,8 @@ public Plugin myinfo =
 {
 	name = "Noclip",
 	author = "AlliedModders LLC, norths7ar",
-	description = "Administrator noclip command and player assistance menu for all modes",
-	version = "1.0.0"
+	description = "Administrator noclip command and player management menu for all modes",
+	version = "1.1.0"
 };
 
 public void OnPluginStart()
@@ -34,18 +34,9 @@ public void OnAdminMenuReady(Handle topmenu)
 	TopMenu menu = TopMenu.FromHandle(topmenu);
 	if (menu == null || menu == hTopMenu) return;
 	hTopMenu = menu;
-	TopMenuObject category = FindTopMenuCategory(menu, "PlayerAssistance");
-	if (category == INVALID_TOPMENUOBJECT)
-		category = menu.AddCategory("PlayerAssistance", PlayerAssistanceCategory);
+	TopMenuObject category = FindTopMenuCategory(menu, ADMINMENU_PLAYERCOMMANDS);
 	if (category == INVALID_TOPMENUOBJECT) return;
 	menu.AddItem("sm_noclip", AdminMenu_NoClip, category, "sm_noclip", ADMFLAG_SLAY | ADMFLAG_CHEATS);
-}
-
-public void PlayerAssistanceCategory(TopMenu menu, TopMenuAction action, TopMenuObject objectId,
-	int client, char[] buffer, int maxlength)
-{
-	if (action == TopMenuAction_DisplayTitle || action == TopMenuAction_DisplayOption)
-		Format(buffer, maxlength, "%T", "AdminPlayerAssistance", client);
 }
 
 /**

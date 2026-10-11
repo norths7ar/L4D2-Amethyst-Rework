@@ -7,6 +7,7 @@
 #include <sdktools>
 #include <left4dhooks>
 #include <l4d2lib>
+#include <map_rules>
 #define L4D2UTIL_STOCKS_ONLY
 #include <l4d2util_rounds>
 
@@ -17,7 +18,7 @@
 public Plugin myinfo = {
 	name = "Boss Spawn Rules",
 	author = "CanadaRox, Sir, devilesk, Derpduck, Forgetest",
-	version = "2.5.0",
+	version = "2.6.0",
 	description = "Sets a tank spawn and has the option to remove the witch spawn point on every map",
 	url = "https://github.com/devilesk/rl4d2l-plugins"
 };
@@ -49,6 +50,8 @@ ArrayList
 	hValidWitchFlows,
 	hMapWitchFlows; // Map restrictions without the moving Tank avoidance interval.
 
+#include "boss_spawn_rules/map_rules.inc"
+
 // ======================================
 // Plugin Setup
 // ======================================
@@ -63,12 +66,15 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("SetTankPercent", Native_SetTankPercent);
 	CreateNative("SetWitchPercent", Native_SetWitchPercent);
 	CreateNative("SetBossPercents", Native_SetBossPercents);
+	CreateNative("BossRules_GetStatic", Native_GetStaticRule);
+	CreateNative("BossRules_SetStatic", Native_SetStaticRule);
 
 	RegPluginLibrary("boss_spawn_rules");
 	return APLRes_Success;
 }
 
 public void OnPluginStart() {
+	InitBossMapRules();
 	g_hCvarDebug = CreateConVar("sm_tank_witch_debug", "0", "Tank and Witch ifier debug mode", FCVAR_DONTRECORD, true, 0.0, true, 1.0);
 	g_hCvarTankCanSpawn = CreateConVar("sm_tank_can_spawn", "1", "Tank and Witch ifier enables tanks to spawn", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 	g_hCvarWitchCanSpawn = CreateConVar("sm_witch_can_spawn", "1", "Tank and Witch ifier enables witches to spawn", FCVAR_NOTIFY, true, 0.0, true, 1.0);
@@ -124,6 +130,7 @@ public Action L4D2_OnSpawnWitchBride(const float vecPos[3], const float vecAng[3
 
 public void OnMapStart() {
 	GetCurrentMapLower(g_sCurrentMap, sizeof g_sCurrentMap);
+	if (MapRules_Enabled()) LoadBossMapRules();
 	hValidTankFlows.Clear();
 	hValidWitchFlows.Clear();
 	hMapWitchFlows.Clear();
@@ -134,130 +141,146 @@ public void OnMapStart() {
 // ======================================
 
 void RoundStartEvent(Event event, const char[] name, bool dontBroadcast) {
+	if (MapRules_Enabled()) LoadBossMapRules();
 	CreateTimer(0.5, AdjustBossFlow, _, TIMER_FLAG_NO_MAPCHANGE);
 }
 
+public void OnConfigsExecuted() {
+	if (MapRules_Enabled() && !MapRules_IsLive() && LoadBossMapRules()) AdjustBossFlows(true, true);
+}
+
+public void OnRoundIsLive() { MapRules_Lock(); }
+
 Action AdjustBossFlow(Handle timer) {
+	AdjustBossFlows(true, true);
+	return Plugin_Stop;
+}
+
+void AdjustBossFlows(bool adjustTank, bool adjustWitch) {
 	if (InSecondHalfOfRound()) {
-		return Plugin_Stop;
+		return;
 	}
-	
-	hValidTankFlows.Clear();
-	hValidWitchFlows.Clear();
-	hMapWitchFlows.Clear();
-	
+
+	if (adjustTank) hValidTankFlows.Clear();
+	if (adjustWitch) {
+		hValidWitchFlows.Clear();
+		hMapWitchFlows.Clear();
+	}
+
 	int iCvarMinFlow = RoundToCeil(g_hVsBossFlowMin.FloatValue * 100);
 	int iCvarMaxFlow = RoundToFloor(g_hVsBossFlowMax.FloatValue * 100);
-	
+
 	// mapinfo override
 	iCvarMinFlow = L4D2_GetMapValueInt("versus_boss_flow_min", iCvarMinFlow);
 	iCvarMaxFlow = L4D2_GetMapValueInt("versus_boss_flow_max", iCvarMaxFlow);
 	PrintDebug("[AdjustBossFlow] flow: (%i, %i).", iCvarMinFlow, iCvarMaxFlow);
-	
-	if (!IsStaticTankMap(g_sCurrentMap) && g_hCvarTankCanSpawn.BoolValue) {
-		PrintDebug("[AdjustBossFlow] Not static tank map. Flow tank enabled.");
-		
-		ArrayList hBannedFlows = new ArrayList(2);
-		
-		int interval[2];
-		interval[0] = 0, interval[1] = iCvarMinFlow - 1;
-		if (IsValidInterval(interval)) hBannedFlows.PushArray(interval);
-		interval[0] = iCvarMaxFlow + 1, interval[1] = 100;
-		if (IsValidInterval(interval)) hBannedFlows.PushArray(interval);
-	
-		KeyValues kv = new KeyValues("tank_ban_flow");
-		L4D2_CopyMapSubsection(kv, "tank_ban_flow");
-		
-		if (kv.GotoFirstSubKey()) {
-			do {
-				interval[0] = kv.GetNum("min", -1);
-				interval[1] = kv.GetNum("max", -1);
-				PrintDebug("[AdjustBossFlow] ban (%i, %i).", interval[0], interval[1]);
-				if (IsValidInterval(interval)) hBannedFlows.PushArray(interval);
-			} while (kv.GotoNextKey());
-		}
-		delete kv;
-		
-		MergeIntervals(hBannedFlows);
-		MakeComplementaryIntervals(hBannedFlows, hValidTankFlows);
-		
-		delete hBannedFlows;
-		
-		// check each array index to see if it is within a ban range
-		int iValidSpawnTotal = hValidTankFlows.Length;
-		if (iValidSpawnTotal == 0) {
-			SetTankPercent(0);
-			PrintDebug("[AdjustBossFlow] Ban range covers entire flow range. Flow tank disabled.");
-		}
-		else {
-			int iTankFlow = GetRandomIntervalNum(hValidTankFlows);
-			PrintDebug("[AdjustBossFlow] iTankFlow: %i. iValidSpawnTotal: %i", iTankFlow, iValidSpawnTotal);
-			SetTankPercent(iTankFlow);
-		}
-	}
-	else {
-		SetTankPercent(0);
-		PrintDebug("[AdjustBossFlow] Static tank map. Flow tank disabled.");
-	}
-	
-	if (!IsStaticWitchMap(g_sCurrentMap) && g_hCvarWitchCanSpawn.BoolValue) {
-		PrintDebug("[AdjustBossFlow] Not static witch map. Flow witch enabled.");
 
-		ArrayList hBannedFlows = new ArrayList(2);
-		
-		int interval[2];
-		interval[0] = 0, interval[1] = iCvarMinFlow - 1;
-		if (IsValidInterval(interval)) hBannedFlows.PushArray(interval);
-		interval[0] = iCvarMaxFlow + 1, interval[1] = 100;
-		if (IsValidInterval(interval)) hBannedFlows.PushArray(interval);
-	
-		KeyValues kv = new KeyValues("witch_ban_flow");
-		L4D2_CopyMapSubsection(kv, "witch_ban_flow");
-		
-		if (kv.GotoFirstSubKey()) {
-			do {
-				interval[0] = kv.GetNum("min", -1);
-				interval[1] = kv.GetNum("max", -1);
-				PrintDebug("[AdjustBossFlow] ban (%i, %i).", interval[0], interval[1]);
-				if (IsValidInterval(interval)) hBannedFlows.PushArray(interval);
-			} while (kv.GotoNextKey());
-		}
-		delete kv;
-		
-		// Keep permanent map bans separate: moving the Tank must never restore them.
-		MergeIntervals(hBannedFlows);
-		MakeComplementaryIntervals(hBannedFlows, hMapWitchFlows);
-		if (GetTankAvoidInterval(interval))
-		{
-			PrintDebug("[AdjustBossFlow] tank avoid (%i, %i)", interval[0], interval[1]);
+	if (adjustTank) {
+		if (!IsStaticTankMap(g_sCurrentMap) && g_hCvarTankCanSpawn.BoolValue) {
+			PrintDebug("[AdjustBossFlow] Not static tank map. Flow tank enabled.");
+
+			ArrayList hBannedFlows = new ArrayList(2);
+
+			int interval[2];
+			interval[0] = 0, interval[1] = iCvarMinFlow - 1;
 			if (IsValidInterval(interval)) hBannedFlows.PushArray(interval);
-		}
-		
-		MergeIntervals(hBannedFlows);
-		MakeComplementaryIntervals(hBannedFlows, hValidWitchFlows);
-		
-		delete hBannedFlows;
-		
-		// check each array index to see if it is within a ban range
-		int iValidSpawnTotal = hValidWitchFlows.Length;
-		if (iValidSpawnTotal == 0) {
-			SetWitchPercent(0);
-			PrintDebug("[AdjustBossFlow] Ban range covers entire flow range. Flow witch disabled.");
+			interval[0] = iCvarMaxFlow + 1, interval[1] = 100;
+			if (IsValidInterval(interval)) hBannedFlows.PushArray(interval);
+
+			KeyValues kv = new KeyValues("tank_ban_flow");
+			L4D2_CopyMapSubsection(kv, "tank_ban_flow");
+
+			if (kv.GotoFirstSubKey()) {
+				do {
+					interval[0] = kv.GetNum("min", -1);
+					interval[1] = kv.GetNum("max", -1);
+					PrintDebug("[AdjustBossFlow] ban (%i, %i).", interval[0], interval[1]);
+					if (IsValidInterval(interval)) hBannedFlows.PushArray(interval);
+				} while (kv.GotoNextKey());
+			}
+			delete kv;
+
+			MergeIntervals(hBannedFlows);
+			MakeComplementaryIntervals(hBannedFlows, hValidTankFlows);
+
+			delete hBannedFlows;
+
+			// check each array index to see if it is within a ban range
+			int iValidSpawnTotal = hValidTankFlows.Length;
+			if (iValidSpawnTotal == 0) {
+				SetTankPercent(0);
+				PrintDebug("[AdjustBossFlow] Ban range covers entire flow range. Flow tank disabled.");
+			}
+			else {
+				int iTankFlow = GetRandomIntervalNum(hValidTankFlows);
+				PrintDebug("[AdjustBossFlow] iTankFlow: %i. iValidSpawnTotal: %i", iTankFlow, iValidSpawnTotal);
+				SetTankPercent(iTankFlow);
+			}
 		}
 		else {
-			int iWitchFlow = GetRandomIntervalNum(hValidWitchFlows);
-			PrintDebug("[AdjustBossFlow] iWitchFlow: %i. iValidSpawnTotal: %i", iWitchFlow, iValidSpawnTotal);
-			SetWitchPercent(iWitchFlow);
+			SetTankPercent(0);
+			PrintDebug("[AdjustBossFlow] Static tank map. Flow tank disabled.");
 		}
 	}
-	else {
-		SetWitchPercent(0);
-		PrintDebug("[AdjustBossFlow] Static witch map or witch not enabled. Flow witch disabled.");
-	}
-	
-	PrintDebugInfoDump();
 
-	return Plugin_Stop;
+	if (adjustWitch) {
+		if (!IsStaticWitchMap(g_sCurrentMap) && g_hCvarWitchCanSpawn.BoolValue) {
+			PrintDebug("[AdjustBossFlow] Not static witch map. Flow witch enabled.");
+
+			ArrayList hBannedFlows = new ArrayList(2);
+
+			int interval[2];
+			interval[0] = 0, interval[1] = iCvarMinFlow - 1;
+			if (IsValidInterval(interval)) hBannedFlows.PushArray(interval);
+			interval[0] = iCvarMaxFlow + 1, interval[1] = 100;
+			if (IsValidInterval(interval)) hBannedFlows.PushArray(interval);
+
+			KeyValues kv = new KeyValues("witch_ban_flow");
+			L4D2_CopyMapSubsection(kv, "witch_ban_flow");
+
+			if (kv.GotoFirstSubKey()) {
+				do {
+					interval[0] = kv.GetNum("min", -1);
+					interval[1] = kv.GetNum("max", -1);
+					PrintDebug("[AdjustBossFlow] ban (%i, %i).", interval[0], interval[1]);
+					if (IsValidInterval(interval)) hBannedFlows.PushArray(interval);
+				} while (kv.GotoNextKey());
+			}
+			delete kv;
+
+			// Keep permanent map bans separate: moving the Tank must never restore them.
+			MergeIntervals(hBannedFlows);
+			MakeComplementaryIntervals(hBannedFlows, hMapWitchFlows);
+			if (GetTankAvoidInterval(interval))
+			{
+				PrintDebug("[AdjustBossFlow] tank avoid (%i, %i)", interval[0], interval[1]);
+				if (IsValidInterval(interval)) hBannedFlows.PushArray(interval);
+			}
+
+			MergeIntervals(hBannedFlows);
+			MakeComplementaryIntervals(hBannedFlows, hValidWitchFlows);
+
+			delete hBannedFlows;
+
+			// check each array index to see if it is within a ban range
+			int iValidSpawnTotal = hValidWitchFlows.Length;
+			if (iValidSpawnTotal == 0) {
+				SetWitchPercent(0);
+				PrintDebug("[AdjustBossFlow] Ban range covers entire flow range. Flow witch disabled.");
+			}
+			else {
+				int iWitchFlow = GetRandomIntervalNum(hValidWitchFlows);
+				PrintDebug("[AdjustBossFlow] iWitchFlow: %i. iValidSpawnTotal: %i", iWitchFlow, iValidSpawnTotal);
+				SetWitchPercent(iWitchFlow);
+			}
+		}
+		else {
+			SetWitchPercent(0);
+			PrintDebug("[AdjustBossFlow] Static witch map or witch not enabled. Flow witch disabled.");
+		}
+	}
+
+	PrintDebugInfoDump();
 }
 
 // ======================================
@@ -589,11 +612,13 @@ int Native_SetBossPercents(Handle plugin, int numParams) {
 // ======================================
 
 bool IsStaticTankMap(const char[] map) {
+	if (MapRules_Enabled()) return GetStaticRule(map, false);
 	bool dummy;
 	return hStaticTankMaps.GetValue(map, dummy);
 }
 
 bool IsStaticWitchMap(const char[] map) {
+	if (MapRules_Enabled()) return GetStaticRule(map, true);
 	bool dummy;
 	return hStaticWitchMaps.GetValue(map, dummy);
 }

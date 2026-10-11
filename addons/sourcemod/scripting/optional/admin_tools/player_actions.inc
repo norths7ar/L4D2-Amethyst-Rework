@@ -29,8 +29,14 @@ public void OnAdminMenuReady(Handle topmenu)
 	if (category == INVALID_TOPMENUOBJECT)
 		category = menu.AddCategory("PlayerAssistance", PlayerAssistanceCategory);
 	if (category == INVALID_TOPMENUOBJECT) return;
+	TopMenuObject players = FindTopMenuCategory(menu, ADMINMENU_PLAYERCOMMANDS);
 	for (int i = 0; i < sizeof(g_playerActionIds); i++)
-		menu.AddItem(g_playerActionIds[i], PlayerActionTopMenu, category, g_playerActionIds[i], ADMFLAG_CHEATS);
+	{
+		TopMenuObject parent = i == 3 ? players : category;
+		if (parent != INVALID_TOPMENUOBJECT)
+			menu.AddItem(g_playerActionIds[i], PlayerActionTopMenu, parent, g_playerActionIds[i], ADMFLAG_CHEATS);
+	}
+	menu.AddItem("sm_guns", GunsTopMenu, category, "sm_guns", ADMFLAG_CHEATS);
 }
 
 public void PlayerAssistanceCategory(TopMenu menu, TopMenuAction action, TopMenuObject objectId,

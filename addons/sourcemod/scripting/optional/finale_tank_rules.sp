@@ -3,6 +3,7 @@
 
 #include <sourcemod>
 #include <sdktools>
+#include <map_rules>
 #include <left4dhooks> //#include <l4d2_direct>
 
 #define MAP_NAME_MAX_LENGTH 64
@@ -52,17 +53,131 @@ TankSpawningScheme
 int
 	tankCount = 0;
 
+enum FinaleMode
+{
+	FinaleAuto,
+	FinaleRounds,
+	FinaleLegacy
+};
+
+FinaleMode g_finaleMode;
+bool g_activeRounds[3] = {true, true, true};
+static const char g_roundKeys[][] = {"tank_round_1", "tank_round_2", "tank_round_later"};
+bool g_observedCustom;
+bool g_confirmedGauntlet;
+bool g_lateLoad;
+bool g_waitForRound;
+bool g_rulesLoaded;
+int g_activeStage = -1;
+int g_customCount;
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
+{
+	g_lateLoad = late;
+	CreateNative("FinaleRules_CanEdit", Native_CanEdit);
+	CreateNative("FinaleRules_GetRound", Native_GetRound);
+	CreateNative("FinaleRules_SetRound", Native_SetRound);
+	RegPluginLibrary("finale_tank_rules");
+	return APLRes_Success;
+}
+
+public void OnMapStart()
+{
+	g_observedCustom = false;
+	g_confirmedGauntlet = false;
+	g_activeStage = -1;
+	g_customCount = 0;
+	tankCount = 0;
+	g_rulesLoaded = false;
+}
+
+public void OnConfigsExecuted()
+{
+	if (g_lateLoad)
+	{
+		// The helper did not see any saferoom exit before this plugin loaded.
+		g_waitForRound = MapRules_IsLive() || L4D_HasAnySurvivorLeftSafeArea();
+		if (g_waitForRound) MapRules_Lock();
+		g_lateLoad = false;
+	}
+	if (MapRules_Enabled() && (!g_rulesLoaded || !MapRules_IsLive())) LoadFinaleRules();
+}
+
+public void OnRoundIsLive()
+{
+	MapRules_Lock();
+}
+
+void LoadFinaleRules()
+{
+	KeyValues rules = MapRules_Load();
+	char map[MAP_NAME_MAX_LENGTH], mode[16];
+	MapRules_CurrentMap(map, sizeof(map));
+	strcopy(mode, sizeof(mode), "auto");
+	for (int slot = 0; slot < 3; slot++)
+		g_activeRounds[slot] = rules == null || MapRules_ReadInt(rules, map, g_roundKeys[slot], 1) != 0;
+	if (rules != null)
+		MapRules_ReadString(rules, map, "finale_mode", mode, sizeof(mode), "auto");
+	delete rules;
+	g_finaleMode = FinaleAuto;
+	if (StrEqual(mode, "rounds")) g_finaleMode = FinaleRounds;
+	else if (StrEqual(mode, "legacy")) g_finaleMode = FinaleLegacy;
+	g_rulesLoaded = true;
+}
+
+bool CanEditFinale()
+{
+	if (!MapRules_Enabled() || g_waitForRound || g_lateLoad || !g_rulesLoaded) return false;
+	// Unsupported legacy finales retain file policy, not new menu editing.
+	if (g_finaleMode == FinaleLegacy) return false;
+	return !g_confirmedGauntlet && (g_finaleMode == FinaleRounds || g_observedCustom);
+}
+
+int RoundSlot(int ordinal)
+{
+	return ordinal > 2 ? 2 : ordinal - 1;
+}
+
+public any Native_CanEdit(Handle plugin, int numParams)
+{
+	return CanEditFinale();
+}
+
+public any Native_GetRound(Handle plugin, int numParams)
+{
+	int slot = GetNativeCell(1);
+	if (slot < 0 || slot >= 3) return false;
+	if (numParams < 2 || !GetNativeCell(2)) return g_activeRounds[slot];
+	KeyValues rules = MapRules_Load();
+	char map[MAP_NAME_MAX_LENGTH];
+	MapRules_CurrentMap(map, sizeof(map));
+	bool allowed = rules == null || MapRules_ReadInt(rules, map, g_roundKeys[slot], 1) != 0;
+	delete rules;
+	return allowed;
+}
+
+public any Native_SetRound(Handle plugin, int numParams)
+{
+	int slot = GetNativeCell(1);
+	if (slot < 0 || slot >= 3 || !CanEditFinale()) return false;
+	bool allowed = GetNativeCell(2) != 0;
+	if (!MapRules_SaveInt(g_roundKeys[slot], allowed)) return false;
+	if (!MapRules_IsLive()) g_activeRounds[slot] = allowed;
+	return true;
+}
+
 public Plugin myinfo =
 {
 	name = "Finale Tank Rules",
 	author = "Visor, Electr0",
 	description = "Either two event tanks or one flow and one (second) event tank",
-	version = "2.5.2",
+	version = "2.6.0",
 	url = "https://github.com/SirPlease/L4D2-Competitive-Rework"
 };
 
 public void OnPluginStart()
 {
+	MapRules_Init();
 	hFirstTankSpawningScheme = new StringMap();
 	hSecondTankSpawningScheme = new StringMap();
 
@@ -106,13 +221,20 @@ Action SetMapSecondTankSpawningScheme(int args)
 
 void RoundStartEvent(Event hEvent, const char[] name, bool dontBroadcast)
 {
+	tankCount = 0;
+	g_customCount = 0;
+	g_activeStage = -1;
+	g_waitForRound = false;
+	g_lateLoad = false;
+	if (MapRules_Enabled()) LoadFinaleRules();
 	CreateTimer(8.0, ProcessTankSpawn, _, TIMER_FLAG_NO_MAPCHANGE);
 }
 
 Action ProcessTankSpawn(Handle hTimer)
 {
+	// Managed finale rules never own flow eligibility.
+	if (MapRules_Enabled()) return Plugin_Stop;
 	spawnScheme = Skip;
-	tankCount = 0;
 	
 	char mapname[MAP_NAME_MAX_LENGTH];
 	GetCurrentMap(mapname, sizeof(mapname));
@@ -136,6 +258,21 @@ Action ProcessTankSpawn(Handle hTimer)
 
 public Action L4D2_OnChangeFinaleStage(int &finaleType, const char[] arg)
 {
+	if (MapRules_Enabled())
+	{
+		if (g_waitForRound || g_lateLoad || !g_rulesLoaded) return Plugin_Continue;
+		if (g_finaleMode == FinaleLegacy
+			&& (finaleType == FINALE_CUSTOM_TANK
+			|| finaleType == FINALE_GAUNTLET_BOSS
+			|| finaleType == FINALE_GAUNTLET_ESCAPE))
+		{
+			// Preserve legacy interception and count even blocked attempts.
+			tankCount++;
+			if (!g_activeRounds[RoundSlot(tankCount)]) return Plugin_Handled;
+		}
+		// Ordinary custom stages must enter so the engine owns advancement.
+		return Plugin_Continue;
+	}
 	if (spawnScheme != Skip
 		&& (finaleType == FINALE_CUSTOM_TANK
 		|| finaleType == FINALE_GAUNTLET_BOSS
@@ -151,6 +288,31 @@ public Action L4D2_OnChangeFinaleStage(int &finaleType, const char[] arg)
 			return Plugin_Handled;
 		}
 	}
+	return Plugin_Continue;
+}
+
+public void L4D2_OnChangeFinaleStage_Post(int finaleType, const char[] arg)
+{
+	g_activeStage = finaleType;
+	if (finaleType >= FINALE_GAUNTLET_START && finaleType <= FINALE_GAUNTLET_ESCAPE)
+		g_confirmedGauntlet = true;
+	if (finaleType == FINALE_CUSTOM_TANK)
+	{
+		// Map capability survives wipes, but ordinals do not.
+		g_observedCustom = true;
+		if (!g_waitForRound && !g_lateLoad) g_customCount++;
+	}
+}
+
+public Action L4D_OnSpawnTank(const float vecPos[3], const float vecAng[3])
+{
+	if (!CanEditFinale() || g_finaleMode == FinaleLegacy
+		|| g_activeStage != FINALE_CUSTOM_TANK || g_customCount == 0)
+		return Plugin_Continue;
+
+	// A null custom tank consumes the pending spawn; the engine advances when
+	// no live tanks remain. Gauntlets retry null spawns and must never use this.
+	if (!g_activeRounds[RoundSlot(g_customCount)]) return Plugin_Handled;
 	return Plugin_Continue;
 }
 

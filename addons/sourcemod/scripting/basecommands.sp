@@ -177,13 +177,7 @@ public void OnAdminMenuReady(Handle aTopMenu)
 		hTopMenu.AddItem("sm_reloadadmins", AdminMenu_ReloadAdmins, server_commands, "sm_reloadadmins", ADMFLAG_BAN);
 		hTopMenu.AddItem("sm_map", AdminMenu_Map, server_commands, "sm_map", ADMFLAG_CHANGEMAP);
 		hTopMenu.AddItem("sm_execcfg", AdminMenu_ExecCFG, server_commands, "sm_execcfg", ADMFLAG_CONFIG);		
-	}
-
-	TopMenuObject voting_commands = hTopMenu.FindCategory(ADMINMENU_VOTINGCOMMANDS);
-
-	if (voting_commands != INVALID_TOPMENUOBJECT)
-	{
-		hTopMenu.AddItem("sm_cancelvote", AdminMenu_CancelVote, voting_commands, "sm_cancelvote", ADMFLAG_VOTE);
+		hTopMenu.AddItem("sm_cancelvote", AdminMenu_CancelVote, server_commands, "sm_cancelvote", ADMFLAG_VOTE);
 	}
 }
 

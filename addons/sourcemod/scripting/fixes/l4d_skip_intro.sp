@@ -18,7 +18,7 @@
 
 
 
-#define PLUGIN_VERSION		"1.14.0"
+#define PLUGIN_VERSION		"1.15.0"
 
 /*======================================================================================
 	Plugin Info:
@@ -86,12 +86,15 @@
 
 #include <sourcemod>
 #include <sdktools>
+#include <map_rules>
+#include <map_rules_official>
 
 #define CVAR_FLAGS			FCVAR_NOTIFY
 
 
 ConVar g_hCvarAllow, g_hCvarMPGameMode, g_hCvarModes, g_hCvarModesOff, g_hCvarModesTog;
-ConVar g_readyPolicy, g_playCount;
+ConVar g_readyPolicy, g_playCount, g_official;
+bool g_always;
 Handle g_watchTimer;
 ArrayList g_skippedCameras;
 char g_chapter[64];
@@ -105,7 +108,6 @@ bool g_bCvarAllow, g_bMapStarted, g_bLeft4DHooks, g_bFaded, g_bOutput1, g_bOutpu
 // ====================================================================================================
 //					PLUGIN INFO / START
 // ====================================================================================================
-native bool IsInReady();
 native bool L4D_IsFirstMapInScenario(); // So it compiles on forum, optional native.
 
 public Plugin myinfo =
@@ -129,6 +131,10 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	MarkNativeAsOptional("L4D_IsFirstMapInScenario");
 	MarkNativeAsOptional("IsInReady");
 	g_lateLoad = late;
+	RegPluginLibrary("skip_intro");
+	CreateNative("SkipIntro_GetAlways", Native_GetAlways);
+	CreateNative("SkipIntro_SetAlways", Native_SetAlways);
+	CreateNative("SkipIntro_IsOfficialForced", Native_IsOfficialForced);
 
 	return APLRes_Success;
 }
@@ -140,6 +146,10 @@ public void OnAllPluginsLoaded()
 
 public void OnPluginStart()
 {
+	MapRules_Init();
+	FindConVar("map_rules_enabled").AddChangeHook(ConVarChanged_Rules);
+	g_official = CreateConVar("l4d_skip_intro_official", "1", "Ready policy: always skip intros on exact official L4D2 maps.", CVAR_FLAGS, true, 0.0, true, 1.0);
+	g_official.AddChangeHook(ConVarChanged_Allow);
 	g_skippedCameras = new ArrayList();
 	g_readyPolicy = CreateConVar("l4d_skip_intro_ready", "0", "Use per-chapter attempt policy during ready-up; 0 retains legacy first-map behavior.", CVAR_FLAGS, true, 0.0, true, 1.0);
 	g_playCount = CreateConVar("l4d_skip_intro_play_count", "0", "Ready policy: attempts to play before skipping; -1 always plays, 0 always skips.", CVAR_FLAGS, true, -1.0);
@@ -171,6 +181,7 @@ public void OnPluginStart()
 // ====================================================================================================
 public void OnConfigsExecuted()
 {
+	if (!MapRules_IsLive()) LoadAlways();
 	IsAllowed();
 	if (g_lateLoad) { BeginAttempt(); g_lateLoad = false; }
 	StartReadyWatch();
@@ -180,6 +191,7 @@ public void OnMapStart()
 {
 	g_bMapStarted = true;
 	UpdateChapter();
+	LoadAlways();
 }
 
 public void OnMapEnd()
@@ -192,6 +204,7 @@ public void OnMapEnd()
 
 void ConVarChanged_Allow(Handle convar, const char[] oldValue, const char[] newValue)
 {
+	if (!MapRules_IsLive()) LoadAlways();
 	IsAllowed();
 	StartReadyWatch();
 }
@@ -409,6 +422,7 @@ void BeginAttempt()
 	g_roundOpen = true;
 	g_roundLive = false;
 	g_attempts++;
+	LoadAlways();
 	g_directorReleased = false;
 	g_skippedCameras.Clear();
 }
@@ -429,11 +443,13 @@ void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 public void OnReadyUpInitiate()
 {
 	// May fire several times during one round, or before round_start.
+	if (!MapRules_IsLive()) LoadAlways();
 	StartReadyWatch();
 }
 
 public void OnRoundIsLive()
 {
+	MapRules_Lock();
 	g_roundLive = true;
 	StopReadyWatch();
 }
@@ -443,10 +459,70 @@ public void OnPluginEnd()
 	StopReadyWatch();
 }
 
+// Saved state is independent of the official policy and the active round.
+bool ReadSavedAlways()
+{
+	KeyValues rules = MapRules_Load();
+	if (rules == null) return false;
+	char map[64];
+	MapRules_CurrentMap(map, sizeof(map));
+	bool enabled = MapRules_ReadInt(rules, map, "skip_intro", 0) == 1;
+	delete rules;
+	return enabled;
+}
+
+void LoadAlways()
+{
+	g_always = MapRules_Enabled() && ReadSavedAlways();
+}
+
+void ConVarChanged_Rules(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+	if (!MapRules_IsLive()) LoadAlways();
+	StartReadyWatch();
+}
+
+bool IsOfficialForced()
+{
+	char map[64];
+	MapRules_CurrentMap(map, sizeof(map));
+	return g_official.BoolValue && GetEngineVersion() == Engine_Left4Dead2
+		&& MapRules_IsOfficialMap(map);
+}
+
+public any Native_GetAlways(Handle plugin, int numParams)
+{
+	return (numParams > 0 && GetNativeCell(1)) ? ReadSavedAlways() : g_always;
+}
+
+public any Native_SetAlways(Handle plugin, int numParams)
+{
+	bool enabled = GetNativeCell(1) != 0;
+	if (!MapRules_SaveInt("skip_intro", enabled ? 1 : 0)) return false;
+	if (!MapRules_IsLive())
+	{
+		g_always = MapRules_Enabled() && enabled;
+		StartReadyWatch();
+	}
+	return true;
+}
+
+public any Native_IsOfficialForced(Handle plugin, int numParams)
+{
+	return IsOfficialForced();
+}
+
+bool ShouldSkipReadyIntro()
+{
+	if (IsOfficialForced()) return true;
+	if (MapRules_Enabled() && g_always) return true;
+	return g_playCount.IntValue >= 0 && g_attempts > g_playCount.IntValue;
+}
+
 bool CanWatchReadyIntro()
 {
 	return g_bCvarAllow && g_readyPolicy.BoolValue && g_roundOpen && !g_roundLive
-		&& g_playCount.IntValue >= 0 && g_attempts > g_playCount.IntValue
+		&& ShouldSkipReadyIntro()
 		&& GetFeatureStatus(FeatureType_Native, "IsInReady") == FeatureStatus_Available
 		&& IsInReady();
 }

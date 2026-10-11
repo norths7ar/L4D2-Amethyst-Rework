@@ -1,5 +1,29 @@
 "Phrases"
 {
+	"AdminBasicGuns"
+	{
+		"en" "Spawn four basic guns"
+	}
+	"AdminGunsInGame"
+	{
+		"en" "Use this command in game."
+	}
+	"AdminGunsReadyOnly"
+	{
+		"en" "Basic guns can only be spawned during ready-up."
+	}
+	"AdminGunsNoGround"
+	{
+		"en" "Aim at open ground with room for all four guns."
+	}
+	"AdminGunsFailed"
+	{
+		"en" "Could not spawn the guns. Check the server log."
+	}
+	"AdminGunsSpawned"
+	{
+		"en" "Spawned one Uzi, MAC-10, pump shotgun and chrome shotgun."
+	}
 	"AdminPlayerAssistance"
 	{
 		"en" "Player assistance"
