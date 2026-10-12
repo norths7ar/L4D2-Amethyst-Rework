@@ -9,6 +9,7 @@
 #include <script_reloader>
 #undef REQUIRE_PLUGIN
 #include <profile_controller>
+#include <admin_spawn>
 
 #define TEAM_SURVIVORS 2
 #define TEAM_INFECTED 3
@@ -20,7 +21,7 @@ public Plugin myinfo =
     name = "Coop Wave Spawner",
     author = "海洋空氣, norths7ar",
     description = "Runs the single wave-based Special Infected spawn model for Coop.",
-    version = "1.1.0",
+    version = "1.1.1",
     url = "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
 };
 
@@ -73,7 +74,7 @@ int g_iRotationLimits[ZC_WITCH];
 public void OnPluginStart()
 {
     LoadTranslations("wave_spawner.phrases");
-    CreateConVar("wave_spawner_version", "1.1.0", "Coop Wave Spawner version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
+    CreateConVar("wave_spawner_version", "1.1.1", "Coop Wave Spawner version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
     g_RotationQueue = new ArrayList();
     g_cvInterval = CreateConVar("wave_interval", "8.0", "Interval selected for the next SI wave; running timers keep their snapshot.", FCVAR_NOTIFY, true, 0.0, true, 10000.0);
     g_cvSize = CreateConVar("wave_size", "3", "Size selected for the next SI wave; a spawning wave keeps its snapshot.", FCVAR_NOTIFY, true, 1.0, true, 32.0);
@@ -95,8 +96,8 @@ public void OnPluginStart()
 
     HookEvent("round_end", Event_RoundBoundary, EventHookMode_PostNoCopy);
     HookEvent("round_start", Event_RoundBoundary, EventHookMode_PostNoCopy);
-    HookEvent("tank_spawn", Event_TankSpawn, EventHookMode_PostNoCopy);
-    HookEvent("player_death", Event_PlayerDeath, EventHookMode_PostNoCopy);
+    HookEvent("tank_spawn", Event_TankSpawn, EventHookMode_Post);
+    HookEvent("player_death", Event_PlayerDeath, EventHookMode_Post);
     g_cvWaveFields[2] = FindConVar("wave_hunter_limit");
     g_cvWaveFields[3] = FindConVar("wave_smoker_limit");
     g_cvWaveFields[4] = FindConVar("wave_boomer_limit");
@@ -185,7 +186,8 @@ void CountRotationAlive(int counts[ZC_WITCH], int skipClient = 0)
     for (int client = 1; client <= MaxClients; client++)
     {
         if (client == skipClient || !IsClientInGame(client) || !IsFakeClient(client)
-            || !IsPlayerAlive(client) || GetClientTeam(client) != TEAM_INFECTED) continue;
+            || !IsPlayerAlive(client) || GetClientTeam(client) != TEAM_INFECTED
+            || IsAdminInfected(client)) continue;
         int zombieClass = GetEntProp(client, Prop_Send, "m_zombieClass");
         if (zombieClass > 0 && zombieClass < ZC_WITCH) counts[zombieClass]++;
     }
@@ -259,11 +261,27 @@ public void Event_RoundBoundary(Event event, const char[] name, bool dontBroadca
 
 public void Event_TankSpawn(Event event, const char[] name, bool dontBroadcast)
 {
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    if (IsAdminSpawnActive() || IsAdminInfected(client)) return;
     g_iAliveSICount++;
+}
+
+bool IsAdminSpawnActive()
+{
+    return GetFeatureStatus(FeatureType_Native, "AdminSpawn_IsActive") == FeatureStatus_Available
+        && AdminSpawn_IsActive();
+}
+
+bool IsAdminInfected(int client)
+{
+    return GetFeatureStatus(FeatureType_Native, "AdminSpawn_IsInfected") == FeatureStatus_Available
+        && AdminSpawn_IsInfected(client);
 }
 
 public Action L4D_OnSpawnSpecial(int &zombieClass, const float vecPos[3], const float vecAng[3])
 {
+    // Administrator requests retain their requested class and never use a wave slot.
+    if (IsAdminSpawnActive()) return Plugin_Continue;
     if (zombieClass < ZC_WITCH)
     {
         if (!g_bMapReady || g_bRoundEnded) return Plugin_Handled;
@@ -299,6 +317,7 @@ void PrepareWaveNextFrame(any data)
 
 public void L4D_OnSpawnSpecial_Post(int client, int zombieClass, const float vecPos[3], const float vecAng[3])
 {
+    if (IsAdminSpawnActive() || IsAdminInfected(client)) return;
     if (client <= 0 || zombieClass >= ZC_WITCH || !g_bMapReady || g_bRoundEnded) return;
     if (g_bRotation)
     {
@@ -324,6 +343,9 @@ public void Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast
     {
         return;
     }
+
+    // Do not return a class, change alive counts, or start/extend a wave timer.
+    if (IsAdminInfected(client)) return;
 
     int zombieClass = GetEntProp(client, Prop_Send, "m_zombieClass");
     if (event.GetBool("victimisbot") && zombieClass < ZC_WITCH)
@@ -381,7 +403,8 @@ void EnsureWaveProgress(int deadClient)
     for (int client = 1; client <= MaxClients; client++)
     {
         if (client == deadClient || !IsClientInGame(client) || !IsPlayerAlive(client)
-            || GetClientTeam(client) != TEAM_INFECTED || !IsFakeClient(client)) continue;
+            || GetClientTeam(client) != TEAM_INFECTED || !IsFakeClient(client)
+            || IsAdminInfected(client)) continue;
         int zombieClass = GetEntProp(client, Prop_Send, "m_zombieClass");
         if (zombieClass > 0 && zombieClass < ZC_WITCH) return;
     }

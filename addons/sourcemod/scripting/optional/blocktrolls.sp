@@ -29,14 +29,11 @@
 public Plugin myinfo =
 {
 	name        = "Block Trolls",
-	description = "Prevents calling votes while others are loading",
+	description = "Prevents spectators from calling or casting votes",
 	author      = "ProdigySim, CanadaRox, darkid",
-	version     = "2.0.1.2",
+	version     = "2.0.2",
 	url         = "https://github.com/SirPlease/L4D2-Competitive-Rework"
 };
-
-bool g_bBlockCallvote = false;
-int  loadedPlayers 	  = 0;
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
 {
@@ -48,7 +45,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
 int Native_CanVote(Handle plugin, int numParams)
 {
 	int client = GetNativeCell(1);
-	if (g_bBlockCallvote || client < 1 || client > MaxClients
+	if (client < 1 || client > MaxClients
 		|| !IsClientInGame(client) || IsFakeClient(client)) return false;
 	int team = GetClientTeam(client);
 	return team == 2 || team == 3;
@@ -59,25 +56,6 @@ public void OnPluginStart()
 	LoadTranslations("blocktrolls.phrases");
 	AddCommandListener(Vote_Listener, "callvote");
 	AddCommandListener(Vote_Listener, "vote");
-	HookEvent("player_team", Event_OnPlayerJoin);
-}
-
-public void OnMapStart()
-{
-	g_bBlockCallvote = true;
-	loadedPlayers    = 0;
-	CreateTimer(40.0, EnableCallvoteTimer);
-}
-
-void Event_OnPlayerJoin(Event event, char[] name, bool dontBroadcast)
-{
-	if (event.GetInt("oldteam") == 0)
-	{
-		loadedPlayers++;
-
-		if (loadedPlayers == 6)
-			g_bBlockCallvote = false;
-	}
 }
 
 Action Vote_Listener(int client, const char[] command, int argc)
@@ -91,12 +69,6 @@ Action Vote_Listener(int client, const char[] command, int argc)
 	if (!IsClientInGame(client))
 		return Plugin_Handled;
 
-	if (g_bBlockCallvote)
-	{
-		CPrintToChat(client, "%t %t", "Tag", "VotingNotEnabled");
-		return Plugin_Handled;
-	}
-
 	if (GetClientTeam(client) == L4D_TEAM_SPECTATOR)
 	{
 		CPrintToChat(client, "%t %t", "Tag", "NotSpectatorVote");
@@ -104,10 +76,4 @@ Action Vote_Listener(int client, const char[] command, int argc)
 	}
 
 	return Plugin_Continue;
-}
-
-Action EnableCallvoteTimer(Handle timer)
-{
-	g_bBlockCallvote = false;
-	return Plugin_Stop;
 }

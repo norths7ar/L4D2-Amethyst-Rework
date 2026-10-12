@@ -24,7 +24,7 @@ Copyright 2009 James Richardson
 // Define constants
 #define PLUGIN_NAME					"All4Dead"
 #define PLUGIN_TAG					"[A4D] "
-#define PLUGIN_VERSION			"2.3.0"
+#define PLUGIN_VERSION			"2.3.2"
 #define MENU_DISPLAY_TIME		MENU_TIME_FOREVER
 
 // Include necessary files
@@ -50,6 +50,34 @@ new const String:generation_labels[][] = {
 // Other stuff
 new bool:currently_spawning = false;
 new String:change_zombie_model_to[128] = "";
+new bool:admin_spawn_active;
+new admin_infected_serial[MAXPLAYERS + 1];
+
+public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], errMax) {
+	RegPluginLibrary("admin_spawn");
+	CreateNative("AdminSpawn_IsActive", Native_AdminSpawnIsActive);
+	CreateNative("AdminSpawn_IsInfected", Native_AdminSpawnIsInfected);
+	return APLRes_Success;
+}
+
+public Native_AdminSpawnIsActive(Handle:plugin, numParams) {
+	return admin_spawn_active;
+}
+
+public Native_AdminSpawnIsInfected(Handle:plugin, numParams) {
+	new client = GetNativeCell(1);
+	return client > 0 && client <= MaxClients && IsClientInGame(client)
+		&& admin_infected_serial[client] == GetClientSerial(client);
+}
+
+public Event_AdminInfectedSpawn(Handle:event, const String:name[], bool:dontBroadcast) {
+	new client = GetClientOfUserId(GetEventInt(event, "userid"));
+	if (client <= 0 || !IsClientInGame(client)) return;
+	// A reused bot can have another life without disconnecting. Replace the
+	// source on every spawn; serials also protect against client-slot reuse.
+	admin_infected_serial[client] = admin_spawn_active && GetClientTeam(client) == 3
+		? GetClientSerial(client) : 0;
+}
 
 /// Metadata for the mod - used by SourceMod
 public Plugin:myinfo = {
@@ -64,6 +92,10 @@ public Plugin:myinfo = {
 public OnPluginStart() {
 	LoadTranslations("all4dead2.phrases");
 	LoadTranslations("admin_tools.phrases");
+	HookEvent("player_spawn", Event_AdminInfectedSpawn, EventHookMode_Pre);
+	// Refresh Tank source before consumers handle tank_spawn, independently
+	// of its ordering relative to player_spawn when a dead bot is reused.
+	HookEvent("tank_spawn", Event_AdminInfectedSpawn, EventHookMode_Pre);
 	CreateConVar("a4d_version", PLUGIN_VERSION, "The version of All4Dead plugin.", FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_DONTRECORD);
 
 	// If the Admin menu has been loaded start adding stuff to it
@@ -267,13 +299,49 @@ public Menu_SpawnUInfectedHandler(Handle:menu, MenuAction:action, cindex, itempo
 */
 Do_SpawnInfected(client, const String:type[], bool:spawning_uncommon) {
 	if (client <= 0 || !IsClientInGame(client)) return;
+	if (StrEqual(type, "witch")) {
+		Do_SpawnWitch(client);
+		return;
+	}
 	currently_spawning = spawning_uncommon;
+	new bool:previous = admin_spawn_active;
+	admin_spawn_active = true;
 	StripAndExecuteClientCommand(client, "z_spawn", type);
+	admin_spawn_active = previous;
 	// OnEntityCreated consumes the uncommon model during this command. A failed
 	// spawn must not leave it queued for an unrelated Director spawn later.
 	currently_spawning = false;
 	change_zombie_model_to[0] = '\0';
 	LogAction(client, -1, "[NOTICE]: (%L) has spawned a %s", client, type);
+}
+
+Do_SpawnWitch(client) {
+	new Float:location[3], Float:angles[3];
+	if (!Misc_TraceClientViewToLocation(client, location)) {
+		PrintToChat(client, "[SM] %t", "A4DUnableToSpawnThisItem");
+		return;
+	}
+	// Unlike z_spawn's Tank path, SpawnWitch still checks the Director's
+	// WitchLimit. Administrator generation creates the entity directly instead
+	// of temporarily changing the rules for all natural Witch spawns.
+	new entity = CreateEntityByName("witch");
+	if (entity == -1) {
+		PrintToChat(client, "[SM] %t", "A4DUnableToSpawnThisItem");
+		return;
+	}
+	GetClientEyeAngles(client, angles);
+	angles[0] = 0.0;
+	angles[2] = 0.0;
+	location[2] += 2.0;
+	// Set the position before Spawn so the Witch initializes on the chosen nav area.
+	TeleportEntity(entity, location, angles, NULL_VECTOR);
+	if (!DispatchSpawn(entity)) {
+		RemoveEntity(entity);
+		PrintToChat(client, "[SM] %t", "A4DUnableToSpawnThisItem");
+		return;
+	}
+	ActivateEntity(entity);
+	LogAction(client, -1, "[NOTICE]: (%L) has spawned a witch", client);
 }
 
 Do_SpawnUncommonInfected(client, type) {
