@@ -43,7 +43,7 @@ StringMap g_rules;
 StringMap g_mapEntries;
 ConVar g_rulesFile;
 bool g_roundReady, g_configsReady, g_creating;
-bool g_policyFile, g_roundSettled, g_resourcesProcessed, g_itemsProcessed, g_startKitsProcessed;
+bool g_policyFile, g_directorReady, g_initializationPending;
 bool g_replayingSupplies;
 ArrayList g_replayedSupplies;
 int g_roundGeneration;
@@ -67,7 +67,7 @@ public Plugin myinfo =
 	name = "Map Resource Rules",
 	author = "ProdigySim, norths7ar",
 	description = "Owns map supplies, weapon replacements and campaign resource exceptions.",
-	version = "2.1.1"
+	version = "2.2.0"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -89,22 +89,12 @@ public void OnPluginStart()
 	WI_OnModuleStart();
 	SafeItems_Init();
 	StartKits_Init();
-	HookEvent("round_start", RoundStartCb, EventHookMode_PostNoCopy);
-	// A mode can load after round_start (or an administrator can reload it).
-	BeginResourceRound();
+	HookEvent("round_start_pre_entity", RoundResetCb, EventHookMode_Pre);
+	HookEvent("round_start_post_nav", DirectorReadyCb, EventHookMode_PostNoCopy);
 }
 
 public void OnMapStart()
 {
-	g_roundReady = false;
-	g_configsReady = false;
-	g_limitPassPending = false;
-	g_roundSettled = false;
-	g_resourcesProcessed = false;
-	g_itemsProcessed = false;
-	g_startKitsProcessed = false;
-	g_replayingSupplies = false;
-	g_roundGeneration++;
 	g_mapEntries.Clear();
 	// The parsed map lump also retains duplicate output keys. Keep their
 	// association by Hammer ID when a static resource needs a new class.
@@ -115,100 +105,83 @@ public void OnMapStart()
 		if (entry.GetNextKey("hammerid", id, sizeof(id)) != -1) g_mapEntries.SetValue(id, i);
 		delete entry;
 	}
-	// SourceMod also calls OnMapStart for a late load, after OnPluginStart.
-	// Schedule this map's passes even if its round_start event already fired.
-	BeginResourceRound();
 }
 
 public void OnMapEnd()
 {
-	g_roundReady = false;
 	g_configsReady = false;
-	g_limitPassPending = false;
+	ResetResourceRound();
 	WI_OnMapEnd();
-	g_roundGeneration++;
 }
 
 public void OnConfigsExecuted()
 {
-	LoadRules("", true);
+	LoadRules();
 	UpdateCampaign();
 	g_configsReady = true;
-	PrepareResources();
-	FinishResources();
+	QueueResourceInitialization();
 }
 
-public void RoundStartCb(Event event, const char[] name, bool dontBroadcast)
+public void RoundResetCb(Event event, const char[] name, bool dontBroadcast)
 {
-	BeginResourceRound();
+	// Invalidate the previous round before CleanUpMap rebuilds its entities.
+	// post_nav is dispatched inside round_start; resetting in its Post hook
+	// would erase the Director notification belonging to this new round.
+	ResetResourceRound();
 }
 
-void BeginResourceRound()
+void ResetResourceRound()
 {
+	g_resourceDecisions.Clear();
+	g_distributionWarnings.Clear();
 	g_replayedSupplies.Clear();
 	g_roundReady = false;
-	g_roundSettled = false;
-	g_resourcesProcessed = false;
-	g_itemsProcessed = false;
-	g_startKitsProcessed = false;
+	g_directorReady = false;
+	g_initializationPending = false;
+	g_limitPassPending = false;
 	g_replayingSupplies = false;
 	g_roundGeneration++;
-	if (g_configsReady && !g_policyFile)
-	{
-		StartKits_RoundStart();
-		g_startKitsProcessed = true;
-	}
-	CreateTimer(0.3, RoundStartDelay, g_roundGeneration, TIMER_FLAG_NO_MAPCHANGE);
-	CreateTimer(1.0, RoundItemsDelay, g_roundGeneration, TIMER_FLAG_NO_MAPCHANGE);
 }
 
-public Action RoundStartDelay(Handle timer, int generation)
+public void DirectorReadyCb(Event event, const char[] name, bool dontBroadcast)
 {
-	if (generation != g_roundGeneration) return Plugin_Stop;
+	// The engine's synchronous event listeners have finished selecting resources.
+	g_directorReady = true;
+	QueueResourceInitialization();
+}
+
+void QueueResourceInitialization()
+{
+	if (!g_configsReady || !g_directorReady || g_roundReady || g_initializationPending) return;
+	g_initializationPending = true;
+	// Leave event/config dispatch before replacing the Director's selected entities.
+	RequestFrame(InitializeResources, g_roundGeneration);
+}
+
+public void InitializeResources(int generation)
+{
+	if (generation != g_roundGeneration) return;
 	g_roundReady = true;
-	PrepareResources();
-	return Plugin_Stop;
-}
-
-public Action RoundItemsDelay(Handle timer, int generation)
-{
-	if (generation != g_roundGeneration) return Plugin_Stop;
-	g_roundSettled = true;
-	FinishResources();
-	return Plugin_Stop;
-}
-
-void PrepareResources()
-{
-	if (!g_configsReady || !g_roundReady || g_resourcesProcessed) return;
-	g_resourcesProcessed = true;
 	g_replayingSupplies = LGO_ItemTrackingWillReplay();
 	if (g_policyFile) ScanResources();
 	else
 	{
-		if (!g_startKitsProcessed) StartKits_RoundStart();
+		StartKits_RoundStart();
 		FrameworkRules_Scan();
 		WI_RoundStartLoop(null);
 	}
-}
 
-void FinishResources()
-{
-	if (!g_configsReady || !g_roundSettled || !g_resourcesProcessed || g_itemsProcessed) return;
-	g_itemsProcessed = true;
-	g_replayingSupplies = LGO_ItemTrackingWillReplay();
-	// A replay must restore supplies before category accounting. On the first
-	// round, selection precedes recording. These are deliberately opposite orders.
+	// On the first round, limit before recording; on replay, restore before limiting.
 	bool replay = g_replayingSupplies;
-	if (g_policyFile && !g_replayingSupplies) ApplyLimits(0);
+	if (g_policyFile && !replay) ApplyLimits();
 	else if (!g_policyFile) SafeItems_Run();
-	// Reconstructed items are already the final selection. Do not register our
-	// spawn hooks on them and send them through replacement/limiting again.
+	// Restored items are already selected: do not hook their creation for replacement.
 	g_creating = true;
 	LGO_RunItemTracking(!g_policyFile);
 	g_creating = false;
 	g_replayingSupplies = false;
-	if (g_policyFile && replay) ApplyLimits(0);
+	if (g_policyFile && replay) ApplyLimits();
+	g_initializationPending = false;
 }
 
 public void LGO_OnItemReplayed(int entity)
@@ -279,13 +252,23 @@ public void OnEntityCreated(int entity, const char[] classname)
 
 public void ResourceSpawned(int entity)
 {
+	// Initial map resources are handled together after the Director's event.
+	if (!g_roundReady) return;
 	// Give the caller time to equip a newly created weapon or finish setting
 	// its model. Ent references avoid processing an edict reused meanwhile.
-	RequestFrame(ProcessSpawnedResource, EntIndexToEntRef(entity));
+	DataPack data = new DataPack();
+	data.WriteCell(g_roundGeneration);
+	data.WriteCell(EntIndexToEntRef(entity));
+	RequestFrame(ProcessSpawnedResource, data);
 }
 
-public void ProcessSpawnedResource(int reference)
+public void ProcessSpawnedResource(DataPack data)
 {
+	data.Reset();
+	int generation = data.ReadCell();
+	int reference = data.ReadCell();
+	delete data;
+	if (generation != g_roundGeneration) return;
 	int entity = EntRefToEntIndex(reference);
 	if (entity != INVALID_ENT_REFERENCE && g_configsReady && g_roundReady)
 	{

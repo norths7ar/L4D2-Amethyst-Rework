@@ -1,4 +1,4 @@
-// Policy overlay: plugin global < framework mapinfo < plugin maps/<map>.
+// Resource policy overlay: global defaults < maps/<map>.
 enum struct ResourcePolicy
 {
 	char name[64];
@@ -6,7 +6,8 @@ enum struct ResourcePolicy
 	int limit;
 	float flowMin;
 	float flowMax;
-	float spacing;
+	float density;
+	float minDistance;
 	bool finale;
 	int regions;
 
@@ -17,23 +18,25 @@ enum struct ResourcePolicy
 		this.limit = -1;
 		this.flowMin = 0.0;
 		this.flowMax = 1.0;
-		this.spacing = 0.0;
+		this.density = 0.0;
+		this.minDistance = 0.0;
 		this.finale = false;
 		this.regions = (1 << 2) | (1 << 3); // along + unknown; saferooms exempt
 	}
 }
 
-StringMap g_regionRules[3];
-StringMap g_selections;
+StringMap g_regionRules[4]; // start, end, along, finale replacement override
 ArrayList g_itemPolicies, g_categoryPolicies;
+StringMap g_resourceDecisions, g_distributionWarnings;
 ConVar g_visualize;
 
 void InitPolicy()
 {
-	for (int i = 0; i < 3; i++) g_regionRules[i] = new StringMap();
-	g_selections = new StringMap();
+	for (int i = 0; i < 4; i++) g_regionRules[i] = new StringMap();
 	g_itemPolicies = new ArrayList(sizeof(ResourcePolicy));
 	g_categoryPolicies = new ArrayList(sizeof(ResourcePolicy));
+	g_resourceDecisions = new StringMap();
+	g_distributionWarnings = new StringMap();
 	g_visualize = CreateConVar("resource_rules_visualize", "0",
 		"Limit preview: 0 normal; 1 glow/log without culling; 2 cull and glow kept points. Replacement still applies.",
 		_, true, 0.0, true, 2.0);
@@ -102,9 +105,12 @@ float ReadFraction(KeyValues kv, const char[] key, float fallback)
 
 void ReadDistribution(KeyValues kv, ResourcePolicy policy)
 {
+	if (kv.GetDataType("flow_spacing") != KvData_None)
+		SetFailState("flow_spacing is no longer supported; use flow_density and min_distance");
 	policy.flowMin = ReadFraction(kv, "flow_min", policy.flowMin);
 	policy.flowMax = ReadFraction(kv, "flow_max", policy.flowMax);
-	policy.spacing = ReadFraction(kv, "flow_spacing", policy.spacing);
+	policy.density = ReadNonNegative(kv, "flow_density", policy.density);
+	policy.minDistance = ReadNonNegative(kv, "min_distance", policy.minDistance);
 	int finale = kv.GetNum("flow_finale", policy.finale ? 1 : 0);
 	if (finale != 0 && finale != 1) SetFailState("flow_finale must be 0 or 1");
 	policy.finale = finale != 0;
@@ -128,38 +134,65 @@ void ReadDistribution(KeyValues kv, ResourcePolicy policy)
 	}
 }
 
-void ReadItemLimits(KeyValues kv)
+float ReadNonNegative(KeyValues kv, const char[] key, float fallback)
 {
-	if (!kv.GotoFirstSubKey(false)) return;
-	do {
-		char name[64];
-		kv.GetSectionName(name, sizeof(name));
-		if (!IsResourceName(name)) SetFailState("Unsupported ItemLimits resource: %s", name);
-		int index = PolicyIndex(g_itemPolicies, name);
-		ResourcePolicy policy;
+	char value[32];
+	kv.GetString(key, value, sizeof(value), "");
+	if (!value[0]) return fallback;
+	TrimString(value);
+	float number;
+	if (StringToFloatEx(value, number) != strlen(value) || !(number >= 0.0 && number < 3.402823466e38))
+		SetFailState("Invalid resource value %s: %s (expected finite non-negative number)", key, value);
+	return number;
+}
+
+bool HasItemPolicy(const char[] name)
+{
+	ResourcePolicy policy;
+	for (int index = 0; index < g_itemPolicies.Length; index++)
+	{
 		g_itemPolicies.GetArray(index, policy);
-		policy.limit = ParseLimit(kv, NULL_STRING, policy.limit);
-		g_itemPolicies.SetArray(index, policy);
-	} while (kv.GotoNextKey(false));
-	kv.GoBack();
+		if (StrEqual(name, policy.name)) return true;
+	}
+	return false;
+}
+
+void ValidateCategoryOwners()
+{
+	StringMap owners = new StringMap();
+	ResourcePolicy policy;
+	for (int index = 0; index < g_categoryPolicies.Length; index++)
+	{
+		g_categoryPolicies.GetArray(index, policy);
+		char members[66][64];
+		int count = ExplodeString(policy.members, ",", members, sizeof(members), sizeof(members[]));
+		for (int member = 0; member < count; member++)
+		{
+			if (!members[member][0] || HasItemPolicy(members[member])) continue;
+			char previous[64];
+			if (owners.GetString(members[member], previous, sizeof(previous)) && !StrEqual(previous, policy.name))
+				SetFailState("Resource %s belongs to both categories %s and %s", members[member], previous, policy.name);
+			owners.SetString(members[member], policy.name);
+		}
+	}
+	delete owners;
 }
 
 void ReadPolicyLayer(KeyValues kv)
 {
 	ReadRuleSection(kv, "rules", g_rules);
-	ReadRuleSection(kv, "weapon_selections", g_selections);
 	g_meleePickups = kv.GetNum("melee_pickups", g_meleePickups);
 	if (g_meleePickups < 1) SetFailState("melee_pickups must be positive");
 	if (kv.JumpToKey("regions"))
 	{
-		static const char names[][] = {"start", "end", "along"};
-		for (int i = 0; i < 3; i++) ReadRuleSection(kv, names[i], g_regionRules[i]);
+		static const char names[][] = {"start", "end", "along", "finale"};
+		for (int i = 0; i < sizeof(names); i++) ReadRuleSection(kv, names[i], g_regionRules[i]);
 		kv.GoBack();
 	}
 	if (kv.JumpToKey("ItemLimits"))
 	{
-		ReadItemLimits(kv);
-		kv.GoBack();
+		SetFailState("ItemLimits is no longer supported; use distribution/<resource>/limit");
+		return;
 	}
 	if (kv.JumpToKey("distribution"))
 	{
@@ -169,9 +202,15 @@ void ReadPolicyLayer(KeyValues kv)
 				char name[64];
 				kv.GetSectionName(name, sizeof(name));
 				if (!IsResourceName(name)) SetFailState("Unsupported distribution resource: %s", name);
+				static const char fields[][] = {"limit", "flow_min", "flow_max", "flow_density", "min_distance", "flow_finale", "regions"};
+				bool configured;
+				for (int field = 0; field < sizeof(fields); field++)
+					if (kv.GetDataType(fields[field]) != KvData_None) configured = true;
+				if (!configured) SetFailState("Empty distribution policy for %s; use limit -1 for an explicit unrestricted policy", name);
 				int index = PolicyIndex(g_itemPolicies, name);
 				ResourcePolicy policy;
 				g_itemPolicies.GetArray(index, policy);
+				policy.limit = ParseLimit(kv, "limit", policy.limit);
 				ReadDistribution(kv, policy);
 				g_itemPolicies.SetArray(index, policy);
 			} while (kv.GotoNextKey());
@@ -218,33 +257,10 @@ void ReadPolicyLayer(KeyValues kv)
 	}
 }
 
-void ReadMapInfoPolicy()
-{
-	if (!LGO_IsMapDataAvailable()) return;
-	KeyValues limits = new KeyValues("ItemLimits");
-	LGO_CopyMapSubsection(limits, "ItemLimits");
-	ReadItemLimits(limits);
-	delete limits;
-	static const char keys[][] = {"pillflow_min", "pillflow_max", "pillflow_separation"};
-	for (int i = 0; i < sizeof(keys); i++)
-	{
-		float value = LGO_GetMapValueFloat(keys[i], -1.0);
-		if (value < 0.0) continue; // Framework's absent/disabled override sentinel.
-		int index = PolicyIndex(g_itemPolicies, "pain_pills");
-		ResourcePolicy policy;
-		g_itemPolicies.GetArray(index, policy);
-		if (i == 0) policy.flowMin = value;
-		else if (i == 1) policy.flowMax = value;
-		else policy.spacing = value;
-		g_itemPolicies.SetArray(index, policy);
-	}
-}
-
-void LoadRules(const char[] incomingMap = "", bool withMapInfo = false)
+void LoadRules(const char[] incomingMap = "")
 {
 	g_rules.Clear();
-	g_selections.Clear();
-	for (int i = 0; i < 3; i++) g_regionRules[i].Clear();
+	for (int i = 0; i < 4; i++) g_regionRules[i].Clear();
 	g_itemPolicies.Clear();
 	g_categoryPolicies.Clear();
 	g_meleePickups = 1;
@@ -259,13 +275,22 @@ void LoadRules(const char[] incomingMap = "", bool withMapInfo = false)
 	if (!rules.JumpToKey("global")) SetFailState("Resource policy %s needs a global section", path);
 	ReadPolicyLayer(rules);
 	rules.GoBack();
-	// OnMapInit runs before Confogl selects the incoming map; do not import
-	// the previous map's limits there. Generation only needs replacement rules.
-	if (withMapInfo) ReadMapInfoPolicy();
 	if (incomingMap[0]) strcopy(map, sizeof(map), incomingMap);
 	else GetCurrentMap(map, sizeof(map));
 	if (rules.JumpToKey("maps") && rules.JumpToKey(map)) ReadPolicyLayer(rules);
 	delete rules;
+	ResourcePolicy policy;
+	for (int i = 0; i < g_itemPolicies.Length; i++)
+	{
+		g_itemPolicies.GetArray(i, policy);
+		if (policy.flowMax < policy.flowMin) SetFailState("Resource %s: flow_max must be >= flow_min", policy.name);
+	}
+	for (int i = 0; i < g_categoryPolicies.Length; i++)
+	{
+		g_categoryPolicies.GetArray(i, policy);
+		if (policy.flowMax < policy.flowMin) SetFailState("Category %s: flow_max must be >= flow_min", policy.name);
+	}
+	ValidateCategoryOwners();
 }
 
 // -1 is unknown, not automatically "along". Start/end data are independent.
@@ -292,6 +317,8 @@ bool GetResourceRule(int entity, const char[] name, char[] target, int maxlen)
 
 bool GetRuleInRegion(int region, const char[] name, char[] target, int maxlen)
 {
+	// Finale supplies share the established end area, not the whole finale map.
+	if (region == 1 && L4D_IsMissionFinalMap() && g_regionRules[3].GetString(name, target, maxlen)) return true;
 	if (region >= 0 && g_regionRules[region].GetString(name, target, maxlen)) return true;
 	return g_rules.GetString(name, target, maxlen);
 }

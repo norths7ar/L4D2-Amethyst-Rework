@@ -7,13 +7,19 @@
 
 void QueueLimitPass()
 {
-	if (!g_policyFile) return;
+	if (!g_policyFile || !g_roundReady || g_initializationPending) return;
 	if (g_limitPassPending) return;
 	g_limitPassPending = true;
-	RequestFrame(ApplyLimits);
+	RequestFrame(ApplyQueuedLimits, g_roundGeneration);
 }
 
-public void ApplyLimits(any unused)
+public void ApplyQueuedLimits(int generation)
+{
+	if (generation != g_roundGeneration) return;
+	ApplyLimits();
+}
+
+void ApplyLimits()
 {
 	g_limitPassPending = false;
 	if (!g_configsReady || !g_roundReady) return;
@@ -30,11 +36,23 @@ public void ApplyLimits(any unused)
 		GetResourceName(entity, name, sizeof(name));
 		if (!name[0] || IsAllowed(name)) continue; // Campaign compatibility vote takes priority.
 		if (HasEntProp(entity, Prop_Data, "m_itemCount") && GetEntProp(entity, Prop_Data, "m_itemCount") <= 0) continue;
+		char key[16];
+		IntToString(EntIndexToEntRef(entity), key, sizeof(key));
+		int previous;
+		if (g_resourceDecisions.GetValue(key, previous) && previous != RR_KEEP)
+		{
+			// Preview-only rejected points remain visible, but never get rerolled.
+			reasons[entity] = previous;
+			touched[entity] = true;
+			resources.Push(EntIndexToEntRef(entity));
+			continue;
+		}
 		resources.Push(EntIndexToEntRef(entity));
 	}
 
 	ResourcePolicy policy;
-	// Item rules first. Categories retain first-declaration order across overlays.
+	// Each resource has one owner. Explicit item policies exclude categories,
+	// even when unrestricted or scoped to a different region.
 	for (int i = 0; i < g_itemPolicies.Length; i++)
 	{
 		g_itemPolicies.GetArray(i, policy);
@@ -53,6 +71,9 @@ public void ApplyLimits(any unused)
 		int entity = EntRefToEntIndex(resources.Get(i));
 		if (entity == INVALID_ENT_REFERENCE || !touched[entity]) continue;
 		int reason = reasons[entity];
+		char key[16];
+		IntToString(EntIndexToEntRef(entity), key, sizeof(key));
+		g_resourceDecisions.SetValue(key, reason);
 		if (reason != RR_KEEP && visualize != 1) RemoveEntity(entity);
 		else if (visualize > 0 && HasEntProp(entity, Prop_Send, "m_iGlowType")
 			&& HasEntProp(entity, Prop_Send, "m_glowColorOverride")
@@ -74,8 +95,8 @@ void MarkResourceCull(int entity, int reason, const char[] rule, int[] reasons)
 
 void ApplyResourcePolicy(ArrayList resources, ResourcePolicy policy, bool category, int[] reasons, bool[] touched)
 {
-	bool flow = policy.flowMin > 0.0 || policy.flowMax < 1.0 || policy.spacing > 0.0;
-	if (policy.limit < 0 && !flow) return;
+	bool flow = policy.flowMin > 0.0 || policy.flowMax < 1.0 || policy.density > 0.0;
+	if (policy.limit < 0 && !flow && policy.minDistance <= 0.0) return;
 	if (category && !policy.members[0]) return;
 	ArrayList matches = new ArrayList();
 	ArrayList saved = new ArrayList();
@@ -87,6 +108,7 @@ void ApplyResourcePolicy(ArrayList resources, ResourcePolicy policy, bool catego
 		GetResourceName(entity, name, sizeof(name));
 		if (category)
 		{
+			if (HasItemPolicy(name)) continue;
 			char token[68];
 			FormatEx(token, sizeof(token), ",%s,", name);
 			if (StrContains(policy.members, token) == -1) continue;
@@ -96,52 +118,18 @@ void ApplyResourcePolicy(ArrayList resources, ResourcePolicy policy, bool catego
 		if (region < 0) region = 3;
 		if (!(policy.regions & (1 << region))) continue;
 		touched[entity] = true;
-		if (IsReplayedSupply(entity)) saved.Push(EntIndexToEntRef(entity));
+		char key[16];
+		IntToString(EntIndexToEntRef(entity), key, sizeof(key));
+		int previous;
+		if (IsReplayedSupply(entity) || (g_resourceDecisions.GetValue(key, previous) && previous == RR_KEEP))
+			saved.Push(EntIndexToEntRef(entity));
 		else matches.Push(EntIndexToEntRef(entity));
 	}
 	// Saved points still consume individual/category slots. Only new candidates
 	// can be culled, so an unrelated spawn cannot reroll the previous half's result.
-	if (policy.limit >= 0)
-	{
-		policy.limit -= saved.Length;
-		if (policy.limit < 0) policy.limit = 0;
-	}
-	if (flow && saved.Length > 0) ApplySavedSpacing(matches, saved, policy, reasons);
-	if (!ApplyDistribution(matches, policy, reasons) && policy.limit >= 0)
-	{
-		// Retain Confogl's random excess removal when flow selection is inactive.
-		while (matches.Length > policy.limit)
-		{
-			int index = GetRandomInt(0, matches.Length - 1);
-			int entity = EntRefToEntIndex(matches.Get(index));
-			if (entity != INVALID_ENT_REFERENCE) MarkResourceCull(entity, RR_LIMIT, policy.name, reasons);
-			matches.Erase(index);
-		}
-	}
+	ApplyDistribution(matches, saved, policy, category, reasons);
 	if (g_visualize.IntValue > 0)
 		LogMessage("[ResourceRules] Rule %s: %d points retained", policy.name, matches.Length + saved.Length);
 	delete matches;
 	delete saved;
-}
-
-void ApplySavedSpacing(ArrayList matches, ArrayList saved, ResourcePolicy policy, int[] reasons)
-{
-	if (policy.spacing <= 0.0 || policy.flowMax < policy.flowMin) return;
-	if (!policy.finale && L4D_IsMissionFinalMap()) return;
-	float maxFlow = L4D2Direct_GetMapMaxFlowDistance();
-	if (maxFlow <= 0.0) return;
-	for (int i = matches.Length - 1; i >= 0; i--)
-	{
-		int entity = EntRefToEntIndex(matches.Get(i));
-		float flow = ResourceFlowFraction(entity, maxFlow);
-		if (flow < 0.0) continue;
-		for (int j = 0; j < saved.Length; j++)
-		{
-			float other = ResourceFlowFraction(EntRefToEntIndex(saved.Get(j)), maxFlow);
-			if (other < 0.0 || FloatAbs(flow - other) >= policy.spacing) continue;
-			MarkResourceCull(entity, RR_SPACING, policy.name, reasons);
-			matches.Erase(i);
-			break;
-		}
-	}
 }

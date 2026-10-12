@@ -140,15 +140,20 @@ void ReplaceResource(int entity, const char[] target)
 	bool spawner = StrEqual(classname, "weapon_spawn") || StrContains(classname, "_spawn") != -1;
 	int count = HasEntProp(entity, Prop_Data, "m_itemCount") ? GetEntProp(entity, Prop_Data, "m_itemCount") : 1;
 	if (spawner && count <= 0) return;
+	// A post-generation replacement may introduce a model absent from the
+	// Director's original selection, including when rebuilding a fixed spawn.
+	char model[PLATFORM_MAX_PATH];
+	if (HasValidWeaponModel(id))
+	{
+		GetWeaponModel(id, model, sizeof(model));
+		Format(model, sizeof(model), "models%s", model);
+		PrecacheModel(model);
+	}
 
 	// Confogl already changes weapon_spawn in place. Keep its outputs,
 	// parent and targetname rather than rebuilding a generic gun spawner.
 	if (StrEqual(classname, "weapon_spawn") && id != WEPID_MELEE && HasValidWeaponModel(id))
 	{
-		char model[PLATFORM_MAX_PATH];
-		GetWeaponModel(id, model, sizeof(model));
-		Format(model, sizeof(model), "models%s", model);
-		PrecacheModel(model);
 		SetEntProp(entity, Prop_Send, "m_weaponID", id);
 		SetEntityModel(entity, model);
 		return;
@@ -199,6 +204,14 @@ void ReplaceResource(int entity, const char[] target)
 	float origin[3], angles[3];
 	GetEntPropVector(entity, Prop_Send, "m_vecOrigin", origin);
 	GetEntPropVector(entity, Prop_Send, "m_angRotation", angles);
+	if (id == WEPID_MELEE)
+	{
+		// Match Rework/Anne's MeleeInTheSafeRoom resting orientation.
+		// The source model's pitch/roll (e.g. a chainsaw) cannot be reused.
+		// This applies only to replacements, never map-authored melee entities.
+		angles[0] = 90.0;
+		angles[2] = 0.0;
+	}
 	TeleportEntity(created, origin, angles, NULL_VECTOR);
 	if (!DispatchSpawn(created)) { delete outputs; RemoveEntity(created); LogError("Cannot spawn replacement %s", replacement); return; }
 	bool copied = CopyLiveOutputs(entity, created, outputs);

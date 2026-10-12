@@ -1,11 +1,5 @@
-// Generalized from Confogl ItemTracking's pill-flow selector. Preserve the
-// window -> spacing -> evenly distributed limit order and flowless accounting.
-#define PF_KEEP        0
-#define PF_CULL_WINDOW 1
-#define PF_CULL_SEP    2
-#define PF_CULL_LIMIT  3
-#define PF_NO_FLOW    -1
-
+// Route flow determines the budget and spread; world coordinates determine
+// spacing. Existing selections are anchors, never candidates for a new roll.
 float ResourceFlowFraction(int entity, float maxFlow)
 {
     float origin[3];
@@ -13,152 +7,153 @@ float ResourceFlowFraction(int entity, float maxFlow)
     Address nav = L4D_GetNearestNavArea(origin, 120.0, true, false, false, 2);
     if (nav == Address_Null) nav = L4D2Direct_GetTerrorNavArea(origin);
     float flow = nav != Address_Null ? L4D2Direct_GetTerrorNavAreaFlow(nav) : -1.0;
-    if (flow < 0.0) return -1.0;
-    float fraction = flow / maxFlow;
-    return fraction > 1.0 ? 1.0 : fraction;
+    if (!(flow >= 0.0 && flow <= maxFlow)) return -1.0;
+    return flow / maxFlow;
 }
 
-bool ApplyDistribution(ArrayList hSpawns, ResourcePolicy policy, int[] reasons)
+bool ResourceHasRoom(int reference, ArrayList selected, float minimum)
 {
-    float fFlowMin = policy.flowMin, fFlowMax = policy.flowMax, fSep = policy.spacing;
-    int iLimit = policy.limit;
-    if (fFlowMin <= 0.0 && fFlowMax >= 1.0 && fSep <= 0.0) return false;
-    if (fFlowMax < fFlowMin) {
-        LogError("[ResourceRules] %s: flow_max < flow_min; using count limit only", policy.name);
-        return false;
-    }
-    if (!policy.finale && L4D_IsMissionFinalMap()) return false;
-    float fMaxFlowDist = L4D2Direct_GetMapMaxFlowDistance();
-    if (fMaxFlowDist <= 0.0) return false;
-
-    int iCount = hSpawns.Length;
-    if (!iCount) {
-        return true;
-    }
-
-    int entity;
-
-    // Resolve each stored resource point to a flow fraction and apply the window.
-    float[] fPct = new float[iCount];
-    int[] iReason = new int[iCount];
-
-    for (int i = 0; i < iCount; i++) {
-        entity = EntRefToEntIndex(hSpawns.Get(i));
-        fPct[i] = ResourceFlowFraction(entity, fMaxFlowDist);
-        if (fPct[i] < 0.0) {
-            fPct[i] = -1.0;
-            iReason[i] = PF_NO_FLOW;
-            continue;
-        }
-
-        if (fPct[i] < fFlowMin || fPct[i] > fFlowMax) {
-            iReason[i] = PF_CULL_WINDOW;
-        }
-    }
-
-    // Index order sorted by ascending flow (spacing passes walk the map start->end).
-    int[] iOrder = new int[iCount];
-    for (int i = 0; i < iCount; i++) {
-        iOrder[i] = i;
-    }
-    for (int i = 1; i < iCount; i++) {
-        int tmp = iOrder[i];
-        int j = i - 1;
-        while (j >= 0 && fPct[iOrder[j]] > fPct[tmp]) {
-            iOrder[j + 1] = iOrder[j];
-            j--;
-        }
-        iOrder[j + 1] = tmp;
-    }
-
-    // Minimum flow separation; of a too-close cluster the earliest spawn wins.
-    if (fSep > 0.0) {
-        float fLastKept = -1.0;
-        for (int k = 0; k < iCount; k++) {
-            int i = iOrder[k];
-            if (iReason[i] != PF_KEEP) {
-                continue;
-            }
-            if (fLastKept >= 0.0 && fPct[i] - fLastKept < fSep) {
-                iReason[i] = PF_CULL_SEP;
-            } else {
-                fLastKept = fPct[i];
-            }
-        }
-    }
-
-    /*
-        Enforce the resource limit here, evenly spaced by flow.
-        Spawns without flow data can't be spaced, so they occupy limit slots off the top.
-    */
-    if (iLimit >= 0) {
-        int iKept = 0, iNoFlow = 0;
-        for (int i = 0; i < iCount; i++) {
-            if (iReason[i] == PF_KEEP) {
-                iKept++;
-            } else if (iReason[i] == PF_NO_FLOW) {
-                iNoFlow++;
-            }
-        }
-
-        int iSlots = iLimit - iNoFlow;
-        if (iSlots < 0) {
-            /*
-                More flowless spawns than the limit alone allows: remove the extra.
-                No flow data means there is nothing to space them by, so array order decides
-            */
-            int iExcess = -iSlots;
-            for (int i = iCount - 1; i >= 0 && iExcess > 0; i--) {
-                if (iReason[i] == PF_NO_FLOW) {
-                    iReason[i] = PF_CULL_LIMIT;
-                    iExcess--;
-                }
-            }
-            iSlots = 0;
-        }
-
-        if (iSlots < iKept) {
-            bool[] bSelected = new bool[iCount];
-            for (int slot = 0; slot < iSlots; slot++) {
-                // Ideal flow for this slot
-                float fWant = fFlowMin + (fFlowMax - fFlowMin) * (float(slot) + 0.5) / float(iSlots);
-
-                int best = -1;
-                float fBestDist = 0.0;
-                for (int i = 0; i < iCount; i++) {
-                    if (iReason[i] != PF_KEEP || bSelected[i]) {
-                        continue;
-                    }
-                    float d = fPct[i] - fWant;
-                    if (d < 0.0) {
-                        d = -d;
-                    }
-                    if (best == -1 || d < fBestDist) {
-                        best = i;
-                        fBestDist = d;
-                    }
-                }
-                if (best != -1) {
-                    bSelected[best] = true;
-                }
-            }
-
-            for (int i = 0; i < iCount; i++) {
-                if (iReason[i] == PF_KEEP && !bSelected[i]) {
-                    iReason[i] = PF_CULL_LIMIT;
-                }
-            }
-        }
-    }
-
-    // A virtual removal excludes this point from all later groups, including
-    // preview mode. Physical removal/glow happens once after the final rule.
-    for (int i = iCount - 1; i >= 0; i--) {
-        if (iReason[i] <= PF_KEEP) continue;
-        entity = EntRefToEntIndex(hSpawns.Get(i));
-        if (entity != INVALID_ENT_REFERENCE)
-            MarkResourceCull(entity, iReason[i], policy.name, reasons);
-        hSpawns.Erase(i);
+    if (minimum <= 0.0) return true;
+    float origin[3], other[3];
+    GetEntPropVector(EntRefToEntIndex(reference), Prop_Data, "m_vecAbsOrigin", origin);
+    for (int i = 0; i < selected.Length; i++)
+    {
+        int entity = EntRefToEntIndex(selected.Get(i));
+        if (entity == INVALID_ENT_REFERENCE) continue;
+        GetEntPropVector(entity, Prop_Data, "m_vecAbsOrigin", other);
+        if (GetVectorDistance(origin, other) < minimum) return false;
     }
     return true;
+}
+
+void ApplyDistribution(ArrayList matches, ArrayList saved, ResourcePolicy policy, bool category, int[] reasons)
+{
+    int count = matches.Length;
+    if (count == 0) return;
+    // One random tie order for new candidates. Decisions are retained until the
+    // round resets, including virtual removals in preview mode.
+    for (int i = count - 1; i > 0; i--)
+    {
+        int other = GetRandomInt(0, i);
+        int value = matches.Get(i);
+        matches.Set(i, matches.Get(other));
+        matches.Set(other, value);
+    }
+    float[] flow = new float[count];
+    bool route = policy.finale || !L4D_IsMissionFinalMap();
+    float maxFlow = route ? L4D2Direct_GetMapMaxFlowDistance() : 0.0;
+    bool validLength = maxFlow > 0.0 && maxFlow < 3.402823466e38;
+    int known;
+    for (int i = 0; i < count; i++)
+    {
+        flow[i] = validLength ? ResourceFlowFraction(EntRefToEntIndex(matches.Get(i)), maxFlow) : -1.0;
+        if (flow[i] >= 0.0) known++;
+    }
+    float[] savedFlow = new float[saved.Length];
+    for (int i = 0; i < saved.Length; i++)
+    {
+        savedFlow[i] = validLength ? ResourceFlowFraction(EntRefToEntIndex(saved.Get(i)), maxFlow) : -1.0;
+        if (savedFlow[i] >= 0.0) known++;
+    }
+    bool useFlow = route && validLength && known > 0;
+    if (route && !useFlow && (policy.density > 0.0 || policy.flowMin > 0.0 || policy.flowMax < 1.0))
+    {
+        int warned;
+        char warningKey[80];
+        FormatEx(warningKey, sizeof(warningKey), "%s:%s", category ? "category" : "item", policy.name);
+        if (!g_distributionWarnings.GetValue(warningKey, warned))
+        {
+            LogMessage("[ResourceRules] %s: no usable route data; density/window skipped, limit and min_distance still apply", policy.name);
+            g_distributionWarnings.SetValue(warningKey, 1);
+        }
+    }
+
+    int budget = count + saved.Length;
+    if (policy.limit >= 0 && policy.limit < budget) budget = policy.limit;
+    if (useFlow && policy.density > 0.0)
+    {
+        float quota = maxFlow / 1000.0 * (policy.flowMax - policy.flowMin) * policy.density;
+        // Bound before integer conversion, including very large valid density.
+        if (quota < float(budget)) budget = RoundToFloor(quota);
+    }
+    int slots = budget - saved.Length;
+    if (slots < 0) slots = 0;
+    int[] status = new int[count];
+    bool[] chosen = new bool[count];
+    ArrayList selected = saved.Clone();
+    for (int i = 0; i < count; i++)
+    {
+        if (useFlow && flow[i] >= 0.0 && (flow[i] < policy.flowMin || flow[i] > policy.flowMax))
+            status[i] = RR_WINDOW;
+    }
+
+    bool bounded = policy.limit >= 0 || (useFlow && policy.density > 0.0);
+    if (bounded && useFlow && budget > 0)
+    {
+        bool[] occupied = new bool[budget];
+        // Give anchors their nearest remaining target, so new items fill gaps
+        // rather than concentrating around targets that already have supplies.
+        for (int i = 0; i < saved.Length; i++)
+        {
+            int best = -1;
+            float distance;
+            for (int target = 0; target < budget; target++)
+            {
+                if (occupied[target]) continue;
+                float wanted = policy.flowMin + (policy.flowMax - policy.flowMin) * (float(target) + 0.5) / float(budget);
+                float delta = savedFlow[i] >= 0.0 ? FloatAbs(savedFlow[i] - wanted) : 0.0;
+                if (best < 0 || delta < distance) { best = target; distance = delta; }
+            }
+            if (best >= 0) occupied[best] = true;
+        }
+        int left = (budget - 1) / 2, right = left + 1;
+        for (int turn = 0; turn < budget && slots > 0; turn++)
+        {
+            int target = turn % 2 == 0 ? left-- : right++;
+            if (occupied[target]) continue;
+            float wanted = policy.flowMin + (policy.flowMax - policy.flowMin) * (float(target) + 0.5) / float(budget);
+            int best = -1;
+            float distance;
+            for (int i = 0; i < count; i++)
+            {
+                if (chosen[i] || status[i] != RR_KEEP || flow[i] < 0.0) continue;
+                if (!ResourceHasRoom(matches.Get(i), selected, policy.minDistance)) continue;
+                float delta = FloatAbs(flow[i] - wanted);
+                if (best < 0 || delta < distance) { best = i; distance = delta; }
+            }
+            if (best >= 0)
+            {
+                chosen[best] = true;
+                selected.Push(matches.Get(best));
+                slots--;
+            }
+        }
+    }
+    // Unknown-flow candidates fill only vacancies. Without a count constraint,
+    // keep all spatially compatible candidates, preferring usable route data.
+    for (int pass = 0; pass < 2 && slots > 0; pass++)
+    {
+        for (int i = 0; i < count && slots > 0; i++)
+        {
+            if (chosen[i] || status[i] != RR_KEEP) continue;
+            bool hasFlow = useFlow && flow[i] >= 0.0;
+            if ((pass == 0) != hasFlow) continue;
+            if (!ResourceHasRoom(matches.Get(i), selected, policy.minDistance)) continue;
+            chosen[i] = true;
+            selected.Push(matches.Get(i));
+            slots--;
+        }
+    }
+    for (int i = count - 1; i >= 0; i--)
+    {
+        if (chosen[i]) continue;
+        int reason = status[i];
+        if (reason == RR_KEEP)
+            reason = ResourceHasRoom(matches.Get(i), selected, policy.minDistance) ? RR_LIMIT : RR_SPACING;
+        MarkResourceCull(EntRefToEntIndex(matches.Get(i)), reason, policy.name, reasons);
+        matches.Erase(i);
+    }
+    if (g_visualize.IntValue > 0)
+        LogMessage("[ResourceRules] %s: route=%d length=%.1f budget=%d anchors=%d new=%d", policy.name, useFlow, maxFlow, budget, saved.Length, matches.Length);
+    delete selected;
 }
