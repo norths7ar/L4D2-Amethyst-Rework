@@ -12,7 +12,9 @@
 #include <sdktools>
 #include <sourcemod>
 
-#define PLUGIN_VERSION "2.2.0"
+#include <si_damage_stats>
+
+#define PLUGIN_VERSION "2.2.1"
 
 #define SHOTGUN_BLAST_TIME	 0.1
 #define POUNCE_CHECK_TIME	 0.1
@@ -384,6 +386,7 @@ public APLRes
 
 public void OnPluginStart()
 {
+	SIDamageStats_Init();
 	LoadTranslation("skill_detect.phrases");
 	SkillEventsStart();
 

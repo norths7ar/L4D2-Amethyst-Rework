@@ -5,6 +5,7 @@
 #include <sdktools>
 #include <left4dhooks>
 #include <colors>
+#include <si_damage_stats>
 
 #define TEAM_SPECTATOR          1 
 #define TEAM_SURVIVOR           2 
@@ -85,7 +86,7 @@ public Plugin:myinfo =
     name = "Survivor MVP notification",
     author = "Tabun, Artifacial",
     description = "Shows MVP for survivor team at end of round",
-    version = "0.3.4",
+    version = "0.3.5",
     url = "https://github.com/alexberriman/l4d2_survivor_mvp"
 };
 
@@ -228,6 +229,7 @@ int Native_GetMVPCIPercent(Handle:plugin, numParams)
 
 public OnPluginStart()
 {
+    SIDamageStats_Init();
     // Round triggers
     //HookEvent("door_close", DoorClose_Event);
     HookEvent("finale_vehicle_leaving", FinaleEnd_Event, EventHookMode_PostNoCopy);
@@ -861,6 +863,8 @@ void PlayerHurt_Event(Handle:event, const String:name[], bool:dontBroadcast)
         if (GetClientTeam(attacker) == TEAM_SURVIVOR && GetClientTeam(victim) == TEAM_INFECTED)
         {
             zombieClass = GetEntProp(victim, Prop_Send, "m_zombieClass");
+            if (zombieClass >= ZC_SMOKER && zombieClass <= ZC_CHARGER)
+                damageDone = SIDamageStats_Consume(victim, damageDone);
             
             // Increment the damage for that class to the total
             iDidDamageClass[attacker][zombieClass] += damageDone;

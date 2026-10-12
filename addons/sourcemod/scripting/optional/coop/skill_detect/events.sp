@@ -128,8 +128,12 @@ void SkillDeath(Event event, const char[] name, bool dontBroadcast)
     record.skill = g_CandidateActor[victim] == record.actorUser ? g_CandidateSkill[victim] : Skill_None;
     record.skillDamage = g_CandidateActor[victim] == record.actorUser ? g_CandidateDamage[victim] : 0;
     event.GetString("weapon", record.weapon, sizeof(record.weapon));
-    record.shots = g_HunterHits[victim][actor];
-    record.damage = g_HunterDamage[victim][actor];
+    HunterContribution contribution;
+    if (HunterGetContribution(victim, record.actorUser, contribution) >= 0)
+    {
+        record.shots = contribution.shots;
+        record.damage = contribution.damage;
+    }
     HunterAssistNames(victim, actor, record.assists, sizeof(record.assists));
     int index = g_KillRecords.PushArray(record);
     g_PendingKill[victim] = index;
