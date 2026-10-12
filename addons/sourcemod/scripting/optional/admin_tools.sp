@@ -20,7 +20,7 @@ public Plugin myinfo =
 	name = "Coop admin tools",
 	author = "海洋空氣, norths7ar",
 	description = "Administrator player operations and emergency controls for Coop",
-	version = "1.4.1"
+	version = "1.5.1"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
@@ -34,8 +34,9 @@ public void OnPluginStart()
 	LoadTranslations("admin_tools.phrases");
 	InitPlayerActions();
 	MapRules_Init();
+	InitBasicGuns();
 	RegAdminCmd("sm_mset", CommandMapMenu, ADMFLAG_GENERIC, "本图路程 Boss、救援轮次和开场动画设置。");
-	RegAdminCmd("sm_guns", CommandGuns, ADMFLAG_CHEATS, "准备阶段在瞄准的地面生成五把基础枪。");
+	RegAdminCmd("sm_guns", CommandGuns, ADMFLAG_CHEATS, "准备阶段按配置在瞄准的地面生成 T1 武器各一把。");
 	RegAdminCmd("sm_fuck", CommandCleanup, ADMFLAG_BAN, "清理匹配名称的 AI 特感。");
 }
 

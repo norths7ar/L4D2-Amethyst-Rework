@@ -1,8 +1,107 @@
 "Phrases"
 {
+	"MapMenuTitle"
+	{
+		"#format" "{1:s},{2:s}"
+		"en" "Map Rules: {1}\n{2}"
+	}
+	"MapMenuReady"
+	{
+		"en" "Changes apply this round and are saved"
+	}
+	"MapMenuLive"
+	{
+		"en" "Round in progress; changes apply next round"
+	}
+	"MapMenuTank"
+	{
+		"en" "Flow Tank"
+	}
+	"MapMenuWitch"
+	{
+		"en" "Flow Witch"
+	}
+	"MapMenuWave1"
+	{
+		"en" "Finale Tank: Wave 1"
+	}
+	"MapMenuWave2"
+	{
+		"en" "Finale Tank: Wave 2"
+	}
+	"MapMenuWave3"
+	{
+		"en" "Finale Tank: Wave 3+"
+	}
+	"MapMenuIntro"
+	{
+		"en" "Intro Cutscene"
+	}
+	"MapMenuAllowed"
+	{
+		"en" "Allowed"
+	}
+	"MapMenuBlocked"
+	{
+		"en" "Blocked"
+	}
+	"MapMenuAlwaysSkip"
+	{
+		"en" "Always Skip"
+	}
+	"MapMenuSkipCount"
+	{
+		"en" "Skip by Count"
+	}
+	"MapMenuCurrent"
+	{
+		"#format" "{1:s},{2:s}"
+		"en" "{1}: {2}"
+	}
+	"MapMenuPending"
+	{
+		"#format" "{1:s},{2:s},{3:s}"
+		"en" "{1}: {2} → {3} next round"
+	}
+	"MapMenuInGame"
+	{
+		"en" "[Map Rules] Open this menu in game."
+	}
+	"MapMenuDisabled"
+	{
+		"en" "[Map Rules] Map rule settings are disabled in this mode."
+	}
+	"MapMenuBossMissing"
+	{
+		"en" "Non-Finale Bosses: Plugin not loaded"
+	}
+	"MapMenuFinaleUnavailable"
+	{
+		"en" "Finale Waves: Original rules; editing unavailable"
+	}
+	"MapMenuOfficialIntro"
+	{
+		"en" "Intro Cutscene: Always Skip (official map setting)"
+	}
+	"MapMenuIntroMissing"
+	{
+		"en" "Intro Cutscene: Plugin not loaded"
+	}
+	"MapMenuSavedNow"
+	{
+		"en" "[Map Rules] Saved for this round; retained after restart."
+	}
+	"MapMenuSavedNext"
+	{
+		"en" "[Map Rules] Saved for next round; retained after restart."
+	}
+	"MapMenuSaveFailed"
+	{
+		"en" "[Map Rules] Change failed. Check feature availability and the server log."
+	}
 	"AdminBasicGuns"
 	{
-		"en" "Spawn five basic guns"
+		"en" "Spawn T1 weapons"
 	}
 	"AdminGunsInGame"
 	{
@@ -14,7 +113,7 @@
 	}
 	"AdminGunsNoGround"
 	{
-		"en" "Aim at open ground with room for all five guns."
+		"en" "Aim at open ground with room for the selected weapons."
 	}
 	"AdminGunsFailed"
 	{
@@ -22,11 +121,15 @@
 	}
 	"AdminGunsSpawned"
 	{
-		"en" "Spawned one Uzi, MAC-10, MP5, pump shotgun and chrome shotgun."
+		"en" "Spawned one of each configured T1 weapon."
+	}
+	"AdminGunsDisabled"
+	{
+		"en" "T1 weapon spawning is disabled."
 	}
 	"AdminPlayerAssistance"
 	{
-		"en" "Player assistance"
+		"en" "Player Assistance"
 	}
 	"AdminCleanupSyntax"
 	{

@@ -1,7 +1,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "1.5.0"
+#define PLUGIN_VERSION "1.5.1"
 	
 #include <sourcemod>
 #include <sdktools>
@@ -68,9 +68,7 @@ public void OnPluginStart()
 	CreateConVar("sm_drop_version", PLUGIN_VERSION, "[L4D2] Weapon Drop Version", FCVAR_SPONLY|FCVAR_REPLICATED);
 	hDropMeleeUnsafe = CreateConVar("sm_drop_melee_unsafe", "1", "Enable drop melee weapon out unsafe area.");
 	
-	HookEvent("mission_lost", Event_MissionLost);
-	HookEvent("round_end", Event_MissionLost);
-	HookEvent("map_transition", Event_MissionLost);
+	HookEvent("round_start", Event_RoundStart);
 
 	LoadTranslations("common.phrases");
 }
@@ -86,9 +84,16 @@ public Action L4D_OnFirstSurvivorLeftSafeArea(int client)
 	GameStarted = true;
 }
 
-public void Event_MissionLost(Handle event, char[] name, bool dontBroadcast)
+// Same live boundary as survivor inventory initialization and starting pills.
+public void OnRoundIsLive()
+{
+	GameStarted = true;
+}
+
+public void Event_RoundStart(Handle event, char[] name, bool dontBroadcast)
 {
 	GameStarted = false;
+	for (int client = 1; client <= MaxClients; client++) PressTime[client] = 0.0;
 }
 
 public Action OnPlayerRunCmd(int client, int& buttons, int& impuls, float vel[3], float angles[3], int& weapon)

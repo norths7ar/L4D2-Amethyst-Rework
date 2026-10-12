@@ -18,7 +18,7 @@
 
 
 
-#define PLUGIN_VERSION		"1.15.0"
+#define PLUGIN_VERSION		"1.15.1"
 
 /*======================================================================================
 	Plugin Info:
@@ -564,14 +564,11 @@ Action TimerReadyIntro(Handle timer)
 		}
 		camera = EntRefToEntIndex(reference);
 		if (camera <= MaxClients) continue;
-		// Preserve upstream survivor-camera movement/finish handling. Other
-		// cameras expose Disable. Never delete cameras reused later by the map.
-		if (survivorCamera)
-		{
-			SetVariantString("!self");
-			AcceptEntityInput(camera, "StartMovement");
-		}
-		else AcceptEntityInput(camera, "Disable");
+		// End camera ownership, not its return-to-player animation. Reissuing
+		// StartMovement on every poll restarts that animation while ready-up
+		// can still be holding the survivor in place. Disable also releases
+		// the camera's cached player; keep the entity for later map scenes.
+		AcceptEntityInput(camera, "Disable", client);
 	}
 	if (found && !g_directorReleased)
 	{

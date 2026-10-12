@@ -1,8 +1,104 @@
 "Phrases"
 {
+	"MapMenuTitle"
+	{
+		"chi" "地图规则：{1}\n{2}"
+	}
+	"MapMenuReady"
+	{
+		"chi" "修改本轮生效并保存"
+	}
+	"MapMenuLive"
+	{
+		"chi" "已开局，修改下轮生效"
+	}
+	"MapMenuTank"
+	{
+		"chi" "路程 Tank"
+	}
+	"MapMenuWitch"
+	{
+		"chi" "路程 Witch"
+	}
+	"MapMenuWave1"
+	{
+		"chi" "救援 Tank 第1轮"
+	}
+	"MapMenuWave2"
+	{
+		"chi" "救援 Tank 第2轮"
+	}
+	"MapMenuWave3"
+	{
+		"chi" "救援 Tank 第3轮及以后"
+	}
+	"MapMenuIntro"
+	{
+		"chi" "开场动画"
+	}
+	"MapMenuAllowed"
+	{
+		"chi" "允许"
+	}
+	"MapMenuBlocked"
+	{
+		"chi" "禁止"
+	}
+	"MapMenuAlwaysSkip"
+	{
+		"chi" "始终跳过"
+	}
+	"MapMenuSkipCount"
+	{
+		"chi" "按次数"
+	}
+	"MapMenuCurrent"
+	{
+		"chi" "{1}：{2}"
+	}
+	"MapMenuPending"
+	{
+		"chi" "{1}：{2} → 下轮{3}"
+	}
+	"MapMenuInGame"
+	{
+		"chi" "[地图规则] 请在游戏内打开菜单。"
+	}
+	"MapMenuDisabled"
+	{
+		"chi" "[地图规则] 当前模式未启用地图规则设置。"
+	}
+	"MapMenuBossMissing"
+	{
+		"chi" "路程 Boss：插件未加载"
+	}
+	"MapMenuFinaleUnavailable"
+	{
+		"chi" "救援轮次：沿用原规则，暂不支持编辑"
+	}
+	"MapMenuOfficialIntro"
+	{
+		"chi" "开场动画：始终跳过（官图设置）"
+	}
+	"MapMenuIntroMissing"
+	{
+		"chi" "开场动画：插件未加载"
+	}
+	"MapMenuSavedNow"
+	{
+		"chi" "[地图规则] 已保存，本轮生效；重开后保留。"
+	}
+	"MapMenuSavedNext"
+	{
+		"chi" "[地图规则] 已保存，下轮生效；重开后保留。"
+	}
+	"MapMenuSaveFailed"
+	{
+		"chi" "[地图规则] 修改失败，请检查功能是否可用及服务器日志。"
+	}
 	"AdminBasicGuns"
 	{
-		"chi" "生成五把基础枪"
+		"chi" "生成 T1 武器"
 	}
 	"AdminGunsInGame"
 	{
@@ -14,7 +110,7 @@
 	}
 	"AdminGunsNoGround"
 	{
-		"chi" "请瞄准能摆下五把枪的空地。"
+		"chi" "请瞄准能摆下所选武器的空地。"
 	}
 	"AdminGunsFailed"
 	{
@@ -22,7 +118,11 @@
 	}
 	"AdminGunsSpawned"
 	{
-		"chi" "已生成 Uzi、MAC-10、MP5、木喷、铁喷各一把。"
+		"chi" "已按配置生成 T1 武器各一把。"
+	}
+	"AdminGunsDisabled"
+	{
+		"chi" "当前未启用 T1 武器补给。"
 	}
 	"AdminPlayerAssistance"
 	{
