@@ -58,6 +58,12 @@ public Action Charger_OnPlayerRunCmd(int charger, int& buttons, int& impulse, fl
 	} else {
 		bShouldCharge[charger] = true;
 	}
+	// Aim before the engine consumes this attack command, never from ability_use.
+	if ((buttons & IN_ATTACK) && Charger_IsAbilityReady(charger)) {
+		if (!(GetEntityFlags(charger) & FL_ONGROUND) || GetEntityMoveType(charger) != MOVETYPE_WALK)
+			return Plugin_Continue;
+		return Charger_PrepareCharge(charger, buttons, vel, angles) ? Plugin_Changed : Plugin_Continue;
+	}
 	return Charger_CorrectApproach(charger, target, buttons, vel, angles) ? Plugin_Changed : Plugin_Continue;
 }
 
@@ -69,11 +75,12 @@ void BlockCharge(int charger) {
 	} 			
 }
 
-void Charger_OnCharge(int charger) {
+bool Charger_PrepareCharge(int charger, int &buttons, float vel[3], float angles[3]) {
 	// Share the same eligible-target policy with OnChooseVictim. Do not undo
 	// its choice by turning the charge back into a pinned survivor.
 	int aimTarget = GetClientOfUserId(g_chargerTargetUserId[charger]);
 	if (!Charger_IsFreeTarget(aimTarget)
+		|| !Charger_IsTargetAhead(charger, aimTarget, angles[1])
 		|| GetPlayerAimOffset(aimTarget, charger) <= GetConVarFloat(hCvarAimOffsetSensitivityCharger)) {
 		// Do not turn a close attack into a dash at someone farther away/behind.
 		float position[3]; GetClientAbsOrigin(charger, position);
@@ -82,11 +89,39 @@ void Charger_OnCharge(int charger) {
 			float distance = float(GetSurvivorProximity(position, aimTarget));
 			if (distance < limit) limit = distance;
 		}
-		int alternative = Charger_GetNearbyUnpinnedTarget(charger, aimTarget, limit, true);
+		int alternative = Charger_GetNearbyUnpinnedTarget(charger, aimTarget, limit, true, angles[1]);
 		if (alternative > 0) aimTarget = alternative;
 	}
-	if (Charger_IsFreeTarget(aimTarget) && Charger_HasChargeLine(charger, aimTarget))
-		ChargePrediction(charger, aimTarget);
+	if (!Charger_IsFreeTarget(aimTarget) || !Charger_IsTargetAhead(charger, aimTarget, angles[1])
+		|| !Charger_HasChargeLine(charger, aimTarget)) return false;
+
+	float position[3], destination[3], direction[3];
+	GetClientAbsOrigin(charger, position);
+	GetClientAbsOrigin(aimTarget, destination);
+	MakeVectorFromPoints(position, destination, direction);
+	direction[2] = 0.0;
+	GetVectorAngles(direction, angles);
+	angles[0] = 0.0;
+	angles[2] = 0.0;
+	g_chargerTargetUserId[charger] = GetClientUserId(aimTarget);
+	// The charge supplies forward movement; discard the approach command only
+	// for this ready attack, as in Anne's pre-charge RunCmd handling.
+	vel[0] = 0.0;
+	vel[1] = 0.0;
+	buttons &= ~(IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT);
+	TeleportEntity(charger, NULL_VECTOR, angles, NULL_VECTOR);
+	return true;
+}
+
+bool Charger_IsTargetAhead(int charger, int survivor, float yaw) {
+	float position[3], destination[3], direction[3], facing[3], forwardVector[3];
+	GetClientAbsOrigin(charger, position);
+	GetClientAbsOrigin(survivor, destination);
+	MakeVectorFromPoints(position, destination, direction);
+	direction[2] = 0.0;
+	facing[1] = yaw;
+	GetAngleVectors(facing, forwardVector, NULL_VECTOR, NULL_VECTOR);
+	return GetVectorDotProduct(direction, forwardVector) > 0.0;
 }
 
 bool Charger_IsFreeTarget(int survivor) {
@@ -102,7 +137,7 @@ bool Charger_IsAbilityReady(int charger)
 		&& GetEntPropFloat(ability, Prop_Send, "m_timestamp") <= GetGameTime();
 }
 
-int Charger_GetNearbyUnpinnedTarget(int charger, int excluded, float maximum = 0.0, bool forwardOnly = false)
+int Charger_GetNearbyUnpinnedTarget(int charger, int excluded, float maximum = 0.0, bool forwardOnly = false, float yaw = 0.0)
 {
 	float chargerPos[3], survivorPos[3];
 	GetClientAbsOrigin(charger, chargerPos);
@@ -123,7 +158,7 @@ int Charger_GetNearbyUnpinnedTarget(int charger, int excluded, float maximum = 0
 			continue;
 		}
 		GetClientAbsOrigin(survivor, survivorPos);
-		if (forwardOnly && GetPlayerAimOffset(charger, survivor) > 90.0) continue;
+		if (forwardOnly && !Charger_IsTargetAhead(charger, survivor, yaw)) continue;
 		float distance = GetVectorDistance(chargerPos, survivorPos);
 		if (distance <= bestDistance && Charger_HasChargeLine(charger, survivor))
 		{
@@ -153,22 +188,6 @@ bool Charger_HasChargeLine(int charger, int survivor)
 public bool Charger_TraceFilter(int entity, int contentsMask, int charger)
 {
 	return entity != charger;
-}
-
-void ChargePrediction(int charger, int survivor) {
-	if( !IsBotCharger(charger) || !IsSurvivor(survivor) ) {
-		return;
-	}
-	float survivorPos[3];
-	float chargerPos[3];
-	float attackDirection[3];
-	float attackAngle[3];
-	// Add some fancy schmancy trignometric prediction here; as a placeholder charger will face survivor directly
-	GetClientAbsOrigin(charger, chargerPos);
-	GetClientAbsOrigin(survivor, survivorPos);
-	MakeVectorFromPoints( chargerPos, survivorPos, attackDirection );
-	GetVectorAngles(attackDirection, attackAngle);	
-	TeleportEntity(charger, NULL_VECTOR, attackAngle, NULL_VECTOR); 
 }
 
 // Anne's approach module also separates direct approaches from navigation.

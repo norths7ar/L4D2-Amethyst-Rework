@@ -30,6 +30,7 @@ static ConVar
 	g_hCvarMobSpawnMinSize = null,
 	g_hCvarMobSpawnMaxSize = null,
 	g_hGT_RemoveEscapeTank = null,
+	g_hGT_RemoveExistingEscapeTank = null,
 	g_hGT_BlockPunchRock = null,
 	g_hGT_DisableTankHordes = null; // Disable Tank Hordes items
 
@@ -43,6 +44,7 @@ void GT_OnModuleStart()
 	);
 
 	g_hGT_RemoveEscapeTank = CreateConVarEx("remove_escape_tank", "1", "Remove tanks that spawn as the rescue vehicle is incoming on finales.", _, true, 0.0, true, 1.0);
+	g_hGT_RemoveExistingEscapeTank = CreateConVarEx("remove_existing_escape_tank", "1", "Remove the existing AI Tank when rescue arrives; independent of blocking new escape Tanks.", _, true, 0.0, true, 1.0);
 	g_hGT_DisableTankHordes = CreateConVarEx("disable_tank_hordes", "0", "Disable natural hordes while tanks are in play", _, true, 0.0, true, 1.0);
 	g_hGT_BlockPunchRock = CreateConVarEx("block_punch_rock", "0", "Block tanks from punching and throwing a rock at the same time", _, true, 0.0, true, 1.0);
 
@@ -141,7 +143,9 @@ static void GT_FinaleVehicleIncoming(Event hEvent, const char[] sEventName, bool
 {
 	g_bGT_FinaleVehicleIncoming = true;
 
-	if (g_bGT_TankIsInPlay && IsFakeClient(g_iGT_TankClient)) {
+	// Keep the legacy cleanup default for competitive modes. Coop can preserve
+	// a living scripted Tank without allowing new escape spawns.
+	if (g_hGT_RemoveExistingEscapeTank.BoolValue && g_bGT_TankIsInPlay && IsFakeClient(g_iGT_TankClient)) {
 		KickClient(g_iGT_TankClient);
 		GT_Reset();
 	}

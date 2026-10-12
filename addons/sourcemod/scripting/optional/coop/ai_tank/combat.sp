@@ -71,14 +71,13 @@ int Tank_ChooseNearbyTarget(int tank, int engineTarget) {
     float distance;
     // A short hold and a meaningful distance advantage avoid alternate-frame switches.
     if (GetGameTime() < g_nextTargetChange[tank] && Tank_CloseTarget(tank, previous, distance)) return previous;
-    float currentDistance = 999999.0;
-    if (IsFreeSurvivor(engineTarget)) {
-        float origin[3], targetPos[3];
-        GetClientAbsOrigin(tank, origin); GetClientAbsOrigin(engineTarget, targetPos);
-        currentDistance = GetVectorDistance(origin, targetPos);
-    }
+    float currentDistance;
+    // Compare like-for-like opportunities. A victim behind a wall must not
+    // win solely through a short straight-line distance. If no clear nearby
+    // alternative exists, keep Valve's target and its long-range navigation.
+    bool currentReachable = Tank_CloseTarget(tank, engineTarget, currentDistance);
     int chosen = engineTarget;
-    float best = currentDistance - 64.0;
+    float best = currentReachable ? currentDistance - 64.0 : 999999.0;
     for (int survivor = 1; survivor <= MaxClients; survivor++) {
         if (survivor == engineTarget || !Tank_CloseTarget(tank, survivor, distance)) continue;
         if (distance < best) { chosen = survivor; best = distance; }

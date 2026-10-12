@@ -30,7 +30,7 @@ public Plugin myinfo =
 	name = "SI Unstuck",
 	author = "OpenAI",
 	description = "Moves a stuck live AI special infected to a safe hidden nav position",
-	version = "1.2.0",
+	version = "1.2.1",
 	url = ""
 };
 
@@ -42,7 +42,7 @@ public void OnPluginStart()
 	g_cvAttempts = CreateConVar("si_unstuck_attempts", "12", "Hidden spawn positions tested per relocation", FCVAR_NONE, true, 1.0);
 	g_cvRetryDelay = CreateConVar("si_unstuck_retry_delay", "2.0", "Delay after no safe destination was found", FCVAR_NONE, true, 0.1);
 	g_cvTankEnable = CreateConVar("tank_unstuck_enable", "0", "Enable stuck AI Tank relocation independently of normal SI", FCVAR_NONE, true, 0.0, true, 1.0);
-	g_cvTankTime = CreateConVar("tank_unstuck_time", "8.0", "Tank stationary movement-attempt time before relocation", FCVAR_NONE, true, 1.0);
+	g_cvTankTime = CreateConVar("tank_unstuck_time", "8.0", "Tank stationary time before checking for safe relocation", FCVAR_NONE, true, 1.0);
 	g_cvTankMinDistance = CreateConVar("tank_unstuck_min_distance", "300.0", "Minimum Tank destination distance from every living survivor", FCVAR_NONE, true, 100.0);
 
 	HookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
@@ -102,14 +102,6 @@ public Action Timer_Monitor(Handle timer)
 		bool tank = GetEntProp(client, Prop_Send, "m_zombieClass") == 8;
 		float stuckTime = tank ? g_cvTankTime.FloatValue : g_cvStuckTime.FloatValue;
 		GetClientAbsOrigin(client, origin);
-		// Keep the Tank's movement-attempt watchdog independent. Normal SI may
-		// spawn embedded or lose their route without ever issuing movement input.
-		if (tank && now - g_lastMoveInput[client] > 1.0)
-		{
-			CopyVector(origin, g_lastOrigin[client]);
-			g_lastProgress[client] = now;
-			continue;
-		}
 		if (g_lastProgress[client] == 0.0 || GetVectorDistance(origin, g_lastOrigin[client]) >= g_cvMoveTolerance.FloatValue)
 		{
 			CopyVector(origin, g_lastOrigin[client]);
@@ -132,7 +124,7 @@ public Action Timer_Monitor(Handle timer)
 		// No input alone is not evidence of being stuck: preserve idle ambushers
 		// unless their current hull is embedded or no survivor route can be built.
 		// Rate-limit the path query as well as failed destination searches.
-		if (!tank && now - g_lastMoveInput[client] > 1.0
+		if (now - g_lastMoveInput[client] > 1.0
 			&& !IsCurrentHullEmbedded(client, origin) && HasPathToSurvivors(origin))
 		{
 			g_nextAttempt[client] = now + g_cvRetryDelay.FloatValue;
@@ -263,7 +255,8 @@ bool IsPositionHidden(const float position[3], float top = 74.0)
 
 bool IsBusySI(int client, float now)
 {
-	if (GetEntProp(client, Prop_Send, "m_zombieClass") == 8)
+	bool tank = GetEntProp(client, Prop_Send, "m_zombieClass") == 8;
+	if (tank)
 	{
 		// anim_hulk sequence numbers: climbing/ladders, shoves, attacks/throws,
 		// victory/rage and flinches. Never rescue a Tank during these actions.
@@ -271,12 +264,14 @@ bool IsBusySI(int client, float now)
 		if ((sequence >= 2 && sequence <= 4) || (sequence >= 16 && sequence <= 31) || (sequence >= 33 && sequence <= 64)
 			|| (GetEntityFlags(client) & FL_FROZEN)) return true;
 	}
-	if (now - g_lastCombatInput[client] < 1.0 || GetEntityMoveType(client) == MOVETYPE_LADDER)
+	// Other plugins may veto a Tank's attack request later in RunCmd. Its
+	// actual attack animations above, not raw buttons, own the busy state.
+	if ((!tank && now - g_lastCombatInput[client] < 1.0) || GetEntityMoveType(client) == MOVETYPE_LADDER)
 	{
 		return true;
 	}
 
-	if (GetEntProp(client, Prop_Send, "m_zombieClass") != 8)
+	if (!tank)
 	{
 		if (GetEntityFlags(client) & FL_FROZEN) return true;
 		int ability = GetEntPropEnt(client, Prop_Send, "m_customAbility");

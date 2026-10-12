@@ -10,7 +10,7 @@
 public Plugin myinfo = {
     name = "AI Tank", author = "Breezy, norths7ar",
     description = "AI Tank movement, throws and opportunistic obstacle interaction",
-    version = "1.3.0"
+    version = "1.3.1"
 };
 
 ConVar g_enable, hCvarTankBhop, hCvarTankRock, hCvarTankBhopStopDistance;

@@ -34,7 +34,7 @@ public Plugin myinfo =
 	name = "AI: Hard SI",
 	author = "Breezy",
 	description = "Improves the AI behaviour of special infected",
-	version = "1.4.1",
+	version = "1.4.2",
 	url = "github.com/breezyplease"
 };
 
@@ -301,8 +301,6 @@ public Action OnAbilityUse(Handle event, char[] name, bool dontBroadcast) {
 			Jockey_OnLeap(bot);
 		} else if( StrEqual(abilityName, "ability_lunge") ) {
 			return Hunter_OnPounce(bot);
-		} else if( StrEqual(abilityName, "ability_charge") ) {
-			Charger_OnCharge(bot);
 		} /* else if( StrEqual(abilityName, "ability_spit") ) { // stop smokers and spitters running away
 			CreateTimer(0.5, Timer_Suicide, any:client, TIMER_FLAG_NO_MAPCHANGE);
 		}*/
