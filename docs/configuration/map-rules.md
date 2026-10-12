@@ -41,8 +41,10 @@ static 只禁止路程 Boss，不影响固定 Boss；恢复允许后仍遵守地
 
 AstRedux 设置 `l4d_skip_intro_ready 1`，在所有章节使用 Ready 阶段的开场检查。未命中前两项时，`l4d_skip_intro_play_count 2` 表示本章前两次队伍尝试正常播放，第三次起跳过；`0` 始终跳过，`-1` 始终播放。计数来自回合边界，同章重开累计，Ready 重初始化和玩家重连不增加；换章节清零，服务器重启或插件重新加载后重新计数。后来加入的玩家沿用队伍次数。
 
-跳过仅处理实际接管生还者的开场镜头，不要求全员都绑定摄像机；正式开局后停止检查，不处理后续剧情。地图镜头实体保留，已有 OnUser1 输出每个镜头每次尝试最多触发一次，不清空地图延迟输出。没有启用 Ready 策略的模式保留原插件首关行为。
+跳过仅处理实际接管生还者的开场镜头，不要求全员都绑定摄像机；通过 Disable 结束镜头控制，不反复启动归位动画。正式开局后停止检查，不处理后续剧情。地图镜头实体保留，已有 OnUser1 输出每个镜头每次尝试最多触发一次，不清空地图延迟输出。没有启用 Ready 策略的模式保留原插件首关行为。
 
 ## 功能归属
+
+AstRedux 的救援到来事件保留已经存活的 AI Tank（`confogl_remove_existing_escape_tank 0`），不提前结束灌油或其他地图流程已生成的 Tank。后续逃生 Tank 仍由 `confogl_remove_escape_tank 1` 拦截，与救援阶段轮次设置分开。新开关默认值为 `1`，其他模式保留原有清理行为。
 
 `!mset` 菜单集成在 `admin_tools`。路程 Boss、救援轮次和开场动画分别由 `boss_spawn_rules`、`finale_tank_rules`、`l4d_skip_intro` 执行和保存，static 命令由 `boss_spawn_rules` 注册。
