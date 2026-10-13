@@ -24,7 +24,7 @@ Copyright 2009 James Richardson
 // Define constants
 #define PLUGIN_NAME					"All4Dead"
 #define PLUGIN_TAG					"[A4D] "
-#define PLUGIN_VERSION			"2.3.2"
+#define PLUGIN_VERSION			"2.3.3"
 #define MENU_DISPLAY_TIME		MENU_TIME_FOREVER
 
 // Include necessary files
@@ -300,7 +300,10 @@ public Menu_SpawnUInfectedHandler(Handle:menu, MenuAction:action, cindex, itempo
 Do_SpawnInfected(client, const String:type[], bool:spawning_uncommon) {
 	if (client <= 0 || !IsClientInGame(client)) return;
 	if (StrEqual(type, "witch")) {
+		new bool:previousWitchSpawn = admin_spawn_active;
+		admin_spawn_active = true;
 		Do_SpawnWitch(client);
+		admin_spawn_active = previousWitchSpawn;
 		return;
 	}
 	currently_spawning = spawning_uncommon;

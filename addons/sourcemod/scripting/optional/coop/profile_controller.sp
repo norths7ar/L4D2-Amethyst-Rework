@@ -18,7 +18,7 @@ public Plugin myinfo =
     name = "Profile Controller",
     author = "norths7ar",
     description = "Validates, selects, and applies declarative player-count profiles.",
-    version = "0.5.0"
+    version = "0.5.1"
 };
 
 CachedProfile g_profiles[MAX_PROFILES + 1];
@@ -36,7 +36,7 @@ bool g_bProfilesLoaded;
 public void OnPluginStart()
 {
     LoadTranslations("profile_controller.phrases");
-    CreateConVar("profile_controller_version", "0.5.0", "Profile Controller version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
+    CreateConVar("profile_controller_version", "0.5.1", "Profile Controller version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
     g_cvCurrentProfile = CreateConVar("profile_current", "1", "Currently applied player profile.", FCVAR_NOTIFY, true, 1.0, true, 4.0);
     g_cvProfileConfig = CreateConVar("profile_controller_config", "", "Path_SM-relative KeyValues profile configuration.", FCVAR_DONTRECORD);
     HookConVarChange(g_cvProfileConfig, OnProfileConfigChanged);
@@ -55,6 +55,13 @@ public void OnPluginStart()
 public void OnConfigsExecuted()
 {
     TryInitializeProfiles();
+}
+
+public void OnRoundIsLivePre()
+{
+    // Resolve pending team changes before live consumers commit round policy.
+    // Unchanged profiles need no reapply or reset of their runtime settings.
+    ApplyEffectiveProfile("round_live", false);
 }
 
 public void OnProfileConfigChanged(ConVar convar, const char[] oldValue, const char[] newValue)

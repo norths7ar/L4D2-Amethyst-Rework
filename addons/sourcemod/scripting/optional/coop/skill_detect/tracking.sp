@@ -5,6 +5,9 @@
 
 Action Event_RoundStart(Handle event, const char[] name, bool dontBroadcast)
 {
+	// Map-authored Witches can spawn before round_start. Keep their records;
+	// round_end / map end own cleanup, not the beginning of the live round.
+	g_WitchRoundLive = true;
 	g_iRocksBeingThrownCount = 0;
 	SkillRoundReset();
 
@@ -22,6 +25,7 @@ Action Event_RoundStart(Handle event, const char[] name, bool dontBroadcast)
 
 Action Event_RoundEnd(Handle event, const char[] name, bool dontBroadcast)
 {
+	WitchReset(false);
 	SkillRoundReset();
 	// clean trie, new cars will be created
 	ClearTrie(g_hCarTrie);
@@ -806,6 +810,8 @@ Action Timer_DeathChargeCheck(Handle timer, any client)
 // entity creation
 public void OnEntityCreated(int entity, const char[] classname)
 {
+	if (StrEqual(classname, "witch") || StrEqual(classname, "witch_bride"))
+		SDKHook(entity, SDKHook_SpawnPost, WitchSpawnPost);
 	if (entity < 1 || !IsValidEntity(entity) || !IsValidEdict(entity))
 		return;
 	// track infected / witches, so damage on them counts as hits
@@ -911,6 +917,7 @@ void OnEntitySpawned_CarAlarmGlass(int entity)
 // entity destruction
 public void OnEntityDestroyed(int entity)
 {
+	WitchDestroyed(entity);
 	char witch_key[10];
 	FormatEx(witch_key, sizeof(witch_key), "%x", entity);
 
@@ -923,23 +930,6 @@ public void OnEntityDestroyed(int entity)
 		return;
 	}
 
-	int witch_array[MAXPLAYERS + DMGARRAYEXT];
-	if (GetTrieArray(g_hWitchTrie, witch_key, witch_array, sizeof(witch_array)))
-	{
-		// witch
-		//  delayed deletion, to avoid potential problems with crowns not detecting
-		CreateTimer(WITCH_DELETE_TIME, Timer_WitchKeyDelete, entity);
-		SDKUnhook(entity, SDKHook_OnTakeDamagePost, OnTakeDamagePost_Witch);
-		return;
-	}
-}
-
-Action Timer_WitchKeyDelete(Handle timer, any witch)
-{
-	char witch_key[10];
-	FormatEx(witch_key, sizeof(witch_key), "%x", witch);
-	RemoveFromTrie(g_hWitchTrie, witch_key);
-	return Plugin_Continue;
 }
 
 Action Timer_CheckRockSkeet(Handle timer, any rock)
@@ -1005,285 +995,6 @@ Action Event_BoomerExploded(Handle event, const char[] name, bool dontBroadcast)
 			HandlePop(attacker, client, g_iBoomerGotShoved[client], (GetGameTime() - g_fSpawnTime[client]));
 	}
 	return Plugin_Continue;
-}
-
-// crown tracking
-Action Event_WitchSpawned(Handle event, const char[] name, bool dontBroadcast)
-{
-	int witch = GetEventInt(event, "witchid");
-
-	SDKHook(witch, SDKHook_OnTakeDamagePost, OnTakeDamagePost_Witch);
-
-	int	 witch_dmg_array[MAXPLAYERS + DMGARRAYEXT];
-	char witch_key[10];
-	FormatEx(witch_key, sizeof(witch_key), "%x", witch);
-	witch_dmg_array[MAXPLAYERS + WTCH_HEALTH] = g_cvarWitchHealth.IntValue;
-	SetTrieArray(g_hWitchTrie, witch_key, witch_dmg_array, MAXPLAYERS + DMGARRAYEXT, false);
-	return Plugin_Continue;
-}
-
-Action Event_WitchKilled(Handle event, const char[] name, bool dontBroadcast)
-{
-	int witch	 = GetEventInt(event, "witchid");
-	int attacker = GetClientOfUserId(GetEventInt(event, "userid"));
-	SDKUnhook(witch, SDKHook_OnTakeDamagePost, OnTakeDamagePost_Witch);
-
-	if (!IsValidSurvivor(attacker))
-		return Plugin_Continue;
-
-	bool   bOneShot = GetEventBool(event, "oneshot");
-
-	// is it a crown / drawcrown?
-	Handle pack		= CreateDataPack();
-	WritePackCell(pack, GetClientUserId(attacker));
-	WritePackCell(pack, witch);
-	WritePackCell(pack, g_SkillEpoch);
-	WritePackCell(pack, g_SurvivorLife[attacker]);
-	WritePackCell(pack, GetClientHealth(attacker));
-	WritePackCell(pack, (bOneShot) ? 1 : 0);
-	CreateTimer(WITCH_CHECK_TIME, Timer_CheckWitchCrown, pack, TIMER_FLAG_NO_MAPCHANGE | TIMER_DATA_HNDL_CLOSE);
-
-	return Plugin_Continue;
-}
-
-Action Event_WitchHarasserSet(Handle event, const char[] name, bool dontBroadcast)
-{
-	int	 witch = GetEventInt(event, "witchid");
-
-	char witch_key[10];
-	FormatEx(witch_key, sizeof(witch_key), "%x", witch);
-	int witch_dmg_array[MAXPLAYERS + DMGARRAYEXT];
-
-	if (!GetTrieArray(g_hWitchTrie, witch_key, witch_dmg_array, MAXPLAYERS + DMGARRAYEXT))
-	{
-		for (int i = 0; i <= MAXPLAYERS; i++)
-		{
-			witch_dmg_array[i] = 0;
-		}
-		witch_dmg_array[MAXPLAYERS + WTCH_HEALTH]	= g_cvarWitchHealth.IntValue;
-		witch_dmg_array[MAXPLAYERS + WTCH_STARTLED] = 1;	// harasser set
-		SetTrieArray(g_hWitchTrie, witch_key, witch_dmg_array, MAXPLAYERS + DMGARRAYEXT, false);
-	}
-	else
-	{
-		witch_dmg_array[MAXPLAYERS + WTCH_STARTLED] = 1;	// harasser set
-		SetTrieArray(g_hWitchTrie, witch_key, witch_dmg_array, MAXPLAYERS + DMGARRAYEXT, true);
-	}
-	return Plugin_Continue;
-}
-
-Action OnTakeDamageByWitch(int victim, int& attacker, int& inflictor, float& damage, int& damagetype)
-{
-	// if a survivor is hit by a witch, note it in the witch damage array (maxplayers+2 = 1)
-	if (IsValidSurvivor(victim) && damage > 0.0)
-	{
-		// not a crown if witch hit anyone for > 0 damage
-		if (IsWitch(attacker))
-		{
-			char witch_key[10];
-			FormatEx(witch_key, sizeof(witch_key), "%x", attacker);
-			int witch_dmg_array[MAXPLAYERS + DMGARRAYEXT];
-
-			if (!GetTrieArray(g_hWitchTrie, witch_key, witch_dmg_array, MAXPLAYERS + DMGARRAYEXT))
-			{
-				for (int i = 0; i <= MAXPLAYERS; i++)
-				{
-					witch_dmg_array[i] = 0;
-				}
-				witch_dmg_array[MAXPLAYERS + WTCH_HEALTH]	= g_cvarWitchHealth.IntValue;
-				witch_dmg_array[MAXPLAYERS + WTCH_GOTSLASH] = 1;	// failed
-				SetTrieArray(g_hWitchTrie, witch_key, witch_dmg_array, MAXPLAYERS + DMGARRAYEXT, false);
-			}
-			else
-			{
-				witch_dmg_array[MAXPLAYERS + WTCH_GOTSLASH] = 1;	// failed
-				SetTrieArray(g_hWitchTrie, witch_key, witch_dmg_array, MAXPLAYERS + DMGARRAYEXT, true);
-			}
-		}
-	}
-	return Plugin_Continue;
-}
-
-void OnTakeDamagePost_Witch(int victim, int attacker, int inflictor, float damage, int damagetype)
-{
-	// only called for witches, so no check required
-
-	char witch_key[10];
-	FormatEx(witch_key, sizeof(witch_key), "%x", victim);
-	int witch_dmg_array[MAXPLAYERS + DMGARRAYEXT];
-
-	if (!GetTrieArray(g_hWitchTrie, witch_key, witch_dmg_array, MAXPLAYERS + DMGARRAYEXT))
-	{
-		for (int i = 0; i <= MAXPLAYERS; i++)
-		{
-			witch_dmg_array[i] = 0;
-		}
-		witch_dmg_array[MAXPLAYERS + WTCH_HEALTH] = g_cvarWitchHealth.IntValue;
-		SetTrieArray(g_hWitchTrie, witch_key, witch_dmg_array, MAXPLAYERS + DMGARRAYEXT, false);
-	}
-
-	// store damage done to witch
-	if (IsValidSurvivor(attacker))
-	{
-		witch_dmg_array[attacker] += RoundToFloor(damage);
-		witch_dmg_array[MAXPLAYERS + WTCH_HEALTH] -= RoundToFloor(damage);
-
-		// remember last shot
-		if (g_fWitchShotStart[attacker] == 0.0 || (GetGameTime() - g_fWitchShotStart[attacker]) > SHOTGUN_BLAST_TIME)
-		{
-			// reset last shot damage count and attacker
-			g_fWitchShotStart[attacker]					 = GetGameTime();
-			witch_dmg_array[MAXPLAYERS + WTCH_CROWNER]	 = attacker;
-			witch_dmg_array[MAXPLAYERS + WTCH_CROWNSHOT] = 0;
-			witch_dmg_array[MAXPLAYERS + WTCH_CROWNTYPE] = (damagetype & DMG_BUCKSHOT) ? 1 : 0;	   // only allow shotguns
-		}
-
-		// continued blast, add up
-		witch_dmg_array[MAXPLAYERS + WTCH_CROWNSHOT] += RoundToFloor(damage);
-
-		SetTrieArray(g_hWitchTrie, witch_key, witch_dmg_array, MAXPLAYERS + DMGARRAYEXT, true);
-	}
-	else
-	{
-		// store all chip from other sources than survivor in [0]
-		witch_dmg_array[0] += RoundToFloor(damage);
-		// witch_dmg_array[MAXPLAYERS+1] -= RoundToFloor(damage);
-		SetTrieArray(g_hWitchTrie, witch_key, witch_dmg_array, MAXPLAYERS + DMGARRAYEXT, true);
-	}
-}
-
-Action Timer_CheckWitchCrown(Handle timer, Handle pack)
-{
-    ResetPack(pack);
-    int attacker = GetClientOfUserId(ReadPackCell(pack));
-    int witch = ReadPackCell(pack);
-    int epoch = ReadPackCell(pack);
-    int life = ReadPackCell(pack);
-    int health = ReadPackCell(pack);
-    bool oneShot = view_as<bool>(ReadPackCell(pack));
-    if (epoch != g_SkillEpoch || !IsValidSurvivor(attacker) || life != g_SurvivorLife[attacker]) return Plugin_Stop;
-    CoopSkill skill = CheckWitchCrown(witch, attacker, oneShot);
-    PublishKill(attacker, 0, skill, 7, "", health);
-    return Plugin_Stop;
-}
-
-CoopSkill CheckWitchCrown(int witch, int attacker, bool bOneShot = false)
-{
-	char witch_key[10];
-	FormatEx(witch_key, sizeof(witch_key), "%x", witch);
-	int witch_dmg_array[MAXPLAYERS + DMGARRAYEXT];
-	if (!GetTrieArray(g_hWitchTrie, witch_key, witch_dmg_array, MAXPLAYERS + DMGARRAYEXT))
-	{
-		PrintDebug("Witch Crown Check: Error: Trie entry missing (entity: %i, oneshot: %i)", witch, bOneShot);
-		return Skill_None;
-	}
-
-	int chipDamage	 = 0;
-	int iWitchHealth = g_cvarWitchHealth.IntValue;
-
-	if (bOneShot)
-		witch_dmg_array[MAXPLAYERS + WTCH_CROWNTYPE] = 1;
-
-	if (witch_dmg_array[MAXPLAYERS + WTCH_GOTSLASH] || !witch_dmg_array[MAXPLAYERS + WTCH_CROWNTYPE])
-	{
-		PrintDebug("Witch Crown Check: Failed: bungled: %i / crowntype: %i (entity: %i)",
-				   witch_dmg_array[MAXPLAYERS + WTCH_GOTSLASH],
-				   witch_dmg_array[MAXPLAYERS + WTCH_CROWNTYPE],
-				   witch);
-		PrintDebug("Witch Crown Check: Further details: attacker: %N, attacker dmg: %i, teamless dmg: %i",
-				   attacker,
-				   witch_dmg_array[attacker],
-				   witch_dmg_array[0]);
-		return Skill_None;
-	}
-
-	PrintDebug("Witch Crown Check: crown shot: %i, harrassed: %i (full health: %i / drawthresh: %i / oneshot %i)",
-			   witch_dmg_array[MAXPLAYERS + WTCH_CROWNSHOT],
-			   witch_dmg_array[MAXPLAYERS + WTCH_STARTLED],
-			   iWitchHealth,
-			   g_cvarDrawCrownThresh.IntValue,
-			   bOneShot);
-
-	// full crown? unharrassed
-	if (!witch_dmg_array[MAXPLAYERS + WTCH_STARTLED] && (bOneShot || witch_dmg_array[MAXPLAYERS + WTCH_CROWNSHOT] >= iWitchHealth))
-	{
-		PrintDebug("Witch Crown Check: Full crown detected. Attacker: %N, Damage: %i, Chip Damage: %i",
-				   attacker,
-				   witch_dmg_array[attacker],
-				   chipDamage);
-
-		// make sure that we don't count any type of chip
-		if (g_cvarHideFakeDamage.BoolValue)
-		{
-			chipDamage = 0;
-			for (int i = 0; i <= MAXPLAYERS; i++)
-			{
-				if (i == attacker) { continue; }
-				chipDamage += witch_dmg_array[i];
-			}
-			witch_dmg_array[attacker] = iWitchHealth - chipDamage;
-		}
-		HandleCrown(attacker, witch_dmg_array[attacker]);
-        return Skill_WitchCrown;
-	}
-	else if (witch_dmg_array[MAXPLAYERS + WTCH_CROWNSHOT] >= g_cvarDrawCrownThresh.IntValue)
-	{
-		PrintDebug("Witch Crown Check: Draw crown detected. Attacker: %N, Crown Shot: %i, Threshold: %i",
-				   attacker,
-				   witch_dmg_array[MAXPLAYERS + WTCH_CROWNSHOT],
-				   g_cvarDrawCrownThresh.IntValue);
-
-		// draw crown: harassed + over X damage done by one survivor -- in ONE shot
-
-		for (int i = 0; i <= MAXPLAYERS; i++)
-		{
-			if (i == attacker)
-				// count any damage done before final shot as chip
-				chipDamage += witch_dmg_array[i] - witch_dmg_array[MAXPLAYERS + WTCH_CROWNSHOT];
-			else
-				chipDamage += witch_dmg_array[i];
-		}
-
-		PrintDebug("Witch Crown Check: Chip Damage Calculated: %i, Total Health: %i", chipDamage, iWitchHealth);
-
-		// make sure that we don't count any type of chip
-		if (g_cvarHideFakeDamage.BoolValue)
-		{
-			// unlikely to happen, but if the chip was A LOT
-			if (chipDamage >= iWitchHealth)
-			{
-				chipDamage									 = iWitchHealth - 1;
-				witch_dmg_array[MAXPLAYERS + WTCH_CROWNSHOT] = 1;
-			}
-			else
-				witch_dmg_array[MAXPLAYERS + WTCH_CROWNSHOT] = iWitchHealth - chipDamage;
-
-			PrintDebug("Witch Crown Check: Adjusted Crown Shot: %i, Adjusted Chip Damage: %i",
-					   witch_dmg_array[MAXPLAYERS + WTCH_CROWNSHOT],
-					   chipDamage);
-
-			// re-check whether it qualifies as a drawcrown:
-			if (witch_dmg_array[MAXPLAYERS + WTCH_CROWNSHOT] < g_cvarDrawCrownThresh.IntValue)
-			{
-				PrintDebug("Witch Crown Check: Adjusted Crown Shot below threshold. No draw crown.");
-				return Skill_None;
-			}
-		}
-
-		// plus, set final shot as 'damage', and the rest as chip
-		HandleDrawCrown(attacker, witch_dmg_array[MAXPLAYERS + WTCH_CROWNSHOT], chipDamage);
-        return Skill_WitchDraw;
-	}
-	else
-	{
-		PrintDebug("Witch Crown Check: No crown detected. Crown Shot: %i, Threshold: %i, Harassed: %i",
-				   witch_dmg_array[MAXPLAYERS + WTCH_CROWNSHOT],
-				   g_cvarDrawCrownThresh.IntValue,
-				   witch_dmg_array[MAXPLAYERS + WTCH_STARTLED]);
-	}
-
-	return Skill_None;
-	// remove trie
 }
 
 // tank rock

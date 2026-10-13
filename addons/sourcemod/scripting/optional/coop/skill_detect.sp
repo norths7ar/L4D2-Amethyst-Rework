@@ -14,7 +14,7 @@
 
 #include <si_damage_stats>
 
-#define PLUGIN_VERSION "2.2.1"
+#define PLUGIN_VERSION "2.3.0"
 
 #define SHOTGUN_BLAST_TIME	 0.1
 #define POUNCE_CHECK_TIME	 0.1
@@ -30,7 +30,6 @@
 #define CARALARM_MIN_TIME	 0.11	 // maximum time after touch/shot => alarm to connect the two events (test this for LAG)
 
 #define WITCH_CHECK_TIME	 0.1	 // time to wait before checking for witch crown after shoots fired
-#define WITCH_DELETE_TIME	 0.15	 // time to wait before deleting entry from witch trie after entity is destroyed
 
 #define MIN_DC_TRIGGER_DMG	 300	  // minimum amount a 'trigger' / drown must do before counted as a death action
 #define MIN_DC_FALL_DMG		 175	  // minimum amount of fall damage counts as death-falling for a deathcharge
@@ -151,7 +150,6 @@ Handle
 
 	g_hTrieEntityCreated	  = INVALID_HANDLE,	   // getting classname of entity created
 	g_hTrieAbility			  = INVALID_HANDLE,	   // ability check
-	g_hWitchTrie			  = INVALID_HANDLE,	   // witch tracking (Crox)
 	g_hRockTrie				  = INVALID_HANDLE,	   // tank rock tracking
 	g_hCarTrie				  = INVALID_HANDLE;	   // car alarm tracking
 
@@ -181,9 +179,6 @@ int	  g_iVictimMapDmg[MAXPLAYERS + 1];			// for a victim, how much the cumulativ
 bool  g_bBoomerHitSomebody[MAXPLAYERS + 1];	   // false if boomer didn't puke/exploded on anybody
 int	  g_iBoomerGotShoved[MAXPLAYERS + 1];	   // count boomer was shoved at any point
 int	  g_iBoomerVomitHits[MAXPLAYERS + 1];	   // how many booms in one vomit so far
-
-// crowns
-float g_fWitchShotStart[MAXPLAYERS + 1];	// when the last shotgun blast from a survivor started (on any witch)
 
 // smoker clears
 bool  g_bSmokerClearCheck[MAXPLAYERS + 1];		// [smoker] smoker dies and this is set, it's a self-clear if g_iSmokerVictim is the killer
@@ -243,7 +238,6 @@ ConVar
 
 ConVar
 	g_cvarChargerHealth		  = null,	 // z_charger_health
-	g_cvarWitchHealth		  = null,	 // z_witch_health
 	g_cvarMaxPounceDistance	  = null,	 // z_pounce_damage_range_max
 	g_cvarMinPounceDistance	  = null,	 // z_pounce_damage_range_min
 	g_cvarMaxPounceDamage	  = null,	 // z_hunter_max_pounce_bonus_damage;
@@ -339,6 +333,9 @@ ConVar
 #include <coop_skill_detect>
 #include "skill_detect/hunter.sp"
 #include "skill_detect/events.sp"
+#include "skill_detect/witch.sp"
+#include "skill_detect/witch_classify.sp"
+#include "skill_detect/witch_report.sp"
 #include "skill_detect/tracking.sp"
 #include "skill_detect/report.sp"
 
@@ -386,6 +383,7 @@ public APLRes
 
 public void OnPluginStart()
 {
+	WitchInit();
 	SIDamageStats_Init();
 	LoadTranslation("skill_detect.phrases");
 	SkillEventsStart();
@@ -431,7 +429,6 @@ public void OnPluginStart()
 	// cvars: built in
 
 	g_cvarChargerHealth		  = FindConVar("z_charger_health");
-	g_cvarWitchHealth		  = FindConVar("z_witch_health");
 
 	g_cvarMaxPounceDistance	  = FindConVar("z_pounce_damage_range_max");
 	g_cvarMinPounceDistance	  = FindConVar("z_pounce_damage_range_min");
@@ -458,7 +455,6 @@ public void OnPluginStart()
 	SetTrieValue(g_hTrieAbility, "ability_lunge", ABL_HUNTERLUNGE);
 	SetTrieValue(g_hTrieAbility, "ability_throw", ABL_ROCKTHROW);
 
-	g_hWitchTrie = CreateTrie();
 	g_hRockTrie	 = CreateTrie();
 	g_hCarTrie	 = CreateTrie();
 
@@ -531,6 +527,7 @@ public void OnClientDisconnect(int client)
 
 public void OnMapEnd()
 {
+	WitchReset(false);
 	SkillRoundReset();
 }
 
@@ -600,7 +597,7 @@ stock bool IsWitch(int iEntity)
 	{
 		char strClassName[64];
 		GetEdictClassname(iEntity, strClassName, sizeof(strClassName));
-		return StrEqual(strClassName, "witch");
+		return StrEqual(strClassName, "witch") || StrEqual(strClassName, "witch_bride");
 	}
 	return false;
 }
