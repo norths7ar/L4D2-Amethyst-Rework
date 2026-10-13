@@ -2,7 +2,7 @@
 {
 	"ReadyStartAreaUnavailable"
 	{
-		"en" "Starting safe area unavailable. Survivor movement is restricted. Please ready up."
+		"en" "Normal return to the start area is unavailable. Your movement is temporarily restricted."
 	}
 	"ReadyPanelHeader"
 	{

@@ -2,7 +2,7 @@
 {
 	"ReadyStartAreaUnavailable"
 	{
-		"chi" "起始安全区不可用。生还者移动已被限制，请先准备。"
+		"chi" "暂时无法正常返回起点，已限制你的移动。"
 	}
 	"ReadyPanelHeader"
 	{
