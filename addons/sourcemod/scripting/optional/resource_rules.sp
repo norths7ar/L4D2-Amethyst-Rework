@@ -41,6 +41,7 @@
 
 StringMap g_rules;
 StringMap g_mapEntries;
+StringMap g_playerEquipment;
 ConVar g_rulesFile;
 bool g_roundReady, g_configsReady, g_creating;
 bool g_policyFile, g_directorReady, g_initializationPending;
@@ -81,6 +82,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
 public void OnPluginStart()
 {
 	g_rules = new StringMap();
+	g_playerEquipment = new StringMap();
 	g_replayedSupplies = new ArrayList();
 	InitPolicy();
 	g_mapEntries = new StringMap();
@@ -95,6 +97,8 @@ public void OnPluginStart()
 
 public void OnMapStart()
 {
+	for (int client = 1; client <= MaxClients; client++)
+		if (IsClientInGame(client)) OnClientPutInServer(client);
 	g_mapEntries.Clear();
 	// The parsed map lump also retains duplicate output keys. Keep their
 	// association by Hammer ID when a static resource needs a new class.
@@ -109,6 +113,9 @@ public void OnMapStart()
 
 public void OnMapEnd()
 {
+	// Round restarts may retain equipped entities; only a map change discards
+	// their history. Stale references cannot match newly rebuilt supplies.
+	g_playerEquipment.Clear();
 	g_configsReady = false;
 	ResetResourceRound();
 	WI_OnMapEnd();
@@ -239,6 +246,35 @@ bool IsAllowed(const char[] name)
 	return false;
 }
 
+public void OnClientPutInServer(int client)
+{
+	SDKHook(client, SDKHook_WeaponEquipPost, RememberPlayerEquipment);
+	SDKHook(client, SDKHook_WeaponDropPost, RememberPlayerEquipment);
+}
+
+public void RememberPlayerEquipment(int client, int weapon)
+{
+	if (weapon <= MaxClients || !IsValidEntity(weapon)) return;
+	char key[16];
+	IntToString(EntIndexToEntRef(weapon), key, sizeof(key));
+	g_playerEquipment.SetValue(key, 1);
+}
+
+bool IsPlayerEquipment(int entity)
+{
+	// Ownership persists through transfers and drops. Entity references prevent
+	// a recycled edict from inheriting the previous weapon's exemption.
+	char key[16];
+	IntToString(EntIndexToEntRef(entity), key, sizeof(key));
+	int marked;
+	if (g_playerEquipment.GetValue(key, marked)) return true;
+	if (!HasEntProp(entity, Prop_Send, "m_hOwnerEntity")) return false;
+	int owner = GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity");
+	if (owner <= 0) return false;
+	if (owner <= MaxClients) RememberPlayerEquipment(owner, entity);
+	return true;
+}
+
 public void OnEntityCreated(int entity, const char[] classname)
 {
 	if (!g_policyFile || g_creating || entity <= MaxClients) return;
@@ -272,6 +308,10 @@ public void ProcessSpawnedResource(DataPack data)
 	int entity = EntRefToEntIndex(reference);
 	if (entity != INVALID_ENT_REFERENCE && g_configsReady && g_roundReady)
 	{
+		if (IsPlayerEquipment(entity)) return;
+		char name[64];
+		GetResourceName(entity, name, sizeof(name));
+		if (!name[0]) return; // Decorative/glow props do not change the supply pool.
 		ProcessResource(entity);
 		QueueLimitPass();
 	}

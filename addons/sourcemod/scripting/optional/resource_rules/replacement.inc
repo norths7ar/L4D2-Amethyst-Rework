@@ -47,7 +47,7 @@ void GetResourceName(int entity, char[] name, int maxlen)
 void ProcessResource(int entity)
 {
 	if (!IsValidEntity(entity)) return;
-	if (HasEntProp(entity, Prop_Send, "m_hOwnerEntity") && GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity") > 0) return;
+	if (IsPlayerEquipment(entity)) return;
 	char name[64], target[256];
 	GetResourceName(entity, name, sizeof(name));
 	NormalizePickupFlags(entity);

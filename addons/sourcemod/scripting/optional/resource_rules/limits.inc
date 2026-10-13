@@ -1,4 +1,4 @@
-// Limits concern loose final resources, never inventories. Each entity counts
+// Limits concern map supplies, never player equipment (including drops). Each entity counts
 // once, regardless of pickup count. Evaluate all rules before changing entities.
 #define RR_KEEP 0
 #define RR_WINDOW 1
@@ -31,7 +31,7 @@ void ApplyLimits()
 	for (int entity = MaxClients + 1; entity < maximum; entity++)
 	{
 		if (!IsValidEntity(entity)) continue;
-		if (HasEntProp(entity, Prop_Send, "m_hOwnerEntity") && GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity") > 0) continue;
+		if (IsPlayerEquipment(entity)) continue;
 		char name[64];
 		GetResourceName(entity, name, sizeof(name));
 		if (!name[0] || IsAllowed(name)) continue; // Campaign compatibility vote takes priority.
