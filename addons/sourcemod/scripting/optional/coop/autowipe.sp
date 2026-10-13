@@ -17,7 +17,7 @@ public Plugin myinfo =
     name = "AutoWipe",
     author = "Breezy, 海洋空氣, norths7ar",
     description = "Automatically rescues survivors when every living teammate is pinned.",
-    version = "1.5.0"
+    version = "1.6.0"
 };
 
 ConVar g_cvEnabled;
@@ -29,6 +29,8 @@ bool g_bCanStart;      // Prevent AutoWipe before survivors have left the start 
 bool g_bWipePending;   // Prevent multiple wipe timers from being scheduled together.
 Handle g_hWipeTimer;
 bool g_bRoundLive;
+int g_iPinHealth[MAXPLAYERS + 1];
+int g_iCarryUser[MAXPLAYERS + 1];
 
 public void OnPluginStart()
 {
@@ -39,7 +41,17 @@ public void OnPluginStart()
     HookEvent("mission_lost", Event_DisableAutoWipe, EventHookMode_PostNoCopy);
     HookEvent("round_end", Event_DisableAutoWipe, EventHookMode_PostNoCopy);
 
-    g_cvWipeDamage = CreateConVar("autowipe_wipe_damage", "40", "Survivor health cost when AutoWipe revives the team.", FCVAR_NOTIFY, true, 0.0, true, 100.0);
+    HookEvent("tongue_release", Event_PinEnd);
+    HookEvent("pounce_end", Event_PinEnd);
+    HookEvent("jockey_ride_end", Event_PinEnd);
+    HookEvent("charger_pummel_end", Event_PinEnd);
+    HookEvent("player_spawn", Event_ResetPlayer);
+    HookEvent("player_death", Event_ResetPlayer);
+    // Team changes also occur during bot takeover; replacement transfers the pin.
+    HookEvent("player_bot_replace", Event_PlayerReplace);
+    HookEvent("bot_player_replace", Event_PlayerReplace);
+
+    g_cvWipeDamage = CreateConVar("autowipe_wipe_damage", "40", "Minimum total health loss since the current pin began when AutoWipe rescues a standing survivor.", FCVAR_NOTIFY, true, 0.0, true, 100.0);
     g_cvMaxIncaps = FindConVar("survivor_max_incapacitated_count");
     g_cvReviveHealth = FindConVar("survivor_revive_health");
 }
@@ -49,6 +61,7 @@ public void OnMapStart()
     g_bCanStart = false;
     g_bWipePending = false;
     g_bRoundLive = false;
+    ResetPins();
 }
 
 public void OnMapEnd()
@@ -63,7 +76,93 @@ public Action Event_DisableAutoWipe(Event event, const char[] name, bool dontBro
     g_bWipePending = false;
     g_bRoundLive = false;
     delete g_hWipeTimer;
+    ResetPins();
     return Plugin_Continue;
+}
+
+void ResetPin(int client)
+{
+    g_iPinHealth[client] = 0;
+    g_iCarryUser[client] = 0;
+}
+
+void ResetPins()
+{
+    for (int client = 1; client <= MaxClients; client++) ResetPin(client);
+}
+
+public void OnClientDisconnect(int client)
+{
+    ResetPin(client);
+}
+
+public void Event_ResetPlayer(Event event, const char[] name, bool dontBroadcast)
+{
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    if (client > 0) ResetPin(client);
+}
+
+public void Event_PlayerReplace(Event event, const char[] name, bool dontBroadcast)
+{
+    int player = GetClientOfUserId(event.GetInt("player"));
+    int bot = GetClientOfUserId(event.GetInt("bot"));
+    if (player == 0 || bot == 0) return;
+    int source = StrEqual(name, "player_bot_replace") ? player : bot;
+    int target = source == player ? bot : player;
+    g_iPinHealth[target] = g_iPinHealth[source];
+    g_iCarryUser[target] = g_iCarryUser[source];
+    ResetPin(source);
+}
+
+// Capture before the engine starts the control action, not its notification
+// event, which can already be after the first impact damage.
+public Action L4D_OnPouncedOnSurvivor(int victim, int attacker)
+{
+    StartPin(victim, attacker);
+    return Plugin_Continue;
+}
+
+public Action L4D_OnGrabWithTongue(int victim, int attacker)
+{
+    StartPin(victim, attacker);
+    return Plugin_Continue;
+}
+
+public Action L4D2_OnJockeyRide(int victim, int attacker)
+{
+    StartPin(victim, attacker);
+    return Plugin_Continue;
+}
+
+public Action L4D2_OnStartCarryingVictim(int victim, int attacker)
+{
+    StartPin(victim, attacker, true);
+    return Plugin_Continue;
+}
+
+public Action L4D2_OnPummelVictim(int attacker, int victim)
+{
+    StartPin(victim, attacker, true, true);
+    return Plugin_Continue;
+}
+
+void StartPin(int client, int attacker, bool charger = false, bool pummel = false)
+{
+    if (!IsSurvivor(client) || !IsPlayerAlive(client)) return;
+    int attackerUser = GetClientUserId(attacker);
+    // Carry -> pummel is one pin, including the gap between their events.
+    // Do not reset on carry_end: a later new pin always replaces this snapshot.
+    bool continuedCarry = pummel
+        && g_iCarryUser[client] != 0 && g_iCarryUser[client] == attackerUser;
+    if (!continuedCarry)
+        g_iPinHealth[client] = GetClientHealth(client) + RoundToFloor(L4D_GetTempHealth(client));
+    g_iCarryUser[client] = charger ? attackerUser : 0;
+}
+
+public void Event_PinEnd(Event event, const char[] name, bool dontBroadcast)
+{
+    int client = GetClientOfUserId(event.GetInt("victim"));
+    if (client > 0) ResetPin(client);
 }
 
 public Action Event_EnableAutoWipe(Event event, const char[] name, bool dontBroadcast)
@@ -118,7 +217,7 @@ void WipeSurvivors()
 {
     // Capture settlement before releasing attackers: release callbacks can change health/state.
     bool wasIncapped[MAXPLAYERS + 1];
-    int health[MAXPLAYERS + 1], reviveCounts[MAXPLAYERS + 1];
+    int health[MAXPLAYERS + 1], reviveCounts[MAXPLAYERS + 1], penalties[MAXPLAYERS + 1];
     int dying[MAXPLAYERS + 1], thirdStrikes[MAXPLAYERS + 1];
     float tempHealth[MAXPLAYERS + 1];
     for (int client = 1; client <= MaxClients; client++)
@@ -127,10 +226,15 @@ void WipeSurvivors()
         wasIncapped[client] = IsIncapacitated(client);
         health[client] = GetClientHealth(client);
         tempHealth[client] = L4D_GetTempHealth(client);
+        int lostHealth = g_iPinHealth[client] - health[client] - RoundToFloor(tempHealth[client]);
+        if (lostHealth < 0 || g_iPinHealth[client] == 0) lostHealth = 0;
+        penalties[client] = g_cvWipeDamage.IntValue - lostHealth;
+        if (penalties[client] < 0) penalties[client] = 0;
         reviveCounts[client] = GetEntProp(client, Prop_Send, "m_currentReviveCount");
         dying[client] = GetEntProp(client, Prop_Send, "m_isGoingToDie");
         thirdStrikes[client] = GetEntProp(client, Prop_Send, "m_bIsOnThirdStrike");
     }
+    ResetPins();
     // Release attackers before restoring survivors, regardless of client slot order.
     // Their normal death handling ends pins/carries; an active Tank is preserved.
     for (int attacker = 1; attacker <= MaxClients; attacker++)
@@ -146,10 +250,10 @@ void WipeSurvivors()
     {
         if (IsSurvivor(client) && IsPlayerAlive(client))
         {
-            // Standing survivors pay from their current health, never a pre-pin snapshot.
+            // Only top up the loss from this pin; never restore already lost health.
             int standingHealth = health[client];
             float standingTempHealth = tempHealth[client];
-            int remainingHealth = standingHealth - g_cvWipeDamage.IntValue;
+            int remainingHealth = standingHealth - penalties[client];
             float remainingTotal = standingTempHealth + float(remainingHealth);
 
             // OnRevived restores the hidden secondary weapon. This incap was already
