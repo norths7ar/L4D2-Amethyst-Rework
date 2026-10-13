@@ -44,7 +44,7 @@ public Plugin myinfo =
 	name = "Coop player manager",
 	author = "海洋空氣, norths7ar",
 	description = "Coop join, spectator, bot-slot and player-team lifecycle",
-	version = "1.2.3"
+	version = "1.2.4"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -157,6 +157,10 @@ public Action TimerCheckHumanTeam(Handle timer, int userid)
 {
 	int client = GetClientOfUserId(userid);
 	if (!IsHumanClient(client) || g_transitionCaptured) return Plugin_Stop;
+	// Team enforcement does not depend on identity. Engine Versus assignment
+	// can precede authentication; wait as a spectator without recording intent
+	// or consuming the initial admission / reservation request.
+	if (GetClientTeam(client) == TEAM_INFECTED) ChangeClientTeam(client, TEAM_SPECTATORS);
 	// Arrival alone is insufficient: identify returning players before admitting
 	// them as newcomers or enforcing capacity against their reserved seats.
 	if (!g_loadedSteamId[client][0]) return Plugin_Stop;
@@ -169,15 +173,6 @@ public Action TimerCheckHumanTeam(Handle timer, int userid)
 		g_wantsSpectator[client] = true;
 		if (GetClientTeam(client) != TEAM_SPECTATORS) ChangeClientTeam(client, TEAM_SPECTATORS);
 		ClaimReservation(client);
-	}
-	else if (GetClientTeam(client) == TEAM_INFECTED)
-	{
-		// Anne join.sp also checks the actual team event: command-only checks miss
-		// the automatic Versus assignment while a human is connecting.
-		ChangeClientTeam(client, TEAM_SPECTATORS);
-		if (ValidReservation(reservation) && g_reservationRole[reservation] == RESERVATION_SURVIVOR && !g_reservationClaimed[reservation])
-			ScheduleMoveToSurvivors(client);
-		else if (initialAdmission) CommandJoin(client, 0);
 	}
 	else if (GetClientTeam(client) == TEAM_SURVIVORS)
 	{
