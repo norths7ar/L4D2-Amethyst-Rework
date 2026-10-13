@@ -199,7 +199,7 @@ bool ContinueObstacleJump(int tank, int target, int &buttons, float vel[3]) {
     NormalizeVector(direction, direction);
     for (int axis = 0; axis < 3; axis++) next[axis] = position[axis] + direction[axis] * 24.0;
     GetEntPropVector(tank, Prop_Send, "m_vecMins", mins); GetEntPropVector(tank, Prop_Send, "m_vecMaxs", maxs);
-    if (GetVectorDistance(position, targetPos) < hCvarTankBhopStopDistance.FloatValue
+    if (GetVectorDistance(position, targetPos) < 85.0
         || !HasTopSupport(tank, next) || !HullClear(tank, position, next, mins, maxs)) {
         vel[0] = vel[1] = 0.0;
         buttons &= ~(IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT);
@@ -213,36 +213,139 @@ bool ContinueObstacleJump(int tank, int target, int &buttons, float vel[3]) {
 // Short local recovery owns only usercmd movement, never persistent CommandABot
 // MOVE. Every exit immediately returns navigation to Valve (Anne command lifecycle).
 float g_stallSince[MAXPLAYERS + 1], g_stallOrigin[MAXPLAYERS + 1][3];
-float g_stallWish[MAXPLAYERS + 1][3], g_retreatUntil[MAXPLAYERS + 1];
+float g_retreatUntil[MAXPLAYERS + 1];
 float g_retreatGoal[MAXPLAYERS + 1][3], g_recoveryAfter[MAXPLAYERS + 1];
 float g_retreatCheck[MAXPLAYERS + 1];
 float g_groundZ[MAXPLAYERS + 1], g_noHopUntil[MAXPLAYERS + 1];
 bool g_haveGround[MAXPLAYERS + 1];
 int g_recoveryAttempts[MAXPLAYERS + 1];
 float g_recoveryOrigin[MAXPLAYERS + 1][3];
+float g_hopUntil[MAXPLAYERS + 1], g_airThink[MAXPLAYERS + 1];
+float g_recoveryFlightUntil[MAXPLAYERS + 1];
+int g_lastRecoveryCandidate[MAXPLAYERS + 1];
+bool g_hopPaused[MAXPLAYERS + 1];
+
+void ResetTankHop(int tank) {
+    g_hopUntil[tank] = 0.0;
+}
+float TankRunSpeed(int tank) {
+    float speed = GetEntPropFloat(tank, Prop_Send, "m_flMaxspeed");
+    return speed > 0.0 ? speed : 210.0;
+}
+float TankGravity(int tank) {
+    float scale = GetEntPropFloat(tank, Prop_Data, "m_flGravity");
+    if (scale <= 0.0) scale = 1.0;
+    float gravity = FindConVar("sv_gravity").FloatValue * scale;
+    return gravity > 0.0 ? gravity : 800.0;
+}
+
+// Anne-style route validation: collision sweeps plus a supported destination.
+// No path snapshot dependency: use Valve's current movement direction, not a
+// straight line to a victim behind a wall. Only modest floor-height changes.
+bool TankHopRouteClear(int tank, const float position[3], const float velocity[3], float time) {
+    float mins[3], maxs[3], previous[3], point[3], top[3], sample[3];
+    GetClientMins(tank, mins); GetClientMaxs(tank, maxs);
+    float gravity = TankGravity(tank);
+    for (int axis = 0; axis < 2; axis++) sample[axis] = position[axis] + velocity[axis] * time;
+    sample[2] = position[2] + velocity[2] * time - 0.5 * gravity * time * time + 18.0;
+    if (!FindTop(tank, sample, sample[2] - 54.0, top, 0.7)) return false;
+    // Solve the arrival time at that floor, then verify the actual landing there.
+    float disc = velocity[2] * velocity[2] + 2.0 * gravity * (position[2] - top[2]);
+    if (disc < 0.0) return false;
+    time = (velocity[2] + SquareRoot(disc)) / gravity;
+    if (time <= 0.0 || time > 1.0) return false;
+    for (int axis = 0; axis < 2; axis++) sample[axis] = position[axis] + velocity[axis] * time;
+    sample[2] = top[2] + 18.0;
+    float landing[3];
+    if (!FindTop(tank, sample, top[2] - 18.0, landing, 0.7) || FloatAbs(landing[2] - top[2]) > 2.0) return false;
+    for (int corner = 0; corner < 4; corner++) {
+        sample = landing;
+        sample[0] += (corner & 1) ? maxs[0] : mins[0];
+        sample[1] += (corner & 2) ? maxs[1] : mins[1];
+        sample[2] += 18.0;
+        if (!FindTop(tank, sample, landing[2] - 18.0, top, 0.7)) return false;
+    }
+    previous = position; previous[2] += 2.0;
+    for (int segment = 1; segment <= 12; segment++) {
+        float t = time * float(segment) / 12.0;
+        point[0] = position[0] + velocity[0] * t;
+        point[1] = position[1] + velocity[1] * t;
+        point[2] = position[2] + velocity[2] * t - 0.5 * gravity * t * t + 2.0;
+        if (!HullClear(tank, previous, point, mins, maxs)) return false;
+        previous = point;
+    }
+    return true;
+}
+
+void TankAirControl(int tank, const float position[3], float velocity[3], const float wish[3], bool moving) {
+    float now = GetGameTime();
+    if (g_hopUntil[tank] <= now) return;
+    float uncapped = SquareRoot(velocity[0] * velocity[0] + velocity[1] * velocity[1]);
+    if (uncapped > g_bhopMaxSpeed.FloatValue) {
+        LimitHorizontalSpeed(velocity, g_bhopMaxSpeed.FloatValue);
+        TeleportEntity(tank, NULL_VECTOR, NULL_VECTOR, velocity);
+    }
+    if (!moving || now < g_airThink[tank]) return;
+    g_airThink[tank] = now + 0.05;
+    float speed = SquareRoot(velocity[0] * velocity[0] + velocity[1] * velocity[1]);
+    if (speed < 1.0) return;
+    float dot = (velocity[0] * wish[0] + velocity[1] * wish[1]) / speed;
+    float corrected[3]; corrected = velocity;
+    // Like Anne: an angle beyond the air-turn range is braked toward run speed,
+    // not instantaneously reversed. The ground-hop branch handles the reversal.
+    if (dot < 0.017452) {
+        float reduced = speed - 1500.0 * 0.05;
+        float run = TankRunSpeed(tank);
+        if (reduced < run) reduced = run;
+        if (reduced >= speed) return;
+        corrected[0] *= reduced / speed; corrected[1] *= reduced / speed;
+    } else {
+        if (dot > 0.996195) return;
+        float direction[3];
+        // Anne's 0.3s response, sampled at 0.05s; do not apply the full blend
+        // every sample (which would turn six times more aggressively).
+        float blend = 1.0 - Pow(0.7, 0.05 / 0.3);
+        direction[0] = velocity[0] / speed * (1.0 - blend) + wish[0] * blend;
+        direction[1] = velocity[1] / speed * (1.0 - blend) + wish[1] * blend;
+        NormalizeVector(direction, direction);
+        float turnDot = (direction[0] * velocity[0] + direction[1] * velocity[1]) / speed;
+        if (turnDot > 1.0) turnDot = 1.0;
+        float adjusted = speed * (1.0 - 0.12 * RadToDeg(ArcCosine(turnDot)) / 90.0);
+        corrected[0] = direction[0] * adjusted; corrected[1] = direction[1] * adjusted;
+    }
+    LimitHorizontalSpeed(corrected, g_bhopMaxSpeed.FloatValue);
+    float sample[3], ground[3]; sample = position; sample[2] += 2.0;
+    if (!FindTop(tank, sample, position[2] - 128.0, ground, 0.7)) return;
+    float gravity = TankGravity(tank);
+    float disc = velocity[2] * velocity[2] + 2.0 * gravity * (position[2] - ground[2]);
+    if (disc < 0.0) return;
+    float remaining = (velocity[2] + SquareRoot(disc)) / gravity;
+    if (TankHopRouteClear(tank, position, corrected, remaining))
+        TeleportEntity(tank, NULL_VECTOR, NULL_VECTOR, corrected);
+}
 
 void CancelTankRecovery(int tank) {
     g_stallSince[tank] = 0.0;
     g_retreatUntil[tank] = 0.0;
+    g_recoveryFlightUntil[tank] = 0.0;
 }
 void ResetTankMovement(int tank) {
     CancelTankRecovery(tank);
+    ResetTankHop(tank);
+    g_hopPaused[tank] = false;
     g_recoveryAfter[tank] = 0.0;
     g_noHopUntil[tank] = 0.0;
     g_haveGround[tank] = false;
     g_recoveryAttempts[tank] = 0;
+    g_lastRecoveryCandidate[tank] = -1;
 }
-bool TankAttackBusy(int tank, int buttons) {
-    if (buttons & (IN_ATTACK | IN_ATTACK2)) return true;
+bool TankAttackBusy(int tank) {
     int sequence = GetEntProp(tank, Prop_Send, "m_nSequence");
     // Match the existing hulk action exclusions, including rage/flinch/frozen.
     if ((sequence >= 2 && sequence <= 4) || (sequence >= 24 && sequence <= 31)
         || (sequence >= 33 && sequence <= 64) || (GetEntityFlags(tank) & FL_FROZEN)) return true;
-    int claw = GetEntPropEnt(tank, Prop_Send, "m_hActiveWeapon");
-    // Attack buttons may already be released during an actual swing/recovery.
-    return GetEntPropFloat(tank, Prop_Send, "m_flNextAttack") > GetGameTime()
-        || (claw > MaxClients && IsValidEntity(claw)
-            && GetEntPropFloat(claw, Prop_Send, "m_flNextPrimaryAttack") > GetGameTime());
+    // A requested attack or cooldown is not evidence of an executing action.
+    return false;
 }
 bool TankWishDirection(int buttons, const float vel[3], const float angles[3], float wish[3]) {
     float forwardMove = vel[0], sideMove = vel[1];
@@ -304,23 +407,25 @@ bool TankRetreatClear(int tank, const float position[3], const float goal[3]) {
                 sample[0] += x < 0 ? mins[0] : (x > 0 ? maxs[0] : 0.0);
                 sample[1] += y < 0 ? mins[1] : (y > 0 ? maxs[1] : 0.0);
                 float floorZ = sample[2]; sample[2] += 18.0;
-                if (!FindTop(tank, sample, floorZ - 18.0, top)
+                if (!FindTop(tank, sample, floorZ - 18.0, top, 0.7)
                     || FloatAbs(top[2] - floorZ) > 18.0) return false;
             }
         }
     }
     return true;
 }
-bool TankRecover(int tank, const float position[3], const float targetPos[3], bool moving,
+bool TankRecover(int tank, int target, const float position[3], const float targetPos[3], bool moving,
     const float wish[3], int &buttons, float vel[3], const float angles[3]) {
     float now = GetGameTime();
     // Retreat/return oscillation is not route progress. After two local tries,
     // leave the blocked bot still long enough for si_unstuck's watchdog. Only
     // leaving this pocket (not a new victim or elapsed time) renews the budget.
-    if (g_recoveryAttempts[tank] > 0 && GetVectorDistance(position, g_recoveryOrigin[tank]) > 128.0)
+    if (g_retreatUntil[tank] == 0.0 && g_recoveryAttempts[tank] > 0 && GetVectorDistance(position, g_recoveryOrigin[tank]) > 128.0) {
         g_recoveryAttempts[tank] = 0;
+        g_lastRecoveryCandidate[tank] = -1;
+    }
     if (!(GetEntityFlags(tank) & FL_ONGROUND) || g_jumpUntil[tank] > now
-        || GetVectorDistance(position, targetPos) > 300.0 || FloatAbs(position[2] - targetPos[2]) > 64.0) {
+        || (GetVectorDistance(position, targetPos) < 85.0 && VisiblePoint(tank, target, targetPos))) {
         CancelTankRecovery(tank); return false;
     }
     if (g_retreatUntil[tank] > 0.0) {
@@ -346,32 +451,74 @@ bool TankRecover(int tank, const float position[3], const float targetPos[3], bo
         buttons |= vel[1] >= 0.0 ? IN_MOVERIGHT : IN_MOVELEFT;
         return true;
     }
-    if (!moving || now < g_recoveryAfter[tank] || g_recoveryAttempts[tank] >= 2) {
+    if (now < g_recoveryAfter[tank] || g_recoveryAttempts[tank] >= 2) {
         g_stallSince[tank] = 0.0; return false;
     }
-    if (g_stallSince[tank] == 0.0 || GetVectorDistance(position, g_stallOrigin[tank]) > 6.0
-        || GetVectorDotProduct(wish, g_stallWish[tank]) < 0.7) {
-        g_stallSince[tank] = now; g_stallOrigin[tank] = position; g_stallWish[tank] = wish;
+    if (g_stallSince[tank] == 0.0 || GetVectorDistance(position, g_stallOrigin[tank]) > 12.0) {
+        g_stallSince[tank] = now; g_stallOrigin[tank] = position;
         return false;
     }
-    if (now - g_stallSince[tank] < 0.45) return false;
+    if (now - g_stallSince[tank] < (moving ? 0.6 : 1.0)) return false;
     g_stallSince[tank] = 0.0;
     g_recoveryAfter[tank] = now + 1.25;
-    float offsets[3] = {180.0, 135.0, -135.0};
+    float direction[3]; direction = wish;
+    if (!moving) {
+        // No invented route through walls/floors: only a visible, same-level
+        // victim supplies a direct direction when NextBot has stopped issuing input.
+        if (FloatAbs(position[2] - targetPos[2]) > 64.0 || !VisiblePoint(tank, target, targetPos)) return false;
+        MakeVectorFromPoints(position, targetPos, direction); direction[2] = 0.0;
+        if (NormalizeVector(direction, direction) < 1.0) return false;
+    }
+    if (g_recoveryAttempts[tank] == 0) g_recoveryOrigin[tank] = position;
+    // Also bound failed geometry searches, not just successful retreat launches.
+    g_recoveryAttempts[tank]++;
+    float toward[3]; MakeVectorFromPoints(position, targetPos, toward); toward[2] = 0.0;
+    NormalizeVector(toward, toward);
+    if (GetVectorDotProduct(direction, toward) > 0.8 && !TankDescending(tank, position, true, direction)
+        && g_lastRecoveryCandidate[tank] != 6
+        && TryObstacleJump(tank, target, position, targetPos, buttons, vel)) {
+        g_lastRecoveryCandidate[tank] = 6;
+        ResetTankHop(tank);
+        return true;
+    }
+    // A raised-platform jump cannot get out of a shallow vehicle bed. Try a
+    // normal-height arc only when the walk route is blocked; do not blindly hop.
+    float forwardGoal[3]; forwardGoal = position;
+    for (int axis = 0; axis < 2; axis++) forwardGoal[axis] += direction[axis] * 48.0;
+    if (g_lastRecoveryCandidate[tank] != 7 && !TankRetreatClear(tank, position, forwardGoal)) {
+        float launch[3];
+        launch[0] = direction[0] * 120.0; launch[1] = direction[1] * 120.0;
+        launch[2] = SquareRoot(2.0 * TankGravity(tank) * 56.0);
+        float flight = 2.0 * launch[2] / TankGravity(tank);
+        if (TankHopRouteClear(tank, position, launch, flight)) {
+            ResetTankHop(tank);
+            SetEntPropEnt(tank, Prop_Send, "m_hGroundEntity", -1);
+            SetEntityFlags(tank, GetEntityFlags(tank) & ~FL_ONGROUND);
+            TeleportEntity(tank, NULL_VECTOR, NULL_VECTOR, launch);
+            buttons &= ~(IN_JUMP | IN_DUCK | IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT);
+            vel[0] = vel[1] = 0.0;
+            g_recoveryFlightUntil[tank] = now + 1.0;
+            g_lastRecoveryCandidate[tank] = 7;
+            return true;
+        }
+    }
+    float offsets[6] = {0.0, 90.0, -90.0, 180.0, 135.0, -135.0};
     for (int candidate = 0; candidate < sizeof(offsets); candidate++) {
-        float yaw = ArcTangent2(wish[1], wish[0]) + DegToRad(offsets[candidate]);
+        if (candidate == g_lastRecoveryCandidate[tank]) continue;
+        float offset = offsets[candidate];
+        float yaw = ArcTangent2(direction[1], direction[0]) + DegToRad(offset);
         float goal[3]; goal = position;
         goal[0] += Cosine(yaw) * 48.0; goal[1] += Sine(yaw) * 48.0;
         float sample[3], top[3]; sample = goal; sample[2] += 18.0;
-        if (!FindTop(tank, sample, goal[2] - 18.0, top)) continue;
+        if (!FindTop(tank, sample, goal[2] - 18.0, top, 0.7)) continue;
         goal[2] = top[2];
         if (!TankRetreatClear(tank, position, goal)) continue;
-        if (g_recoveryAttempts[tank] == 0) g_recoveryOrigin[tank] = position;
-        g_recoveryAttempts[tank]++;
+        ResetTankHop(tank);
+        g_lastRecoveryCandidate[tank] = candidate;
         g_retreatGoal[tank] = goal;
         g_retreatCheck[tank] = now + 0.1;
         g_retreatUntil[tank] = now + 0.35;
-        return TankRecover(tank, position, targetPos, moving, wish, buttons, vel, angles);
+        return TankRecover(tank, target, position, targetPos, moving, wish, buttons, vel, angles);
     }
     return false;
 }

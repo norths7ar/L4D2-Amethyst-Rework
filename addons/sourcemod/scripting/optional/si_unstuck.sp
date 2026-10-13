@@ -5,6 +5,10 @@
 #include <sdktools>
 #include <left4dhooks>
 
+native bool IsInPause();
+// Optional: ai_tank owns only its bounded obstacle jump/local recovery windows.
+native bool AI_Tank_IsMovementOwned(int client);
+
 #define TEAM_SURVIVOR 2
 #define TEAM_INFECTED 3
 #define FIRST_NORMAL_SI 1
@@ -24,15 +28,29 @@ float g_lastProgress[MAXPLAYERS + 1];
 float g_lastCombatInput[MAXPLAYERS + 1];
 float g_lastMoveInput[MAXPLAYERS + 1];
 float g_nextAttempt[MAXPLAYERS + 1];
+int g_tankVictim[MAXPLAYERS + 1];
+bool g_retryNotified[MAXPLAYERS + 1];
+bool g_centerShown[MAXPLAYERS + 1];
+char g_centerNotice[192];
+float g_centerNoticeUntil;
+bool g_paused;
+float g_pauseStarted;
 
 public Plugin myinfo =
 {
 	name = "SI Unstuck",
 	author = "OpenAI",
 	description = "Moves a stuck live AI special infected to a safe hidden nav position",
-	version = "1.2.1",
+	version = "1.2.2",
 	url = ""
 };
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
+{
+	MarkNativeAsOptional("IsInPause");
+	MarkNativeAsOptional("AI_Tank_IsMovementOwned");
+	return APLRes_Success;
+}
 
 public void OnPluginStart()
 {
@@ -51,6 +69,8 @@ public void OnPluginStart()
 
 public void OnMapStart()
 {
+	g_paused = false;
+	g_centerNoticeUntil = 0.0;
 	for (int client = 1; client <= MaxClients; client++)
 	{
 		ResetTracking(client);
@@ -59,6 +79,7 @@ public void OnMapStart()
 
 public void OnClientDisconnect(int client)
 {
+	g_centerShown[client] = false;
 	ResetTracking(client);
 }
 
@@ -75,6 +96,7 @@ public Action Event_PlayerSpawn(Event event, const char[] name, bool dontBroadca
 
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon)
 {
+	if (IsWatchdogPaused()) return Plugin_Continue;
 	if (IsEligibleSI(client) && (buttons & (IN_ATTACK | IN_ATTACK2)))
 	{
 		g_lastCombatInput[client] = GetGameTime();
@@ -89,7 +111,9 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 
 public Action Timer_Monitor(Handle timer)
 {
+	if (IsWatchdogPaused()) return Plugin_Continue;
 	float now = GetGameTime();
+	int countdown;
 	for (int client = 1; client <= MaxClients; client++)
 	{
 		if (!IsEligibleSI(client))
@@ -106,6 +130,7 @@ public Action Timer_Monitor(Handle timer)
 		{
 			CopyVector(origin, g_lastOrigin[client]);
 			g_lastProgress[client] = now;
+			g_retryNotified[client] = false;
 			continue;
 		}
 
@@ -113,7 +138,16 @@ public Action Timer_Monitor(Handle timer)
 		{
 			CopyVector(origin, g_lastOrigin[client]);
 			g_lastProgress[client] = now;
+			g_retryNotified[client] = false;
 			continue;
+		}
+
+		bool chase = tank && IsLivingSurvivor(GetClientOfUserId(g_tankVictim[client]));
+		if (tank && now - g_lastProgress[client] >= 2.0
+			&& !g_retryNotified[client] && (chase || now - g_lastMoveInput[client] <= 1.0))
+		{
+			int remaining = RoundToCeil(stuckTime - (now - g_lastProgress[client]));
+			if (remaining > 0 && (countdown == 0 || remaining < countdown)) countdown = remaining;
 		}
 
 		if (now < g_nextAttempt[client] || now - g_lastProgress[client] < stuckTime)
@@ -123,8 +157,9 @@ public Action Timer_Monitor(Handle timer)
 
 		// No input alone is not evidence of being stuck: preserve idle ambushers
 		// unless their current hull is embedded or no survivor route can be built.
+		// A Tank with a live chase target is not an idle ambusher.
 		// Rate-limit the path query as well as failed destination searches.
-		if (now - g_lastMoveInput[client] > 1.0
+		if (!chase && now - g_lastMoveInput[client] > 1.0
 			&& !IsCurrentHullEmbedded(client, origin) && HasPathToSurvivors(origin))
 		{
 			g_nextAttempt[client] = now + g_cvRetryDelay.FloatValue;
@@ -136,14 +171,96 @@ public Action Timer_Monitor(Handle timer)
 		if ((!tank && !IsPositionHidden(origin)) || !TryRelocate(client, origin))
 		{
 			g_nextAttempt[client] = now + g_cvRetryDelay.FloatValue;
+			if (tank && !g_retryNotified[client])
+			{
+				NotifySurvivors("Tank 暂无安全传送位置，正在重试");
+				g_retryNotified[client] = true;
+			}
 			continue;
 		}
 
+		if (tank) NotifySurvivors("Tank 已传送脱困");
+		g_retryNotified[client] = false;
 		GetClientAbsOrigin(client, g_lastOrigin[client]);
 		g_lastProgress[client] = now;
 		g_nextAttempt[client] = now + stuckTime;
 	}
+	ShowTankCountdown(countdown);
 	return Plugin_Continue;
+}
+
+public Action L4D2_OnChooseVictim(int client, int &target)
+{
+	if (client > 0 && client <= MaxClients && IsClientInGame(client)
+		&& GetEntProp(client, Prop_Send, "m_zombieClass") == 8)
+		g_tankVictim[client] = IsLivingSurvivor(target) ? GetClientUserId(target) : 0;
+	return Plugin_Continue;
+}
+
+bool IsLivingSurvivor(int client)
+{
+	return client > 0 && client <= MaxClients && IsClientInGame(client)
+		&& GetClientTeam(client) == TEAM_SURVIVOR && IsPlayerAlive(client);
+}
+
+void NotifySurvivors(const char[] message)
+{
+	// One result notice takes priority over countdowns, without delaying rescue.
+	strcopy(g_centerNotice, sizeof(g_centerNotice), message);
+	g_centerNoticeUntil = GetGameTime() + 3.0;
+}
+
+void ShowTankCountdown(int remaining)
+{
+	bool notice = GetGameTime() < g_centerNoticeUntil;
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (!IsClientInGame(client)) continue;
+		bool show = (notice || remaining > 0) && GetClientTeam(client) == TEAM_SURVIVOR;
+		if (show && notice) PrintCenterText(client, "%s", g_centerNotice);
+		else if (show) PrintCenterText(client, "Tank 卡住，预计 %d 秒后尝试传送", remaining);
+		else if (g_centerShown[client]) PrintCenterText(client, "");
+		g_centerShown[client] = show;
+	}
+}
+
+public void OnPluginEnd()
+{
+	g_centerNoticeUntil = 0.0;
+	ShowTankCountdown(0);
+}
+
+public void OnPause() { SetWatchdogPaused(true); }
+public void OnUnpause() { SetWatchdogPaused(false); }
+
+bool IsWatchdogPaused()
+{
+	if (GetFeatureStatus(FeatureType_Native, "IsInPause") == FeatureStatus_Available)
+		SetWatchdogPaused(IsInPause());
+	else SetWatchdogPaused(false);
+	return g_paused;
+}
+
+void SetWatchdogPaused(bool paused)
+{
+	if (g_paused == paused) return;
+	float now = GetGameTime();
+	if (paused) g_pauseStarted = now;
+	else
+	{
+		// Game time may freeze with the engine, but can advance during a logical
+		// pause. Exclude only the elapsed game time, without restarting the 8s.
+		float elapsed = now - g_pauseStarted;
+		if (g_centerNoticeUntil > g_pauseStarted) g_centerNoticeUntil += elapsed;
+		for (int client = 1; client <= MaxClients; client++)
+		{
+			if (g_lastProgress[client] > 0.0) g_lastProgress[client] += elapsed;
+			if (g_lastCombatInput[client] > 0.0) g_lastCombatInput[client] += elapsed;
+			if (g_lastMoveInput[client] > 0.0) g_lastMoveInput[client] += elapsed;
+			if (g_nextAttempt[client] > 0.0) g_nextAttempt[client] += elapsed;
+		}
+	}
+	g_paused = paused;
 }
 
 bool TryRelocate(int client, const float oldOrigin[3])
@@ -258,6 +375,8 @@ bool IsBusySI(int client, float now)
 	bool tank = GetEntProp(client, Prop_Send, "m_zombieClass") == 8;
 	if (tank)
 	{
+		if (GetFeatureStatus(FeatureType_Native, "AI_Tank_IsMovementOwned") == FeatureStatus_Available
+			&& AI_Tank_IsMovementOwned(client)) return true;
 		// anim_hulk sequence numbers: climbing/ladders, shoves, attacks/throws,
 		// victory/rage and flinches. Never rescue a Tank during these actions.
 		int sequence = GetEntProp(client, Prop_Send, "m_nSequence");
@@ -341,6 +460,8 @@ void ResetTracking(int client)
 	g_lastCombatInput[client] = 0.0;
 	g_lastMoveInput[client] = 0.0;
 	g_nextAttempt[client] = 0.0;
+	g_tankVictim[client] = 0;
+	g_retryNotified[client] = false;
 }
 
 int GetRandomLivingSurvivor()

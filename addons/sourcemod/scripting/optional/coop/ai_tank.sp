@@ -10,11 +10,11 @@
 public Plugin myinfo = {
     name = "AI Tank", author = "Breezy, norths7ar",
     description = "AI Tank movement, throws and opportunistic obstacle interaction",
-    version = "1.3.1"
+    version = "1.4.0"
 };
 
 ConVar g_enable, hCvarTankBhop, hCvarTankRock, hCvarTankBhopStopDistance;
-ConVar g_bhopMaxSpeed;
+ConVar g_bhopMaxSpeed, g_bhopResumeDistance;
 ConVar hCvarTankThrowMinDistance, hCvarTankThrowMaxDistance;
 ConVar g_climbEnable, g_lowRate, g_highRate, g_obstacleJump, g_hittables;
 int g_targetUserId[MAXPLAYERS + 1];
@@ -27,12 +27,25 @@ int g_jumpTarget[MAXPLAYERS + 1];
 #include "ai_tank/movement.sp"
 #include "ai_tank/combat.sp"
 
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax) {
+    RegPluginLibrary("ai_tank");
+    CreateNative("AI_Tank_IsMovementOwned", NativeMovementOwned);
+    return APLRes_Success;
+}
+public any NativeMovementOwned(Handle plugin, int params) {
+    int tank = GetNativeCell(1);
+    return IsAITank(tank) && g_enable.BoolValue
+        && (g_jumpUntil[tank] > GetGameTime() || g_retreatUntil[tank] > GetGameTime()
+            || g_recoveryFlightUntil[tank] > GetGameTime());
+}
+
 public void OnPluginStart() {
     SetupTankCombat();
     g_enable = CreateConVar("ai_tank_enable", "1", "Enable AI Tank behavior", _, true, 0.0, true, 1.0);
     hCvarTankBhop = CreateConVar("ai_tank_bhop", "1", "Enable AI Tank bhopping");
     hCvarTankRock = CreateConVar("ai_tank_rock", "1", "Allow AI Tank rock throws");
-    hCvarTankBhopStopDistance = CreateConVar("ai_tank_bhop_stop_distance", "85", "Stop adding hops inside target distance when closing on the victim", _, true, 0.0);
+    hCvarTankBhopStopDistance = CreateConVar("ai_tank_bhop_stop_distance", "65", "Pause added bhops inside target distance", _, true, 0.0);
+    g_bhopResumeDistance = CreateConVar("ai_tank_bhop_resume_distance", "100", "Resume added bhops beyond target distance", _, true, 0.0);
     g_bhopMaxSpeed = CreateConVar("ai_tank_bhop_max_speed", "360", "Maximum horizontal bhop speed", _, true, 210.0);
     hCvarTankThrowMinDistance = CreateConVar("ai_tank_throw_min_distance", "500", "Minimum range for starting a rock throw", _, true, 0.0);
     hCvarTankThrowMaxDistance = CreateConVar("ai_tank_throw_max_distance", "800", "Maximum throw-start range; 0 means unlimited", _, true, 0.0);
@@ -101,7 +114,7 @@ public Action L4D2_OnChooseVictim(int tank, int &target) {
     if (GetEntityMoveType(tank) == MOVETYPE_WALK && !(sequence >= 16 && sequence <= 23)
         && !(sequence >= 48 && sequence <= 51)) chosen = Tank_ChooseNearbyTarget(tank, target);
     int userId = IsSurvivor(chosen) ? GetClientUserId(chosen) : 0;
-    if (userId != g_targetUserId[tank]) { CancelTankRecovery(tank); g_jumpUntil[tank] = 0.0; }
+    if (userId != g_targetUserId[tank]) { CancelTankRecovery(tank); ResetTankHop(tank); g_jumpUntil[tank] = 0.0; }
     g_targetUserId[tank] = userId;
     if (chosen == target) return Plugin_Continue;
     g_jumpUntil[tank] = 0.0;
@@ -151,6 +164,7 @@ public Action OnPlayerRunCmd(int tank, int &buttons, int &impulse, float vel[3],
         && GetEntityMoveType(tank) == MOVETYPE_WALK && !L4D_IsPlayerStaggering(tank)
         && Tank_AimAtRider(tank, buttons, angles)) {
         CancelTankRecovery(tank);
+        ResetTankHop(tank);
         g_jumpUntil[tank] = 0.0;
         return Plugin_Changed;
     }
@@ -162,6 +176,7 @@ public Action OnPlayerRunCmd(int tank, int &buttons, int &impulse, float vel[3],
     // Preserve existing rock/punch arbitration, never inject jump rocks.
     if (throwing || (buttons & IN_ATTACK2)) {
         CancelTankRecovery(tank);
+        ResetTankHop(tank);
         g_jumpUntil[tank] = 0.0;
         buttons &= ~(IN_ATTACK | IN_JUMP | IN_DUCK);
         return Plugin_Changed;
@@ -169,21 +184,33 @@ public Action OnPlayerRunCmd(int tank, int &buttons, int &impulse, float vel[3],
     if (GetEntityMoveType(tank) != MOVETYPE_WALK || GetEntProp(tank, Prop_Data, "m_nWaterLevel") > 1
         || (sequence >= 16 && sequence <= 23) || L4D_IsPlayerStaggering(tank)) {
         CancelTankRecovery(tank);
+        ResetTankHop(tank);
         g_jumpUntil[tank] = 0.0;
         return Plugin_Changed;
     }
     int target = GetClientOfUserId(g_targetUserId[tank]);
-    if (!IsFreeSurvivor(target)) { CancelTankRecovery(tank); g_jumpUntil[tank] = 0.0; return Plugin_Changed; }
+    if (!IsFreeSurvivor(target)) { CancelTankRecovery(tank); ResetTankHop(tank); g_jumpUntil[tank] = 0.0; return Plugin_Changed; }
     float position[3], targetPos[3], velocity[3];
     GetClientAbsOrigin(tank, position); GetClientAbsOrigin(target, targetPos);
     float distance = GetVectorDistance(position, targetPos);
+    float resume = g_bhopResumeDistance.FloatValue;
+    if (resume < hCvarTankBhopStopDistance.FloatValue) resume = hCvarTankBhopStopDistance.FloatValue;
+    if (distance <= hCvarTankBhopStopDistance.FloatValue) g_hopPaused[tank] = true;
+    else if (distance >= resume) g_hopPaused[tank] = false;
     // Intentional flight/platform hold owns movement; never count it as a stall.
     if (ContinueObstacleJump(tank, target, buttons, vel)) { CancelTankRecovery(tank); return Plugin_Changed; }
+    if (g_recoveryFlightUntil[tank] > GetGameTime() && !(GetEntityFlags(tank) & FL_ONGROUND)) {
+        // Tested local escape arc, not an accelerated chase hop.
+        buttons &= ~(IN_JUMP | IN_DUCK | IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT);
+        vel[0] = vel[1] = 0.0;
+        return Plugin_Changed;
+    }
+    g_recoveryFlightUntil[tank] = 0.0;
     float wish[3];
     bool moving = TankWishDirection(buttons, vel, angles, wish);
     // Busy actions veto only recovery; retain the existing combat/brake/cap paths.
-    if (TankAttackBusy(tank, buttons)) CancelTankRecovery(tank);
-    else if (TankRecover(tank, position, targetPos, moving, wish, buttons, vel, angles)) return Plugin_Changed;
+    if (TankAttackBusy(tank)) { CancelTankRecovery(tank); ResetTankHop(tank); return Plugin_Changed; }
+    else if (TankRecover(tank, target, position, targetPos, moving, wish, buttons, vel, angles)) return Plugin_Changed;
     bool descending = TankDescending(tank, position, moving, wish);
     if (GetEntityFlags(tank) & FL_ONGROUND) {
         float now = GetGameTime();
@@ -196,23 +223,46 @@ public Action OnPlayerRunCmd(int tank, int &buttons, int &impulse, float vel[3],
                 && TryObstacleJump(tank, target, position, targetPos, buttons, vel)) return Plugin_Changed;
         }
     }
-    if (!hCvarTankBhop.BoolValue) return Plugin_Changed;
+    if (!hCvarTankBhop.BoolValue) { ResetTankHop(tank); return Plugin_Changed; }
     GetEntPropVector(tank, Prop_Data, "m_vecVelocity", velocity);
-    bool braking = BrakeChase(tank, target, position, targetPos, distance, velocity, wish, moving);
-    if (braking || descending || !moving) {
-        buttons &= ~(IN_JUMP | IN_DUCK);
+    bool grounded = (GetEntityFlags(tank) & FL_ONGROUND) != 0;
+    if (!grounded) {
+        TankAirControl(tank, position, velocity, wish, moving);
         return Plugin_Changed;
     }
-    if ((GetEntityFlags(tank) & FL_ONGROUND) && (buttons & IN_ATTACK)) return Plugin_Changed;
+    bool landingHop = g_hopUntil[tank] > GetGameTime();
+    g_hopUntil[tank] = 0.0;
+    // Landing braking must survive a rejected next-hop route. Only bleed the
+    // momentum of our own hop; native jumps remain outside this controller.
     float speed = SquareRoot(velocity[0] * velocity[0] + velocity[1] * velocity[1]);
-    if (!GetEntProp(tank, Prop_Send, "m_hasVisibleThreats") || speed <= 210.0) return Plugin_Changed;
-    if (GetEntityFlags(tank) & FL_ONGROUND) {
-        // TGMaster/Chanz jump approach, retaining Ast's 60-unit impulse.
-        for (int axis = 0; axis < 2; axis++) velocity[axis] += wish[axis] * 60.0;
-        LimitHorizontalSpeed(velocity, g_bhopMaxSpeed.FloatValue);
-        buttons |= IN_DUCK | IN_JUMP;
-        TeleportEntity(tank, NULL_VECTOR, NULL_VECTOR, velocity);
+    if (landingHop && (g_hopPaused[tank] || (moving && speed > 1.0
+        && (velocity[0] * wish[0] + velocity[1] * wish[1]) / speed < 0.55))) {
+        float cap = TankRunSpeed(tank);
+        if (cap > g_bhopMaxSpeed.FloatValue) cap = g_bhopMaxSpeed.FloatValue;
+        LimitHorizontalSpeed(velocity, cap);
+        if (speed > cap) TeleportEntity(tank, NULL_VECTOR, NULL_VECTOR, velocity);
     }
+    // These restrictions own added bhops only; preserve native traversal input.
+    if (g_hopPaused[tank] || descending || !moving || (buttons & (IN_ATTACK | IN_JUMP))) return Plugin_Changed;
+    speed = SquareRoot(velocity[0] * velocity[0] + velocity[1] * velocity[1]);
+    if (!GetEntProp(tank, Prop_Send, "m_hasVisibleThreats") || speed <= 210.0) return Plugin_Changed;
+    // Anne reverse-hop principle: lose stored speed before reversing, rather
+    // than repeatedly adding impulse against the old momentum. Follow native wish.
+    float alignment = (velocity[0] * wish[0] + velocity[1] * wish[1]) / speed;
+    if (alignment < 0.55) {
+        float runSpeed = TankRunSpeed(tank);
+        velocity[0] = wish[0] * runSpeed; velocity[1] = wish[1] * runSpeed;
+    } else {
+        for (int axis = 0; axis < 2; axis++) velocity[axis] += wish[axis] * 60.0;
+    }
+    LimitHorizontalSpeed(velocity, g_bhopMaxSpeed.FloatValue);
+    float flight = 2.0 * SquareRoot(2.0 * TankGravity(tank) * 56.0) / TankGravity(tank);
+    float launch[3]; launch = velocity; launch[2] = SquareRoot(2.0 * TankGravity(tank) * 56.0);
+    if (!TankHopRouteClear(tank, position, launch, flight)) return Plugin_Changed;
+    buttons |= IN_DUCK | IN_JUMP;
+    TeleportEntity(tank, NULL_VECTOR, NULL_VECTOR, velocity);
+    g_hopUntil[tank] = GetGameTime() + flight + 0.2;
+    g_airThink[tank] = GetGameTime();
     return Plugin_Changed;
 }
 
@@ -221,31 +271,6 @@ void LimitHorizontalSpeed(float velocity[3], float maximum) {
     if (speed <= maximum || speed <= 0.0) return;
     velocity[0] *= maximum / speed;
     velocity[1] *= maximum / speed;
-}
-
-bool BrakeChase(int tank, int target, const float position[3], const float targetPos[3], float distance, float velocity[3], const float wish[3], bool moving) {
-    float toward[3], targetVelocity[3];
-    MakeVectorFromPoints(position, targetPos, toward); toward[2] = 0.0;
-    NormalizeVector(toward, toward);
-    GetEntPropVector(target, Prop_Data, "m_vecVelocity", targetVelocity);
-    float speed = SquareRoot(velocity[0] * velocity[0] + velocity[1] * velocity[1]);
-    float approach = velocity[0] * toward[0] + velocity[1] * toward[1];
-    float fleeing = targetVelocity[0] * toward[0] + targetVelocity[1] * toward[1];
-    bool near = distance < hCvarTankBhopStopDistance.FloatValue
-        && approach - fleeing > 15.0 && VisiblePoint(tank, target, targetPos);
-    // Bleed sideways/backwards momentum on landing; let Valve steer and choose attacks.
-    // Compare momentum to Valve's route command, not a victim across a wall/floor.
-    bool turning = moving && speed > 210.0 && GetVectorDotProduct(velocity, wish) / speed < 0.55
-        && (GetEntityFlags(tank) & FL_ONGROUND);
-    float cap = g_bhopMaxSpeed.FloatValue;
-    if (near || turning) {
-        float runSpeed = GetEntPropFloat(tank, Prop_Send, "m_flMaxspeed");
-        if (runSpeed <= 0.0) runSpeed = 210.0;
-        if (cap > runSpeed) cap = runSpeed;
-    }
-    LimitHorizontalSpeed(velocity, cap);
-    if (speed > cap) TeleportEntity(tank, NULL_VECTOR, NULL_VECTOR, velocity);
-    return near || turning;
 }
 
 int Tank_GetRockTarget(int tank) {
