@@ -3019,7 +3019,7 @@
 
 
 
-//-------- ↓↓↓ dont delete the closing bracket ↓↓↓
+// Keep the final MapInfo closing brace after all map entries.
 
 //=======================================================================
 // Additional third-party maps supplied by Cirno
