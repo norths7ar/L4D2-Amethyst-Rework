@@ -25,9 +25,12 @@ Windows 通过本机 SSH 配置中的 `l4d2-coreyun` 连接服务器：
 | 管理员 | `addons/sourcemod/configs/admins_simple.ini` |
 | 服务器名、密码与基础设置 | `cfg/server.cfg` |
 | 模式、公告与插件配置 | `cfg/`、`addons/sourcemod/configs/` |
-| Stripper | `addons/stripper/` |
+| Stripper 插件程序 | `addons/stripper/bin/` |
+| Stripper 地图规则 | `cfg/stripper/astredux/`、`cfg/stripper/zonemod/` |
 | 插件 | `addons/sourcemod/plugins/` |
 | 第三方地图 VPK | `addons/` |
+
+`stripper_cfg_path` 选择当前模式的规则目录；只读取该目录的全图规则和地图规则，不会自动叠加默认的 `addons/stripper/` 配置。
 
 修改管理员后，可在服务器控制台执行 `sm_reloadadmins`；其他配置是否即时生效取决于插件及执行时机。SQLite 数据库和 `addons/sourcemod/data/cannounce_messages.txt` 是运行数据，不在仓库维护。
 

@@ -16,7 +16,8 @@
 
 - 逃亡型救援的 Tank 轮次编辑：保留已有预设，不强行接入普通救援的跳轮方式；L4DHooks 与 gamedata 保持上游版本。
 - PVP的 ready／pause 合并：PVP 与 PVE 的准备逻辑存在实际差异，不需要勉强合并。
-- 暂不合并 Hunter／Jockey skeet 检测、播报与奖励插件。当前只有 PVE 的 AstRedux 使用 Jockey skeet，`l4d2_playstats` 只在 PVP 加载，两者没有需要衔接的场景；保留现有实现，不为合并增加接口。
-- 暂不让 AstRedux 停用 `l4d2_tank_attack_control`：原计划删除 Redux 用不到的真人投石姿势命令（`!underhand`、`!overhand`、`!overonehand`），并把仍需要的出拳／投石相互限制交给 `ai_tank`。退出前需核对两个插件的攻击限制，验证“先启动的动作阻止后启动的动作”，避免删命令时改变 AI 战斗行为；目前保持原样。
-- 暂不修改 `cannounce` 的自定义入服台词、入服声音及相关管理命令。原计划简化 `!joinmsg` 和管理员设置入口、增加玩家声音选择菜单；目前没有足够需求，保留插件原样，继续提供有用的进退服提示。
+- 合并 Hunter／Jockey skeet 检测、播报与奖励插件。当前只有 PVE 的 AstRedux 使用 Jockey skeet，`l4d2_playstats` 只在 PVP 加载，两者没有需要衔接的场景；保留现有实现，不为合并增加接口。
+- 停用 `l4d2_tank_attack_control`：原计划删除 Redux 用不到的真人投石姿势命令（`!underhand`、`!overhand`、`!overonehand`），并把仍需要的出拳／投石相互限制交给 `ai_tank`。退出前需核对两个插件的攻击限制，验证“先启动的动作阻止后启动的动作”，避免删命令时改变 AI 战斗行为；目前保持原样。
+- 修改 `cannounce` 的自定义入服台词、入服声音及相关管理命令。原计划简化 `!joinmsg` 和管理员设置入口、增加玩家声音选择菜单；目前没有足够需求，保留插件原样，继续提供有用的进退服提示。
+- 已知BUG：C5M5 的固定 Tank 可能刷新在生还者后方，暂不调整地图选点。
 - 已知无法稳定复现的BUG：飞行中的 Hunter 被倒地小手枪一发击杀，整条统计有且只有这一发，没有其他伤害或协助。
