@@ -34,7 +34,7 @@ public Plugin myinfo =
 	name = "AI: Hard SI",
 	author = "Breezy",
 	description = "Improves the AI behaviour of special infected",
-	version = "1.4.2",
+	version = "1.4.3",
 	url = "github.com/breezyplease"
 };
 
@@ -49,6 +49,9 @@ public void OnPluginStart() {
 	HookEvent("ability_use", OnAbilityUse, EventHookMode_Pre); 
 	HookEvent("player_shoved", OnPlayerShoved, EventHookMode_Pre);
 	HookEvent("player_jump", OnPlayerJump, EventHookMode_Pre);
+	HookEvent("player_now_it", Boomer_OnBileState);
+	HookEvent("player_no_longer_it", Boomer_OnBileState);
+	HookEvent("player_death", Boomer_OnDeath);
 	// Initialize module resources once, then apply the configured state.
 	EnableHardSI();
 	if (!hCvarHardSIEnable.BoolValue)
@@ -117,6 +120,7 @@ public void OnHardSIEnableChanged(ConVar convar, const char[] oldValue, const ch
 
 public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
 {
+	Boomer_ResetAll();
 	Jockey_ResetAll();
 	g_bSurvivorsLeftSafeArea = false;
 	delete g_hAssaultTimer;
@@ -125,11 +129,14 @@ public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
 
 public void OnClientDisconnect(int client)
 {
+	Boomer_ResetSpray(client);
+	g_boomerBiled[client] = false;
 	Jockey_Reset(client);
 }
 
 public void OnMapEnd()
 {
+	Boomer_ResetAll();
 	Jockey_ResetAll();
 	g_bSurvivorsLeftSafeArea = false;
 	g_hAssaultTimer = null;
@@ -257,6 +264,7 @@ public Action L4D2_OnChooseVictim(int specialInfected, int &curTarget)
 public Action InitialiseSpecialInfected(Handle event, char[] name, bool dontBroadcast) {
 	if (!g_bHardSIActive) return Plugin_Continue;
 	int client = GetClientOfUserId(GetEventInt(event, "userid"));
+	if (client > 0) g_boomerBiled[client] = false;
 	if( IsBotInfected(client) ) {
 		int botInfected = client;
 		bHasBeenShoved[client] = false;
@@ -331,9 +339,6 @@ public Action OnPlayerShoved(Handle event, char[] name, bool dontBroadcast) {
 		bHasBeenShoved[shovedPlayer] = true;
 		if( GetInfectedClass(shovedPlayer) == L4D2Infected_Jockey ) {
 			Jockey_OnShoved(shovedPlayer);
-		}
-		else if ( GetInfectedClass(shovedPlayer) == L4D2Infected_Boomer ) {
-			Boomer_OnShoved(shovedPlayer);
 		}
 	}
 	return Plugin_Continue;	
