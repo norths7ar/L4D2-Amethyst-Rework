@@ -1,12 +1,10 @@
-# L4D2 AstMod Rework
+# AstRedux
 
-基于 [L4D2 Competitive Rework](https://github.com/SirPlease/L4D2-Competitive-Rework) 的 求生之路 2 服务端配置，保留 Zone 系列药抗模式，并提供 AstRedux 药役。
+以 **AstRedux 药役**为主要维护方向的求生之路 2 服务端配置，基于 [L4D2 Competitive Rework](https://github.com/SirPlease/L4D2-Competitive-Rework)，同时保留 Zone 系列药抗模式。
 
-AstMod (Amethyst) 为 海洋空气 开发的药役模式。Ast作为模式统一简称后，Redux后缀意为在原Mod基础上进行的二次开发修改。
+AstRedux 基于海洋空气开发的 AstMod（Amethyst）继续开发，支持 1–4 人游玩，难度随人数调整。
 
-当前主要维护 **AstRedux**。AstMod 已归档至 `archive/astmod-legacy` 分支（`v1.3.0`），主线不再提供或维护。
-
-当前保留 ZoneMod 与 ZoneHunters 的 1v1～4v4、ZoneRetro 4v4，以及 AstRedux，共 10 个模式入口。不再提供 NextMod、NeoMod、Promod／Deadman、Acemod、EQ 和 Apex 模式。
+除 AstRedux 外，当前提供 ZoneMod 与 ZoneHunters 的 1v1～4v4，以及 ZoneRetro 4v4。
 
 ## 常用入口
 
@@ -30,5 +28,7 @@ AstMod (Amethyst) 为 海洋空气 开发的药役模式。Ast作为模式统一
 - [资源规则配置](docs/configuration/resource-rules.md)
 
 ## 来源与致谢
+
+本项目此前维护的 AstMod 已归档至 `archive/astmod-legacy` 分支（`v1.3.0`），主线不再提供或维护。
 
 框架与大量通用修复来自 [L4D2 Competitive Rework](https://github.com/SirPlease/L4D2-Competitive-Rework)。AstMod 原版由海洋空气维护，公开源码见 [L4D2-AstMod-Scriptings](https://github.com/Sglight/L4D2-AstMod-Scriptings)。其他插件保留各自作者信息；许可见 [LICENSE](LICENSE)。

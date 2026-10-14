@@ -13,7 +13,10 @@
 * `docs/ROADMAP.md`: planned work; `docs/CHANGELOG.md`: completed repository changes and version history.
 * `docs/architecture.md`: 只记录框架级别的产品设计思路，不负责记录任何具体模式的决策、路径等。
 * `docs/server-operations.md`: daily deployment and server operations; `ops/README.md`: installation and maintenance of operations tooling.
-* `docs/astredux-design.md`: AstRedux 的设计决策及简短功能、参数和使用说明；按内容大块组织，不按插件逐个拆文档。
+* `docs/astredux-design.md`: AstRedux 的核心理念、设计动机与取舍，兼顾玩法说明和维护者回查。保留按插件或插件组合组织的小节，以及奖励表等有查阅价值的规则；精简代码流程复述，不以压缩篇幅为由合并主题或删除查表资料。
+  * 通常不复述配置中直接可见的内容；代码里写死、查找不便或容易忽略的规则，可以适当记录。
+  * 优先记录设计原则、思考与取舍，以及 v1–v4 这类方案变迁：遇到了什么问题、为什么改成现在这样。这些容易遗忘，也无法从当前配置或实现中完整看出。
+  * 不擅自判定哪些规则对维护者而言属于常识。已有内容不能仅因 Agent 觉得“常见”就删除；拿不准时保留或交由维护者判断。维护目标是减少重复，不是减少篇幅。
 * `docs/configuration/`: 仅承载篇幅较大、需要独立查阅的配置说明。归位文档不等于拆分文档，功能说明不放进服务器运维。
 * Actual cfgs, SourcePawn, VScript, Stripper, and plugin-load files: runtime behavior.
 
