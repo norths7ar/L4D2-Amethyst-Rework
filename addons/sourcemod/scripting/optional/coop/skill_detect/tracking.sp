@@ -80,6 +80,12 @@ Action Event_PlayerHurt(Handle event, const char[] name, bool dontBroadcast)
 
 			}
 
+			case ZC_SMOKER:
+			{
+				if (!IsValidSurvivor(attacker))
+					return Plugin_Continue;
+				g_iSmokerVictimDamage[victim] += damage;
+			}
 		}
 	}
 	else if (IsValidInfected(attacker))
@@ -160,6 +166,7 @@ Action Event_PlayerSpawn(Handle event, const char[] name, bool dontBroadcast)
 		{
 			g_bSmokerClearCheck[client]	  = false;
 			g_iSmokerVictim[client]		  = 0;
+			g_iSmokerVictimDamage[client] = 0;
 		}
 		case ZC_HUNTER:
 		{
@@ -273,10 +280,12 @@ Action Event_PlayerDeath(Handle hEvent, const char[] name, bool dontBroadcast)
 
 			case ZC_SMOKER:
 			{
+				// Only the death-time upstream checks may commit a self-clear.
+				ClearSmokerSkillCandidate(victim);
 				if (!IsValidSurvivor(attacker))
 					return Plugin_Continue;
 
-				if (g_bSmokerClearCheck[victim] && g_iSmokerVictim[victim] == attacker)
+				if (g_bSmokerClearCheck[victim] && g_iSmokerVictim[victim] == attacker && g_iSmokerVictimDamage[victim] >= g_cvarSelfClearThresh.IntValue)
 					HandleSmokerSelfClear(attacker, victim);
 				else
 				{
@@ -1050,10 +1059,7 @@ Action Event_TonguePullStopped(Handle event, const char[] name, bool dontBroadca
 		return Plugin_Continue;
 
 	if (reason == CUT_KILL)
-    {
-        g_bSmokerClearCheck[smoker] = true;
-        RecordSkill(attacker, smoker, Skill_SmokerSelf);
-    }
+		g_bSmokerClearCheck[smoker] = true;
 	else if (g_bSmokerShoved[smoker])
 		HandleSmokerSelfClear(attacker, smoker, true);
 	else if (reason == CUT_SLASH)	 // note: can't trust this to actually BE a slash..
@@ -1078,9 +1084,11 @@ Action Event_TongueGrab(Handle event, const char[] name, bool dontBroadcast)
 	if (IsValidInfected(attacker) && IsValidSurvivor(victim))
 	{
 		// new pull, clean damage
+		ClearSmokerSkillCandidate(attacker);
 		g_bSmokerClearCheck[attacker]	= false;
 		g_bSmokerShoved[attacker]		= false;
 		g_iSmokerVictim[attacker]		= victim;
+		g_iSmokerVictimDamage[attacker] = 0;
 		g_fPinTime[attacker][0]			= GetGameTime();
 		g_fPinTime[attacker][1]			= 0.0;
 	}

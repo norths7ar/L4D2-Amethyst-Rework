@@ -14,7 +14,7 @@
 
 #include <si_damage_stats>
 
-#define PLUGIN_VERSION "2.3.0"
+#define PLUGIN_VERSION "2.3.1"
 
 #define SHOTGUN_BLAST_TIME	 0.1
 #define POUNCE_CHECK_TIME	 0.1
@@ -183,6 +183,7 @@ int	  g_iBoomerVomitHits[MAXPLAYERS + 1];	   // how many booms in one vomit so f
 // smoker clears
 bool  g_bSmokerClearCheck[MAXPLAYERS + 1];		// [smoker] smoker dies and this is set, it's a self-clear if g_iSmokerVictim is the killer
 int	  g_iSmokerVictim[MAXPLAYERS + 1];			// [smoker] the one that's being pulled
+int	  g_iSmokerVictimDamage[MAXPLAYERS + 1];	// [smoker] survivor damage accumulated since the last grab, as in upstream
 bool  g_bSmokerShoved[MAXPLAYERS + 1];			// [smoker] set if the victim of a pull manages to shove the smoker
 
 // rocks
@@ -227,6 +228,7 @@ ConVar
 	g_cvarRepCarAlarm,
 
 	g_cvarDrawCrownThresh,		// cvar damage in final shot for drawcrown-req.
+	g_cvarSelfClearThresh,		// cvar damage while self-clearing from smokers
 	g_cvarHunterDPThresh,		// cvar damage for hunter highpounce
 	g_cvarJockeyDPThresh,		// cvar distance for jockey highpounce
 	g_cvarHideFakeDamage,		// cvar damage while self-clearing from smokers
@@ -417,6 +419,7 @@ public void OnPluginStart()
 	g_cvarRepCarAlarm		= CreateConVar("sm_skill_report_caralarm", "1", "Enable car alarm reporting.", FCVAR_NONE, true, 0.0, true, 1.0);
 
 	g_cvarDrawCrownThresh	= CreateConVar("sm_skill_drawcrown_damage", "500", "How much damage a survivor must at least do in the final shot for it to count as a drawcrown.", FCVAR_NONE, true, 0.0, false);
+	g_cvarSelfClearThresh	= CreateConVar("sm_skill_selfclear_damage", "200", "How much damage a survivor must at least do to a smoker for him to count as self-clearing.", FCVAR_NONE, true, 0.0, false);
 	g_cvarHunterDPThresh	= CreateConVar("sm_skill_hunterdp_height", "400", "Minimum height of hunter pounce for it to count as a DP.", FCVAR_NONE, true, 0.0, false);
 	g_cvarJockeyDPThresh	= CreateConVar("sm_skill_jockeydp_height", "300", "How much height distance a jockey must make for his 'DP' to count as a reportable highpounce.", FCVAR_NONE, true, 0.0, false);
 	g_cvarHideFakeDamage	= CreateConVar("sm_skill_hidefakedamage", "0", "If set, any damage done that exceeds the health of a victim is hidden in reports.", FCVAR_NONE, true, 0.0, true, 1.0);

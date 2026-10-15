@@ -49,6 +49,14 @@ void SkillSpawn(int client)
     HunterReset(client);
 }
 
+void ClearSmokerSkillCandidate(int smoker)
+{
+    if (g_CandidateSkill[smoker] != Skill_SmokerSelf) return;
+    g_CandidateActor[smoker] = 0;
+    g_CandidateSkill[smoker] = Skill_None;
+    g_CandidateDamage[smoker] = 0;
+}
+
 int SkillRewardTier(CoopSkill skill, float lifetime = 0.0)
 {
     switch (skill)
