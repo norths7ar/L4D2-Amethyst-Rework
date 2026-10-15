@@ -1,8 +1,18 @@
 "Phrases"
 {
+	"ReadyNeedsHuman"
+	{
+		"chi" "需要至少一名真人加入生还者队伍才能开局。"
+	}
+
+	"ReadyStartLoop"
+	{
+		"chi" "检测到未移动时反复传回，已暂时限制移动；回到起点或开局后解除。"
+	}
+
 	"ReadyStartAreaUnavailable"
 	{
-		"chi" "暂时无法正常返回起点，已限制你的移动。"
+		"chi" "未能确认归位落点，已尝试返回原始出生位置。"
 	}
 	"ReadyPanelHeader"
 	{

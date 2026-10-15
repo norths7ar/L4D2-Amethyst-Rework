@@ -77,7 +77,7 @@ public Plugin myinfo =
 	name = "Coop ready and pause",
 	author = "CanadaRox, 海洋空氣, norths7ar",
 	description = "Per-player readiness, loading gate and start/resume countdowns",
-	version = "1.3.0"
+	version = "1.3.2"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -157,12 +157,16 @@ public void OnPluginStart()
 	HookEvent("round_start", EventRoundBoundary, EventHookMode_Pre);
 	HookEvent("round_end", EventRoundBoundary, EventHookMode_PostNoCopy);
 	HookEvent("player_team", EventPlayerTeam, EventHookMode_Post);
+	HookEvent("player_spawn", StartArea_PlayerSpawn, EventHookMode_Post);
+	HookEvent("bot_player_replace", StartArea_PlayerReplace, EventHookMode_Post);
+	HookEvent("player_bot_replace", StartArea_PlayerReplace, EventHookMode_Post);
 }
 
 public void OnMapStart()
 {
 	// round_start can precede OnMapStart. OnMapEnd clears the previous map,
 	// so an observed boundary here belongs to this map and must survive setup.
+	bool preserveStartRecords = g_roundInitialized;
 	bool roundInitialized = g_roundInitialized || g_lateLoad;
 	g_configsExecuted = false;
 	g_roundInitialized = false;
@@ -188,7 +192,9 @@ public void OnMapStart()
 	// Mode loads and the first map must also enter ready-up, not only restarts.
 	// A plugin loaded into a running map missed round_start. Ordinary map loads
 	// must observe the real round boundary before allowing a start countdown.
-	BeginReadyPhase(roundInitialized);
+	BeginReadyPhase(roundInitialized, false, preserveStartRecords);
+	if (g_lateLoad)
+		for (int client = 1; client <= MaxClients; client++) StartArea_CaptureBirth(client);
 	g_lateLoad = false;
 }
 
@@ -238,7 +244,7 @@ public void OnConfigsExecuted()
 
 public void OnReadyEnabledChanged(ConVar convar, const char[] oldValue, const char[] newValue)
 {
-	if (g_readyPhase) BeginReadyPhase(g_roundInitialized, !IsStartInitialized() && g_forceStarted);
+	if (g_readyPhase) BeginReadyPhase(g_roundInitialized, !IsStartInitialized() && g_forceStarted, true);
 }
 
 public void OnPauseEnabledChanged(ConVar convar, const char[] oldValue, const char[] newValue)
@@ -260,6 +266,7 @@ public void OnClientPutInServer(int client)
 
 public void OnClientDisconnect(int client)
 {
+	if (g_readyPhase) RequireStartHuman(client);
 	StartArea_ResetClient(client);
 	CancelTimer(g_teamTimer[client]);
 	if (!IsHumanSurvivor(client)) return;
@@ -278,10 +285,11 @@ public Action L4D_OnFirstSurvivorLeftSafeArea(int client)
 {
 	if (!g_readyPhase) return Plugin_Continue;
 	if (!IsStartInitialized()) return Plugin_Handled;
-	if (!g_readyEnabled.BoolValue && !g_startPlacement && g_countdownTimer == null) return Plugin_Continue;
+	if (!g_readyEnabled.BoolValue && !g_startPlacement && g_countdownTimer == null)
+		return RequireStartHuman() ? Plugin_Continue : Plugin_Handled;
 	// Do not teleport or issue client commands inside the Director detour.
 	// A failed boundary can fire again before the original call has unwound.
-	StartArea_RequestReturn(client, true);
+	StartArea_RequestReturn(client, true, true);
 	return Plugin_Handled;
 }
 
@@ -294,7 +302,7 @@ public void L4D_OnFirstSurvivorLeftSafeArea_Post(int client)
 
 void StartRound()
 {
-	if (!g_readyPhase || !IsStartInitialized()) return;
+	if (!g_readyPhase || !IsStartInitialized() || !RequireStartHuman()) return;
 	InvokeForward(g_forwardLivePre);
 	g_readyPhase = false;
 	StartArea_CancelRequests();
@@ -339,13 +347,14 @@ public Action EventRoundBoundary(Event event, const char[] name, bool dontBroadc
 	return Plugin_Continue;
 }
 
-void BeginReadyPhase(bool roundInitialized, bool forceStartPending = false)
+void BeginReadyPhase(bool roundInitialized, bool forceStartPending = false, bool preserveStartRecords = false)
 {
 	g_roundInitialized = false;
 	// Keep the pre-live lifecycle active even when the loading gate is disabled.
 	// Consumers still receive OnRoundIsLive on the first real saferoom exit.
 	g_readyPhase = true;
-	StartArea_ResetRound();
+	if (preserveStartRecords) StartArea_CancelRequests();
+	else StartArea_ResetRound();
 	g_forceStarted = forceStartPending;
 	SetReadyProtection(g_readyEnabled.BoolValue);
 	g_countdownRemaining = 0;
@@ -481,6 +490,7 @@ void SetReadyFrozen(int client, bool frozen)
 
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon)
 {
+	if (g_readyPhase) StartArea_ObserveInput(client, buttons, vel);
 	if (!g_readyPhase || (!g_readyEnabled.BoolValue && !g_startPlacement && g_countdownTimer == null) || !g_startLimited[client]
 		|| !IsClientInGame(client) || GetClientTeam(client) != TEAM_SURVIVORS || !IsPlayerAlive(client)) return Plugin_Continue;
 	// Suppress voluntary movement, not gravity, moving platforms or map teleports.
@@ -506,18 +516,21 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
 		}
 		else if (buttons || impulse) g_panelButtonTime[client] = GetEngineTime();
 	}
-	// Never re-freeze a player a map intro has displaced into the air.
-	if (g_readyPhase && g_countdownTimer != null && IsReadySurvivor(client))
-	{
-		bool degraded;
-		if (g_startReturn[client] == StartConfirmed && StartArea_ActualSafe(client, degraded))
-			SetReadyFrozen(client, true);
-	}
+	if (g_readyPhase && g_countdownTimer != null && IsReadySurvivor(client)
+		&& g_startReturn[client] == StartDone && (GetEntityFlags(client) & FL_ONGROUND)
+		&& GetEntProp(client, Prop_Send, "m_nWaterLevel") < 2)
+		SetReadyFrozen(client, true);
 }
 public Action EventPlayerTeam(Event event, const char[] name, bool dontBroadcast)
 {
 	int client = GetClientOfUserId(event.GetInt("userid"));
-	if (client <= 0 || IsFakeClient(client)) return Plugin_Continue;
+	if (client <= 0) return Plugin_Continue;
+	// Clear the old team's request now, not after a new owner can request return.
+	if (event.GetInt("team") != event.GetInt("oldteam")
+		&& (event.GetInt("team") == TEAM_SURVIVORS || event.GetInt("oldteam") == TEAM_SURVIVORS))
+		StartArea_ClearRequest(client);
+	if (g_readyPhase && event.GetInt("team") != TEAM_SURVIVORS) RequireStartHuman(client);
+	if (IsFakeClient(client)) return Plugin_Continue;
 	g_panelButtonTime[client] = GetEngineTime();
 	if (!g_readyPhase && !g_isPaused) return Plugin_Continue;
 	if (g_teamTimer[client] == null)
@@ -547,7 +560,6 @@ public Action TimerPlayerTeam(Handle timer, DataPack pack)
 	if (team == TEAM_SURVIVORS || oldTeam == TEAM_SURVIVORS)
 	{
 		SetPlayerReady(client, false);
-		StartArea_ResetClient(client);
 		if (g_isPaused || g_startPlacement || IsCountdownParticipant(client)) CancelCountdown(client, "TeamChanged");
 		if (g_isPaused) EvaluatePauseReady();
 	}
@@ -583,7 +595,7 @@ bool IsStartInitialized()
 
 void EvaluateStartReady()
 {
-	if (!g_readyPhase || !IsStartInitialized()) return;
+	if (!g_readyPhase || !RequireStartHuman() || !IsStartInitialized()) return;
 	if (g_forceStarted)
 	{
 		// A forced start requested during initialization waits for the same
@@ -614,7 +626,7 @@ void StartCountdown()
 		ArmCountdownTimer();
 		return;
 	}
-	if (!g_readyPhase || !IsStartInitialized()) return;
+	if (!g_readyPhase || !RequireStartHuman() || !IsStartInitialized()) return;
 	StartArea_CancelRequests();
 	g_startPlacement = true;
 	int epoch = g_startEpoch;
@@ -630,7 +642,7 @@ void StartCountdown()
 
 void CompleteStartPlacement()
 {
-	if (!g_startPlacement || !StartArea_AllConfirmed()) return;
+	if (!g_startPlacement || !StartArea_AllFinished()) return;
 	if (!g_forceStarted && (!ReturningSurvivorsRestored() || !AllSurvivorsReady()))
 	{
 		CancelCountdown(0, "ReadinessChanged");
@@ -641,7 +653,7 @@ void CompleteStartPlacement()
 		g_countdownParticipant[client] = IsHumanSurvivor(client) ? GetClientSerial(client) : 0;
 	g_startPlacement = false;
 	g_countdownRemaining = g_readyCountdownCvar.IntValue;
-	SetSurvivorsFrozen(true);
+	StartArea_FreezeLanded();
 	int epoch = g_startEpoch;
 	InvokeForward(g_forwardCountdown);
 	if (!g_readyPhase || epoch != g_startEpoch) return;
@@ -666,15 +678,19 @@ void ShowCountdown()
 public Action TimerCountdown(Handle timer)
 {
 	if (!g_isPaused && !g_readyPhase) { g_countdownTimer = null; return Plugin_Stop; }
+	if (g_readyPhase && !HasStartHuman())
+	{
+		g_countdownTimer = null;
+		RequireStartHuman();
+		return Plugin_Stop;
+	}
 	if (!g_forceStarted && (!AllSurvivorsReady() || (g_isPaused && g_adminPause)))
 	{
 		g_countdownTimer = null;
 		CancelCountdown(0, "ReadinessChanged");
 		return Plugin_Stop;
 	}
-	// Late arrivals do not change the ready roster or restart the countdown.
-	// Wait only for physical placement, also if a map displaces a participant.
-	if (g_readyPhase && !StartArea_AllConfirmed()) return Plugin_Continue;
+
 	if (--g_countdownRemaining <= 0)
 	{
 		g_countdownTimer = null;
@@ -687,6 +703,7 @@ public Action TimerCountdown(Handle timer)
 
 void FinishCountdown()
 {
+	if (g_readyPhase && !RequireStartHuman()) return;
 	g_countdownRemaining = 0;
 	if (g_isPaused) EndPause();
 	else
@@ -732,6 +749,7 @@ public Action TimerReadyBoundary(Handle timer)
 		g_boundaryTimer = null;
 		return Plugin_Stop;
 	}
+	RequireStartHuman();
 	if (!IsStartInitialized()) return Plugin_Continue;
 	if (g_countdownTimer != null)
 	{
@@ -947,6 +965,23 @@ bool IsCountdownParticipant(int client)
 		&& g_countdownParticipant[client] != 0 && g_countdownParticipant[client] == GetClientSerial(client);
 }
 
+// A force request bypasses readiness, not the presence of someone to play.
+// Exclude a disconnecting/leaving client even while engine team state is stale.
+bool HasStartHuman(int exclude = 0)
+{
+	for (int client = 1; client <= MaxClients; client++)
+		if (client != exclude && IsHumanSurvivor(client)) return true;
+	return false;
+}
+
+bool RequireStartHuman(int exclude = 0)
+{
+	if (HasStartHuman(exclude)) return true;
+	g_forceStarted = false;
+	CancelCountdown(0, "NoHumanSurvivors");
+	return false;
+}
+
 bool AllSurvivorsReady()
 {
 	int humans;
@@ -1018,6 +1053,11 @@ public Action CommandForceStart(int client, int args)
 {
 	if (g_isPaused) return CommandForceUnpause(client, args);
 	if (!g_readyPhase) return Plugin_Handled;
+	if (!RequireStartHuman())
+	{
+		ReplyToCommand(client, "%t", "ReadyNeedsHuman");
+		return Plugin_Handled;
+	}
 	g_forceStarted = true;
 	StartCountdown();
 	RenderPanel();

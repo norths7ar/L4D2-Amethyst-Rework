@@ -1,51 +1,38 @@
-// Private ready-up placement owner. MapInfo is a search hint, never a movement boundary.
-
-#define START_OWN_POINTS 3
-#define START_SHARED_POINTS 8
+// Ready placement owns records and bounded requests, never the ready gate.
 #define START_NAV_POINTS 8
 #define START_CANDIDATES 24
 #define START_CONFIRM_TIMEOUT 1.5
+#define START_REQUEST_TIMEOUT 3.0
 
 enum StartReturnState
 {
     StartIdle,
     StartRequested,
     StartConfirming,
-    StartConfirmed,
-    StartWaiting
-};
-
-enum StartFailure
-{
-    StartNoCandidate,
-    StartConfirmationFailed,
-    StartDegraded,
-    StartFailureCount
+    StartDone
 };
 
 StartReturnState g_startReturn[MAXPLAYERS + 1];
-bool g_startLimited[MAXPLAYERS + 1];
-bool g_startDegraded[MAXPLAYERS + 1];
+bool g_startLimited[MAXPLAYERS + 1]; // Only an observed, input-free boundary loop.
 bool g_startNotify[MAXPLAYERS + 1];
+bool g_startBoundary[MAXPLAYERS + 1];
+bool g_startCounted[MAXPLAYERS + 1];
+bool g_startInput[MAXPLAYERS + 1];
+float g_startLoopTimes[MAXPLAYERS + 1][3];
+int g_startLoopCount[MAXPLAYERS + 1];
 int g_startEpoch;
-int g_startRequestId[MAXPLAYERS + 1];
 int g_startTeleportTick[MAXPLAYERS + 1];
 float g_startDeadline[MAXPLAYERS + 1];
+float g_startRequestDeadline[MAXPLAYERS + 1];
 float g_startTarget[MAXPLAYERS + 1][3];
-float g_startOwn[MAXPLAYERS + 1][START_OWN_POINTS][3];
-int g_startOwnCount[MAXPLAYERS + 1];
-float g_startShared[START_SHARED_POINTS][3];
-int g_startSharedCount;
-int g_startGeneration;
-int g_startWaitGeneration[MAXPLAYERS + 1];
-float g_startWaitPosition[MAXPLAYERS + 1][3];
-float g_startNextProbe[MAXPLAYERS + 1];
+float g_startBirth[MAXPLAYERS + 1][3];
+float g_startLanding[MAXPLAYERS + 1][3];
+bool g_startHasBirth[MAXPLAYERS + 1];
+bool g_startHasLanding[MAXPLAYERS + 1];
 float g_startNextNotice[MAXPLAYERS + 1];
-float g_startNextLog[MAXPLAYERS + 1][StartFailureCount];
 float g_startCandidates[MAXPLAYERS + 1][START_CANDIDATES][3];
 int g_startCandidateCount[MAXPLAYERS + 1];
 int g_startCandidateIndex[MAXPLAYERS + 1];
-ArrayList g_startTried[MAXPLAYERS + 1];
 float g_startNav[START_NAV_POINTS][3];
 int g_startNavCount;
 bool g_startSourcesLoaded;
@@ -55,20 +42,31 @@ float g_startHint[3];
 float g_startHintRadius;
 bool g_startPlacement;
 
+bool IsReadySurvivor(int client)
+{
+    return client > 0 && client <= MaxClients && IsClientInGame(client)
+        && GetClientTeam(client) == TEAM_SURVIVORS && IsPlayerAlive(client);
+}
+
+void StartArea_ClearRequest(int client)
+{
+    g_startReturn[client] = StartIdle;
+    g_startCandidateCount[client] = 0;
+    g_startCandidateIndex[client] = 0;
+    g_startNotify[client] = false;
+    g_startBoundary[client] = false;
+    g_startCounted[client] = false;
+}
+
 void StartArea_ResetClient(int client)
 {
-    delete g_startTried[client];
-    g_startRequestId[client]++;
-    g_startReturn[client] = StartIdle;
+    StartArea_ClearRequest(client);
     g_startLimited[client] = false;
-    g_startDegraded[client] = false;
-    g_startNotify[client] = false;
-    g_startOwnCount[client] = 0;
-    g_startCandidateCount[client] = 0;
+    g_startInput[client] = false;
+    g_startLoopCount[client] = 0;
+    g_startHasBirth[client] = false;
+    g_startHasLanding[client] = false;
     g_startNextNotice[client] = 0.0;
-    g_startNextProbe[client] = 0.0;
-    for (int reason = 0; reason < view_as<int>(StartFailureCount); reason++)
-        g_startNextLog[client][reason] = 0.0;
 }
 
 void StartArea_CancelRequests()
@@ -77,20 +75,15 @@ void StartArea_CancelRequests()
     g_startPlacement = false;
     for (int client = 1; client <= MaxClients; client++)
     {
-        delete g_startTried[client];
-        g_startRequestId[client]++;
-        g_startReturn[client] = StartIdle;
-        g_startCandidateCount[client] = 0;
-        // An unsafe/degraded survivor remains movement-limited until a safe
-        // observation or phase reset; cancellation must not open the map.
+        StartArea_ClearRequest(client);
+        g_startLimited[client] = false;
+        g_startLoopCount[client] = 0;
     }
 }
 
 void StartArea_ResetRound()
 {
     StartArea_CancelRequests();
-    g_startSharedCount = 0;
-    g_startGeneration = 0;
     g_startNavCount = 0;
     g_startSourcesLoaded = false;
     g_startHasHint = false;
@@ -98,20 +91,55 @@ void StartArea_ResetRound()
     for (int client = 1; client <= MaxClients; client++) StartArea_ResetClient(client);
 }
 
-bool IsReadySurvivor(int client)
+// Spawn is recorded before validation. Never infer birth from a later timer.
+void StartArea_CaptureBirth(int client)
 {
-    return client > 0 && client <= MaxClients && IsClientInGame(client)
-        && GetClientTeam(client) == TEAM_SURVIVORS && IsPlayerAlive(client);
+    if (!g_readyPhase || !IsReadySurvivor(client) || g_startHasBirth[client]) return;
+    GetClientAbsOrigin(client, g_startBirth[client]);
+    g_startHasBirth[client] = true;
 }
 
-void StartArea_Log(int client, StartFailure reason)
+public void StartArea_PlayerSpawn(Event event, const char[] name, bool dontBroadcast)
 {
-    if (GetEngineTime() < g_startNextLog[client][reason]) return;
-    g_startNextLog[client][reason] = GetEngineTime() + 30.0;
-    static const char reasons[][] = {"no physical start candidate", "landing confirmation failed", "explicit MapInfo fallback; movement restricted"};
-    LogMessage("[Ready start] client=%N reason=%s", client, reasons[reason]);
+    StartArea_CaptureBirth(GetClientOfUserId(event.GetInt("userid")));
 }
 
+public void StartArea_PlayerReplace(Event event, const char[] name, bool dontBroadcast)
+{
+    if (!g_readyPhase) return;
+    int player = GetClientOfUserId(event.GetInt("player"));
+    int bot = GetClientOfUserId(event.GetInt("bot"));
+    if (!player || !bot) return;
+    bool toPlayer = StrEqual(name, "bot_player_replace");
+    int source = toPlayer ? bot : player;
+    int target = toPlayer ? player : bot;
+    StartArea_ClearRequest(target);
+    g_startHasBirth[target] = g_startHasBirth[source];
+    g_startHasLanding[target] = g_startHasLanding[source];
+    g_startBirth[target] = g_startBirth[source];
+    g_startLanding[target] = g_startLanding[source];
+    g_startLimited[target] = g_startLimited[source];
+    g_startLoopCount[target] = 0;
+    // The outgoing entity no longer owns this survivor's history.
+    StartArea_ResetClient(source);
+}
+
+void StartArea_ObserveInput(int client, int buttons, const float velocity[3])
+{
+    bool moving = (buttons & (IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT | IN_JUMP | IN_DUCK | IN_LEFT | IN_RIGHT)) != 0
+        || velocity[0] != 0.0 || velocity[1] != 0.0 || velocity[2] != 0.0;
+    g_startInput[client] = moving;
+    if (moving) g_startLoopCount[client] = 0;
+}
+
+void StartArea_Notice(int client, bool loop)
+{
+    if (GetEngineTime() < g_startNextNotice[client]) return;
+    g_startNextNotice[client] = GetEngineTime() + 30.0;
+    LogMessage("[Ready start] client=%N reason=%s", client, loop ? "input-free boundary loop" : "return fallback");
+    if (!IsFakeClient(client))
+        PrintToChat(client, "%t", loop ? "ReadyStartLoop" : "ReadyStartAreaUnavailable");
+}
 void StartArea_LoadSources()
 {
     if (g_startSourcesLoaded || !IsStartInitialized()) return;
@@ -170,114 +198,81 @@ public bool StartArea_TraceFilter(int entity, int contentsMask)
     return entity < 1 || entity > MaxClients;
 }
 
-// Always use the standing survivor hull, never the current crouched hull.
-// Project onto actual support, then check the full hull without a head-height lift.
+// Generated locations have no observation evidence. Sweep the full hull onto
+// support rather than planting it at a center ray's height on a slope.
 bool StartArea_PhysicalPoint(const float seed[3], float point[3])
 {
-    float top[3], bottom[3], normal[3];
+    float top[3], bottom[3];
     top = seed;
     bottom = seed;
     top[2] += 18.0;
     bottom[2] -= 128.0;
-    Handle trace = TR_TraceRayFilterEx(top, bottom, MASK_PLAYERSOLID, RayType_EndPoint, StartArea_TraceFilter);
-    bool floor = TR_DidHit(trace) && !TR_StartSolid(trace) && !TR_AllSolid(trace);
-    if (floor)
-    {
-        TR_GetEndPosition(point, trace);
-        TR_GetPlaneNormal(trace, normal);
-        floor = normal[2] >= 0.7;
-    }
-    delete trace;
-    if (!floor) return false;
-    point[2] += 0.5;
     float mins[3] = {-16.0, -16.0, 0.0}, maxs[3] = {16.0, 16.0, 72.0};
-    trace = TR_TraceHullFilterEx(point, point, mins, maxs, MASK_PLAYERSOLID, StartArea_TraceFilter);
-    bool clear = !TR_StartSolid(trace) && !TR_AllSolid(trace) && !TR_DidHit(trace);
+    Handle trace = TR_TraceHullFilterEx(top, bottom, mins, maxs, MASK_PLAYERSOLID, StartArea_TraceFilter);
+    bool valid = TR_DidHit(trace) && !TR_StartSolid(trace) && !TR_AllSolid(trace);
+    if (valid) TR_GetEndPosition(point, trace);
     delete trace;
-    if (!clear) return false;
-    // Waist-deep water is swimming, not a standing return location.
+    if (!valid) return false;
+    point[2] += 0.5;
     top = point;
     top[2] += 36.0;
-    if (TR_GetPointContents(top) & MASK_WATER) return false;
-    // A center ray alone accepts ledges and tiny props. Require support around
-    // the feet, with walkable normals and no drop larger than a normal step.
-    for (int corner = 0; corner < 4; corner++)
-    {
-        top = point;
-        top[0] += (corner & 1) ? 12.0 : -12.0;
-        top[1] += (corner & 2) ? 12.0 : -12.0;
-        top[2] += 18.0;
-        bottom = top;
-        bottom[2] -= 36.0;
-        trace = TR_TraceRayFilterEx(top, bottom, MASK_PLAYERSOLID, RayType_EndPoint, StartArea_TraceFilter);
-        bool support = TR_DidHit(trace) && !TR_StartSolid(trace) && !TR_AllSolid(trace);
-        if (support)
-        {
-            TR_GetPlaneNormal(trace, normal);
-            support = normal[2] >= 0.7;
-        }
-        delete trace;
-        if (!support) return false;
-    }
-    return true;
+    return !(TR_GetPointContents(top) & MASK_WATER);
 }
 
-bool StartArea_Classify(float point[3], bool &degraded)
+bool StartArea_Classify(const float point[3])
 {
-    degraded = false;
-    if (L4D_IsPositionInFirstCheckpoint(point)) return true;
+    float position[3];
+    position = point;
+    if (L4D_IsPositionInFirstCheckpoint(position)) return true;
     if (!g_startExplicit || FloatAbs(point[2] - g_startHint[2]) > 160.0) return false;
     float dx = point[0] - g_startHint[0], dy = point[1] - g_startHint[1];
-    if (dx * dx + dy * dy > g_startHintRadius * g_startHintRadius) return false;
-    // This envelope authorizes only a physically validated landing with active
-    // movement suppressed. It never declares a sphere to be the safe-area boundary.
-    degraded = true;
-    return true;
+    // Explicit MapInfo remains a fallback hint, not the Director boundary.
+    return dx * dx + dy * dy <= g_startHintRadius * g_startHintRadius;
 }
 
-bool StartArea_ActualSafe(int client, bool &degraded)
+bool StartArea_ActualSafe(int client, bool returning = false)
 {
-    if (!(GetEntityFlags(client) & FL_ONGROUND) || GetEntProp(client, Prop_Send, "m_nWaterLevel") >= 2) return false;
-    float actual[3], floor[3];
+    if (!(GetEntityFlags(client) & FL_ONGROUND)
+        || GetEntProp(client, Prop_Send, "m_nWaterLevel") >= 2
+        || GetEntProp(client, Prop_Send, "m_isIncapacitated")
+        || GetEntProp(client, Prop_Send, "m_isHangingFromLedge")) return false;
+    float actual[3];
     GetClientAbsOrigin(client, actual);
-    if (!StartArea_PhysicalPoint(actual, floor) || FloatAbs(actual[2] - floor[2]) > 2.0) return false;
-    return StartArea_Classify(floor, degraded);
+    return returning ? StartArea_Classify(actual) : L4D_IsPositionInFirstCheckpoint(actual);
 }
 
-void StartArea_Remember(int client, const float point[3])
+bool StartArea_RecordSuitable(const float point[3])
 {
-    // Most-recent first; don't churn the shared generation while standing still.
-    bool newOwn = g_startOwnCount[client] == 0 || GetVectorDistance(point, g_startOwn[client][0], true) > 256.0;
-    if (newOwn)
-    {
-        for (int i = START_OWN_POINTS - 1; i > 0; i--) g_startOwn[client][i] = g_startOwn[client][i - 1];
-        g_startOwn[client][0] = point;
-        if (g_startOwnCount[client] < START_OWN_POINTS) g_startOwnCount[client]++;
-    }
-    for (int i = 0; i < g_startSharedCount; i++)
-        if (GetVectorDistance(point, g_startShared[i], true) < 256.0) return;
-    for (int i = START_SHARED_POINTS - 1; i > 0; i--) g_startShared[i] = g_startShared[i - 1];
-    g_startShared[0] = point;
-    if (g_startSharedCount < START_SHARED_POINTS) g_startSharedCount++;
-    g_startGeneration++;
+    float waist[3];
+    waist = point;
+    waist[2] += 36.0;
+    return StartArea_Classify(point) && !(TR_GetPointContents(waist) & MASK_WATER);
 }
 
-void StartArea_AddCandidate(int client, const float seed[3])
+void StartArea_SaveLanding(int client, const float point[3])
 {
-    if (g_startCandidateCount[client] == START_CANDIDATES) return;
+    if (g_startHasLanding[client] || !g_startHasBirth[client]) return;
+    if (GetVectorDistance(point, g_startBirth[client], true) < 256.0) return;
+    g_startLanding[client] = point;
+    g_startHasLanding[client] = true;
+}
+
+void StartArea_AddCandidate(int client, const float seed[3], bool generated = false)
+{
+    if (g_startCandidateCount[client] >= START_CANDIDATES) return;
     float point[3];
-    bool degraded;
-    if (!StartArea_PhysicalPoint(seed, point) || !StartArea_Classify(point, degraded)) return;
-    if (StartArea_WasTried(client, point)) return;
+    point = seed;
+    if (generated && !StartArea_PhysicalPoint(seed, point)) return;
+    if (!StartArea_RecordSuitable(point)) return;
     for (int i = 0; i < g_startCandidateCount[client]; i++)
-        if (GetVectorDistance(point, g_startCandidates[client][i], true) < 64.0) return;
+        if (GetVectorDistance(point, g_startCandidates[client][i], true) < 256.0) return;
     g_startCandidates[client][g_startCandidateCount[client]++] = point;
 }
 
 void StartArea_AddNearby(int client, const float center[3], int limit)
 {
     int stop = g_startCandidateCount[client] + limit;
-    StartArea_AddCandidate(client, center);
+    StartArea_AddCandidate(client, center, true);
     for (int ring = 1; ring <= 2 && g_startCandidateCount[client] < stop; ring++)
         for (int direction = 0; direction < 8 && g_startCandidateCount[client] < stop; direction++)
         {
@@ -286,7 +281,7 @@ void StartArea_AddNearby(int client, const float center[3], int limit)
             float angle = float(direction) * FLOAT_PI / 4.0;
             seed[0] += Cosine(angle) * float(ring) * 64.0;
             seed[1] += Sine(angle) * float(ring) * 64.0;
-            StartArea_AddCandidate(client, seed);
+            StartArea_AddCandidate(client, seed, true);
         }
 }
 
@@ -294,230 +289,156 @@ void StartArea_BuildCandidates(int client)
 {
     g_startCandidateCount[client] = 0;
     g_startCandidateIndex[client] = 0;
-    for (int i = 0; i < g_startOwnCount[client]; i++) StartArea_AddCandidate(client, g_startOwn[client][i]);
-    for (int i = 0; i < g_startSharedCount && i < 5; i++) StartArea_AddCandidate(client, g_startShared[i]);
-    float position[3];
-    GetClientAbsOrigin(client, position);
-    StartArea_AddNearby(client, position, 5);
+    if (g_startHasBirth[client]) StartArea_AddCandidate(client, g_startBirth[client]);
+    if (g_startHasLanding[client]) StartArea_AddCandidate(client, g_startLanding[client]);
+    for (int other = 1; other <= MaxClients; other++)
+        if (other != client && IsReadySurvivor(other) && g_startHasLanding[other])
+            StartArea_AddCandidate(client, g_startLanding[other]);
     if (g_startHasHint) StartArea_AddNearby(client, g_startHint, 5);
-    for (int i = 0; i < g_startNavCount; i++) StartArea_AddCandidate(client, g_startNav[i]);
+    for (int i = 0; i < g_startNavCount; i++) StartArea_AddCandidate(client, g_startNav[i], true);
+    for (int i = 0; i < g_startCandidateCount[client] && !g_startHasLanding[client]; i++)
+        StartArea_SaveLanding(client, g_startCandidates[client][i]);
 }
 
-void StartArea_ProbeCandidates(int client)
-{
-    // The separate attempt history filters unchanged failed landings without
-    // consuming slots needed for newly usable candidates in this bounded batch.
-    StartArea_BuildCandidates(client);
-    if (g_startCandidateCount[client] > 0) g_startReturn[client] = StartRequested;
-}
-
-bool StartArea_WasTried(int client, const float point[3])
-{
-    if (g_startTried[client] == null) return false;
-    float previous[3];
-    for (int i = 0; i < g_startTried[client].Length; i++)
-    {
-        g_startTried[client].GetArray(i, previous);
-        if (GetVectorDistance(point, previous, true) < 64.0) return true;
-    }
-    return false;
-}
-
-void StartArea_RequestReturn(int client, bool notify = false)
+void StartArea_RequestReturn(int client, bool notify = false, bool boundary = false)
 {
     if (!IsReadySurvivor(client)) return;
-    if (g_startReturn[client] == StartRequested || g_startReturn[client] == StartConfirming || g_startReturn[client] == StartWaiting) return;
-    if (g_startReturn[client] == StartConfirmed && g_startDegraded[client])
-    {
-        float actual[3];
-        bool degraded;
-        GetClientAbsOrigin(client, actual);
-        // Broken NAV keeps raising the Director boundary even at the accepted
-        // landing. Merge that notification instead of teleporting in a loop.
-        if (GetVectorDistance(actual, g_startTarget[client], true) <= 576.0
-            && StartArea_ActualSafe(client, degraded)) return;
-    }
-    g_startRequestId[client]++;
-    delete g_startTried[client];
+    if (boundary && (g_startLimited[client] || g_startPlacement || g_countdownTimer != null)) return;
+    if (g_startReturn[client] == StartRequested || g_startReturn[client] == StartConfirming) return;
+    StartArea_ClearRequest(client);
     g_startReturn[client] = StartRequested;
-    g_startLimited[client] = true;
     g_startNotify[client] = notify;
-    g_startCandidateCount[client] = 0;
-    g_startCandidateIndex[client] = 0;
+    g_startBoundary[client] = boundary;
+    g_startRequestDeadline[client] = GetEngineTime() + START_REQUEST_TIMEOUT;
+    StartArea_BuildCandidates(client);
 }
 
-void StartArea_Wait(int client)
+void StartArea_CountBoundaryTeleport(int client)
 {
-    if (g_countdownTimer != null && GetEntityMoveType(client) == MOVETYPE_NONE)
-        SetReadyFrozen(client, false);
-    g_startReturn[client] = StartWaiting;
-    g_startLimited[client] = true;
-    g_startWaitGeneration[client] = g_startGeneration;
-    GetClientAbsOrigin(client, g_startWaitPosition[client]);
-    g_startNextProbe[client] = GetEngineTime() + 2.0;
-    StartArea_Log(client, StartNoCandidate);
+    if (!g_startBoundary[client] || g_startCounted[client]) return;
+    g_startCounted[client] = true;
+    if (g_startInput[client]) { g_startLoopCount[client] = 0; return; }
+    float now = GetEngineTime();
+    int count;
+    for (int i = 0; i < g_startLoopCount[client]; i++)
+        if (now - g_startLoopTimes[client][i] <= 5.0)
+            g_startLoopTimes[client][count++] = g_startLoopTimes[client][i];
+    if (count < 3) g_startLoopTimes[client][count++] = now;
+    g_startLoopCount[client] = count;
+    if (count >= 3)
+    {
+        g_startLimited[client] = true;
+        StartArea_Notice(client, true);
+    }
+}
+
+void StartArea_Teleport(int client, const float point[3])
+{
+    float velocity[3];
+    SetReadyFrozen(client, false);
+    TeleportEntity(client, point, NULL_VECTOR, velocity);
+    SetEntPropFloat(client, Prop_Send, "m_flFallVelocity", 0.0);
+    StartArea_CountBoundaryTeleport(client);
+}
+
+void StartArea_Finish(int client)
+{
+    g_startReturn[client] = StartDone;
+    if (g_startNotify[client]) EmitSoundToClient(client, "ui/beep_error01.wav");
+    g_startNotify[client] = false;
+}
+
+void StartArea_Fallback(int client)
+{
+    int source = g_startHasBirth[client] ? client : 0;
+    if (!source)
+        for (int other = 1; other <= MaxClients; other++)
+            if (IsReadySurvivor(other) && g_startHasBirth[other]) { source = other; break; }
+    if (source) StartArea_Teleport(client, g_startBirth[source]);
+    StartArea_Notice(client, false);
+    StartArea_Finish(client);
 }
 
 void StartArea_TryCandidate(int client)
 {
     if (g_startCandidateIndex[client] >= g_startCandidateCount[client])
     {
-        StartArea_Wait(client);
+        StartArea_Fallback(client);
         return;
     }
-    float point[3], velocity[3];
-    bool degraded;
     int candidate = g_startCandidateIndex[client]++;
-    if (!StartArea_PhysicalPoint(g_startCandidates[client][candidate], point) || !StartArea_Classify(point, degraded)) return;
-    if (g_startTried[client] == null) g_startTried[client] = new ArrayList(3);
-    g_startTried[client].PushArray(point);
-    g_startTarget[client] = point;
-    g_startDegraded[client] = degraded;
+    g_startTarget[client] = g_startCandidates[client][candidate];
     g_startReturn[client] = StartConfirming;
     g_startTeleportTick[client] = GetGameTickCount();
     g_startDeadline[client] = GetEngineTime() + START_CONFIRM_TIMEOUT;
-    // Keep gravity until actual landing is confirmed. Clearing velocity is part
-    // of the teleport, not a recurring buoyancy override or an airborne freeze.
-    SetReadyFrozen(client, false);
-    TeleportEntity(client, point, NULL_VECTOR, velocity);
-    SetEntPropFloat(client, Prop_Send, "m_flFallVelocity", 0.0);
-    DataPack request = new DataPack();
-    request.WriteCell(GetClientSerial(client));
-    request.WriteCell(g_startEpoch);
-    request.WriteCell(g_startRequestId[client]);
-    RequestFrame(StartArea_FrameConfirm, request);
+    StartArea_Teleport(client, g_startTarget[client]);
 }
 
-public void StartArea_FrameConfirm(any data)
-{
-    DataPack request = view_as<DataPack>(data);
-    request.Reset();
-    int client = GetClientFromSerial(request.ReadCell());
-    int epoch = request.ReadCell(), id = request.ReadCell();
-    delete request;
-    if (!client || epoch != g_startEpoch || id != g_startRequestId[client] || !g_readyPhase || !IsReadySurvivor(client)) return;
-    StartArea_Confirm(client);
-}
-
-void StartArea_Confirm(int client)
-{
-    if (g_startReturn[client] != StartConfirming || GetGameTickCount() <= g_startTeleportTick[client]) return;
-    float actual[3];
-    bool degraded;
-    GetClientAbsOrigin(client, actual);
-    if (GetVectorDistance(actual, g_startTarget[client], true) <= 576.0
-        && GetEntityMoveType(client) == MOVETYPE_WALK && StartArea_ActualSafe(client, degraded))
-    {
-        bool placing = g_startPlacement || g_countdownTimer != null;
-        g_startReturn[client] = placing || degraded ? StartConfirmed : StartIdle;
-        g_startDegraded[client] = degraded;
-        g_startLimited[client] = degraded || placing;
-        StartArea_Remember(client, actual);
-        if (degraded) StartArea_Log(client, StartDegraded);
-        if (g_startNotify[client]) EmitSoundToClient(client, "ui/beep_error01.wav");
-        g_startNotify[client] = false;
-        return;
-    }
-    if (GetEngineTime() < g_startDeadline[client]) return;
-    StartArea_Log(client, StartConfirmationFailed);
-    g_startReturn[client] = StartRequested;
-    // Do not rebuild: failed candidates are consumed once per bounded batch.
-}
-
-bool StartArea_AllConfirmed()
+bool StartArea_AllFinished()
 {
     int survivors;
     for (int client = 1; client <= MaxClients; client++)
     {
         if (!IsReadySurvivor(client)) continue;
         survivors++;
-        bool degraded;
-        if (g_startReturn[client] != StartConfirmed || !StartArea_ActualSafe(client, degraded)) return false;
-        if (degraded)
-        {
-            float actual[3];
-            GetClientAbsOrigin(client, actual);
-            if (GetVectorDistance(actual, g_startTarget[client], true) > 576.0) return false;
-        }
+        if (g_startReturn[client] != StartDone) return false;
     }
     return survivors > 0;
+}
+
+void StartArea_FreezeLanded()
+{
+    for (int client = 1; client <= MaxClients; client++)
+    {
+        if (!IsReadySurvivor(client)) continue;
+        bool grounded = (GetEntityFlags(client) & FL_ONGROUND) != 0
+            && GetEntProp(client, Prop_Send, "m_nWaterLevel") < 2;
+        if (g_startReturn[client] == StartDone && grounded) SetReadyFrozen(client, true);
+        else if (GetEntityMoveType(client) == MOVETYPE_NONE) SetReadyFrozen(client, false);
+    }
 }
 
 void StartArea_Tick()
 {
     StartArea_LoadSources();
-    // Observe every player before resolving requests, so one player's newly
-    // safe map placement can rescue another. No single failure locks the team.
     for (int client = 1; client <= MaxClients; client++)
     {
         if (!IsReadySurvivor(client)) continue;
-        bool degraded;
-        if (g_startReturn[client] == StartConfirming) continue;
-        if (StartArea_ActualSafe(client, degraded))
+        bool active = g_startReturn[client] == StartRequested || g_startReturn[client] == StartConfirming;
+        if (!active && StartArea_ActualSafe(client))
         {
             float actual[3];
             GetClientAbsOrigin(client, actual);
-            if (!degraded || (g_startDegraded[client] && GetVectorDistance(actual, g_startTarget[client], true) <= 576.0))
+            StartArea_SaveLanding(client, actual);
+            g_startLimited[client] = false;
+        }
+        if ((g_startPlacement || g_countdownTimer != null) && g_startReturn[client] == StartIdle)
+            StartArea_RequestReturn(client);
+        if (g_startReturn[client] != StartRequested && g_startReturn[client] != StartConfirming) continue;
+        if (GetEngineTime() >= g_startRequestDeadline[client])
+        {
+            StartArea_Fallback(client);
+            continue;
+        }
+        if (g_startReturn[client] == StartConfirming)
+        {
+            float actual[3];
+            GetClientAbsOrigin(client, actual);
+            if (GetGameTickCount() > g_startTeleportTick[client]
+                && GetVectorDistance(actual, g_startTarget[client], true) <= 576.0
+                && StartArea_ActualSafe(client, true))
             {
-                StartArea_Remember(client, actual);
-                if (!g_startPlacement && g_countdownTimer == null && g_startReturn[client] != StartRequested) g_startLimited[client] = degraded;
-                if (g_startReturn[client] == StartWaiting && !degraded)
+                if (StartArea_ActualSafe(client))
                 {
-                    // Map placement is new evidence. Still use next-frame
-                    // teleport confirmation before admitting this player to start.
-                    g_startReturn[client] = StartIdle;
-                    StartArea_RequestReturn(client);
+                    StartArea_SaveLanding(client, actual);
+                    g_startLimited[client] = false;
                 }
+                StartArea_Finish(client);
             }
-        }
-    }
-    for (int client = 1; client <= MaxClients; client++)
-    {
-        if (!IsReadySurvivor(client)) continue;
-        if (g_startReturn[client] == StartConfirmed)
-        {
-            bool degraded;
-            float actual[3];
-            GetClientAbsOrigin(client, actual);
-            if (!StartArea_ActualSafe(client, degraded)
-                || (degraded && GetVectorDistance(actual, g_startTarget[client], true) > 576.0))
-            {
-                // A map push after confirmation invalidates this candidate,
-                // not the whole team. Continue the same bounded batch.
-                if (GetEntityMoveType(client) == MOVETYPE_NONE) SetReadyFrozen(client, false);
+            else if (GetEngineTime() >= g_startDeadline[client])
                 g_startReturn[client] = StartRequested;
-                g_startLimited[client] = true;
-            }
         }
-        if ((g_startPlacement || g_countdownTimer != null) && g_startReturn[client] == StartIdle) StartArea_RequestReturn(client);
-        if (g_startReturn[client] == StartConfirming) StartArea_Confirm(client);
-        else if (g_startReturn[client] == StartWaiting)
-        {
-            float actual[3];
-            GetClientAbsOrigin(client, actual);
-            if (g_startGeneration != g_startWaitGeneration[client]
-                || GetVectorDistance(actual, g_startWaitPosition[client], true) > 256.0)
-            {
-                g_startReturn[client] = StartIdle;
-                StartArea_RequestReturn(client);
-            }
-            else if (GetEngineTime() >= g_startNextProbe[client])
-            {
-                // Doors/props can change without moving a survivor. Search the
-                // same sources, but only retry newly usable candidate positions.
-                g_startNextProbe[client] = GetEngineTime() + 2.0;
-                StartArea_ProbeCandidates(client);
-            }
-        }
-        if (g_startReturn[client] == StartRequested)
-        {
-            if (g_startCandidateCount[client] == 0) StartArea_BuildCandidates(client);
-            StartArea_TryCandidate(client);
-        }
-        if (g_startReturn[client] == StartWaiting && GetEngineTime() >= g_startNextNotice[client])
-        {
-            if (!IsFakeClient(client)) PrintToChat(client, "%t", "ReadyStartAreaUnavailable");
-            g_startNextNotice[client] = GetEngineTime() + 30.0;
-        }
+        if (g_startReturn[client] == StartRequested) StartArea_TryCandidate(client);
     }
+    if (g_countdownTimer != null) StartArea_FreezeLanded();
 }
