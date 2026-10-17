@@ -2,7 +2,7 @@
 
 // Spray targeting/angle-ordered turns and pitch compensation ported from
 // CompetitiveWithAnne optional/AnneHappy/ai_boomer_2.sp (GPL-3.0).
-// Keep HardSI's movement. Native ability state owns cooldown and spray duration;
+// Profiles can bound HardSI's jump impulse. Native ability state owns cooldown and spray duration;
 // every compensation, including zero-frame turns, rechecks the current target.
 #define BoostForwardBoomer 90.0
 #define BOOMER_TURN_ANGLE_DIVIDE 3.0
@@ -11,6 +11,7 @@
 Handle hCvarBoomerExposedTimeTolerance;
 Handle hCvarBoomerVomitDelay;
 ConVar hAllowBhop;
+ConVar g_boomerBhopMaxSpeed, g_boomerBhopVerticalSpeed;
 ConVar g_boomerRange, g_boomerUpVision, g_boomerTurnVision;
 ConVar g_boomerTurnInterval, g_boomerDegree, g_boomerAutoFrame;
 ArrayList g_boomerTargets[MAXPLAYERS + 1]; // [angle at selection, target userid]
@@ -24,6 +25,8 @@ public void Boomer_OnModuleStart()
 	hCvarBoomerExposedTimeTolerance = FindConVar("boomer_exposed_time_tolerance");
 	hCvarBoomerVomitDelay = FindConVar("boomer_vomit_delay");
 	hAllowBhop = CreateConVar("ai_boomer_bhop", "1", "Flag to enable bhop facsimile on AI Boomers");
+	g_boomerBhopMaxSpeed = CreateConVar("ai_boomer_bhop_max_speed", "-1", "Maximum horizontal launch speed in units/s; -1 keeps the original impulse, 0 zeros horizontal launch velocity.", _, true, -1.0);
+	g_boomerBhopVerticalSpeed = CreateConVar("ai_boomer_bhop_vertical_speed", "-1", "Vertical launch speed in units/s; -1 keeps the original jump.", _, true, -1.0);
 	g_boomerRange = FindConVar("z_vomit_range");
 	g_boomerUpVision = CreateConVar("ai_BoomerUpVision", "1", "Boomer 喷吐时是否上抬视角", _, true, 0.0, true, 1.0);
 	g_boomerTurnVision = CreateConVar("ai_BoomerTurnVision", "1", "Boomer 喷吐时是否旋转视角", _, true, 0.0, true, 1.0);
@@ -276,7 +279,7 @@ public Action Boomer_OnPlayerRunCmd(int boomer, int& buttons, float vel[3], floa
 		buttons |= IN_FORWARD | IN_ATTACK;
 	}
 
-	// Keep the existing HardSI rocket-jump impulse and distance gate.
+	// Keep the distance gate; profiles may bound the launch without changing spray behavior.
 	if (hAllowBhop.BoolValue && hasSight && proximity > vomit_range - 100)
 	{
 		buttons &= ~IN_ATTACK;
@@ -286,9 +289,39 @@ public Action Boomer_OnPlayerRunCmd(int boomer, int& buttons, float vel[3], floa
 			float targetPos[3], straightVector[3];
 			GetClientAbsOrigin(targetSurvivor, targetPos);
 			SubtractVectors(targetPos, boomerPos, straightVector);
-			buttons |= IN_JUMP;
-			TeleportEntity(boomer, NULL_VECTOR, NULL_VECTOR, straightVector);
-			Client_Push(boomer, clientEyeAngles, BoostForwardBoomer);
+			float maxSpeed = g_boomerBhopMaxSpeed.FloatValue;
+			float verticalSpeed = g_boomerBhopVerticalSpeed.FloatValue;
+			if (maxSpeed < 0.0 && verticalSpeed < 0.0)
+			{
+				buttons |= IN_JUMP;
+				TeleportEntity(boomer, NULL_VECTOR, NULL_VECTOR, straightVector);
+				Client_Push(boomer, clientEyeAngles, BoostForwardBoomer);
+			}
+			else
+			{
+				float forwardVector[3];
+				// Preserve the original horizontal impulse; override lift separately below.
+				GetAngleVectors(clientEyeAngles, forwardVector, NULL_VECTOR, NULL_VECTOR);
+				ScaleVector(forwardVector, BoostForwardBoomer);
+				AddVectors(straightVector, forwardVector, straightVector);
+				float horizontalSpeed = SquareRoot(straightVector[0] * straightVector[0] + straightVector[1] * straightVector[1]);
+				if (maxSpeed >= 0.0 && horizontalSpeed > maxSpeed)
+				{
+					straightVector[0] *= maxSpeed / horizontalSpeed;
+					straightVector[1] *= maxSpeed / horizontalSpeed;
+				}
+				if (verticalSpeed >= 0.0)
+				{
+					straightVector[2] = verticalSpeed;
+					// Launch directly: IN_JUMP would add the engine's normal jump impulse.
+					buttons &= ~IN_JUMP;
+					SetEntPropEnt(boomer, Prop_Send, "m_hGroundEntity", -1);
+					SetEntityFlags(boomer, flags & ~FL_ONGROUND);
+					bHasBeenShoved[boomer] = false;
+				}
+				else buttons |= IN_JUMP;
+				TeleportEntity(boomer, NULL_VECTOR, NULL_VECTOR, straightVector);
+			}
 		}
 		else if (GetEntityMoveType(boomer) == MOVETYPE_LADDER) buttons &= ~IN_JUMP;
 	}
