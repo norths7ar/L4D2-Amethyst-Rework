@@ -21,15 +21,40 @@ void RestoreRate(int client) {
     g_boosted[client] = false;
 }
 
-bool TryHittable(int tank, int target, const float targetPos[3], int &buttons) {
-    if (!g_hittables.BoolValue || GetGameTime() < g_nextPunch[tank] || !InFront(tank, targetPos, 0.85)) return false;
-    float eye[3], facing[3], forwardVector[3], end[3], origin[3], chest[3];
+int g_doorRef[MAXPLAYERS + 1], g_doorDecision[MAXPLAYERS + 1];
+float g_doorUntil[MAXPLAYERS + 1];
+
+bool TankDoorPending(int tank) {
+    int door = EntRefToEntIndex(g_doorRef[tank]);
+    return g_doors.BoolValue && g_doorDecision[tank] == 4 && GetGameTime() < g_doorUntil[tank]
+        && door > MaxClients && IsValidEntity(door) && TankDoorBreakable(door);
+}
+
+void TankDoorDecision(int tank, int door, int decision, const char[] reason) {
+    int reference = EntIndexToEntRef(door);
+    if (g_doorRef[tank] != reference || g_doorDecision[tank] != decision) TankEvent(tank, "door", reason);
+    g_doorRef[tank] = reference;
+    g_doorDecision[tank] = decision;
+    if (decision == 4) g_doorUntil[tank] = GetGameTime() + 0.22;
+}
+bool TankDoorBreakable(int door) {
+    // Ordinary doors only. Never unlock, open, kill or damage a map entity here.
+    // DAMAGE_YES + positive health respects map-authored invulnerability. Some
+    // door implementations additionally expose an explicit breakable flag.
+    if (!HasEntProp(door, Prop_Data, "m_takedamage") || GetEntProp(door, Prop_Data, "m_takedamage", 1) != 2
+        || !HasEntProp(door, Prop_Data, "m_iHealth") || GetEntProp(door, Prop_Data, "m_iHealth") <= 0) return false;
+    if (HasEntProp(door, Prop_Send, "m_bBreakable") && !GetEntProp(door, Prop_Send, "m_bBreakable")) return false;
+    if (HasEntProp(door, Prop_Data, "m_bBreakable") && !GetEntProp(door, Prop_Data, "m_bBreakable")) return false;
+    if (HasEntProp(door, Prop_Data, "m_bLocked")) return !GetEntProp(door, Prop_Data, "m_bLocked");
+    if (HasEntProp(door, Prop_Send, "m_bLocked")) return !GetEntProp(door, Prop_Send, "m_bLocked");
+    return false;
+}
+
+bool TryForwardInteraction(int tank, int target, const float targetPos[3], bool moving, const float wish[3], int &buttons) {
+    g_doorUntil[tank] = 0.0;
+    if (!g_doors.BoolValue && !g_hittables.BoolValue) return false;
+    float eye[3], facing[3], forwardVector[3], end[3], origin[3];
     GetClientAbsOrigin(tank, origin);
-    for (int axis = 0; axis < 3; axis++) chest[axis] = targetPos[axis];
-    chest[2] += 45.0;
-    float targetDistance = GetVectorDistance(origin, targetPos);
-    if (targetDistance <= FindConVar("tank_swing_range").FloatValue || targetDistance > 650.0
-        || FloatAbs(targetPos[2] - origin[2]) > 100.0 || !VisiblePoint(tank, target, chest)) return false;
     GetClientEyePosition(tank, eye); GetClientEyeAngles(tank, facing);
     GetAngleVectors(facing, forwardVector, NULL_VECTOR, NULL_VECTOR);
     float reach = FindConVar("tank_swing_range").FloatValue;
@@ -40,22 +65,65 @@ bool TryHittable(int tank, int target, const float targetPos[3], int &buttons) {
     float hit[3]; TR_GetEndPosition(hit, trace);
     bool hitProp = TR_DidHit(trace) && !TR_StartSolid(trace);
     delete trace;
-    // Rework's hittable detection uses the engine's Tank-glow flag, not a model list.
-    if (!hitProp || prop <= MaxClients || !IsValidEntity(prop)
-        || !HasEntProp(prop, Prop_Send, "m_hasTankGlow") || !GetEntProp(prop, Prop_Send, "m_hasTankGlow")) return false;
-    float toward[3]; MakeVectorFromPoints(hit, targetPos, toward); toward[2] = 0.0;
-    forwardVector[2] = 0.0; NormalizeVector(forwardVector, forwardVector); NormalizeVector(toward, toward);
-    if (GetVectorDotProduct(forwardVector, toward) < 0.94) return false;
-    // Do not add an attack during the claw cooldown or hammer the same prop every frame.
+    if (!hitProp || prop <= MaxClients || !IsValidEntity(prop)) {
+        if (g_doorDecision[tank] != 0) TankEvent(tank, "door", "forward door cleared");
+        g_doorDecision[tank] = 0;
+        return false;
+    }
+    char classname[64]; GetEntityClassname(prop, classname, sizeof(classname));
+    bool door = StrEqual(classname, "prop_door_rotating");
+    bool checkpoint = StrEqual(classname, "prop_door_rotating_checkpoint");
+    if (checkpoint) { TankDoorDecision(tank, prop, 1, "checkpoint door: native/map rules only"); return false; }
+    if (door) {
+        if (!g_doors.BoolValue) return false;
+        if (!TankDoorBreakable(prop)) { TankDoorDecision(tank, prop, 2, "locked/unbreakable ordinary door: preserve map rules"); return false; }
+        // Confirm that this door blocks actual native movement, not merely the
+        // side of the view hull. With no input, a hidden victim may be beyond it.
+        float direction[3]; direction = wish;
+        if (!moving) {
+            MakeVectorFromPoints(origin, targetPos, direction); direction[2] = 0.0;
+            if (NormalizeVector(direction, direction) < 1.0) return false;
+        }
+        float flatForward[3]; flatForward = forwardVector; flatForward[2] = 0.0;
+        NormalizeVector(flatForward, flatForward);
+        if (GetVectorDotProduct(direction, flatForward) < 0.7) return false;
+        float from[3], to[3], bodyMins[3], bodyMaxs[3]; from = origin; from[2] += 18.0;
+        for (int axis = 0; axis < 3; axis++) to[axis] = from[axis] + direction[axis] * reach;
+        GetClientMins(tank, bodyMins); GetClientMaxs(tank, bodyMaxs);
+        trace = TR_TraceHullFilterEx(from, to, bodyMins, bodyMaxs, MASK_PLAYERSOLID, TraceNotSelf, tank);
+        bool blocks = TR_DidHit(trace) && !TR_StartSolid(trace) && TR_GetEntityIndex(trace) == prop;
+        delete trace;
+        if (!blocks) { TankDoorDecision(tank, prop, 3, "door does not block native movement"); return false; }
+        strcopy(g_commandOwner[tank], sizeof(g_commandOwner[]), "door");
+        TankDoorDecision(tank, prop, 4, "breakable ordinary door blocks movement: normal claw priority");
+    } else {
+        // Preserve existing opportunistic iron rules: engine glow flag, visible
+        // free victim, distance/height and impact alignment, never seek props.
+        if ((buttons & IN_ATTACK) || !g_hittables.BoolValue || !InFront(tank, targetPos, 0.85)
+            || !HasEntProp(prop, Prop_Send, "m_hasTankGlow") || !GetEntProp(prop, Prop_Send, "m_hasTankGlow")) return false;
+        float chest[3]; chest = targetPos; chest[2] += 45.0;
+        float targetDistance = GetVectorDistance(origin, targetPos);
+        if (targetDistance <= reach || targetDistance > 650.0 || FloatAbs(targetPos[2] - origin[2]) > 100.0
+            || !VisiblePoint(tank, target, chest)) return false;
+        float toward[3]; MakeVectorFromPoints(hit, targetPos, toward); toward[2] = 0.0;
+        forwardVector[2] = 0.0; NormalizeVector(forwardVector, forwardVector); NormalizeVector(toward, toward);
+        if (GetVectorDotProduct(forwardVector, toward) < 0.94) return false;
+    }
+    if (buttons & IN_ATTACK) return door; // Engine already requested the normal punch.
     int claw = GetEntPropEnt(tank, Prop_Send, "m_hActiveWeapon");
-    if (claw <= MaxClients || !IsValidEntity(claw)
-        || GetEntPropFloat(claw, Prop_Send, "m_flNextPrimaryAttack") > GetGameTime()) return false;
+    if (claw <= MaxClients || !IsValidEntity(claw)) return false;
+    char weaponClass[32]; GetEntityClassname(claw, weaponClass, sizeof(weaponClass));
+    if (!StrEqual(weaponClass, "weapon_tank_claw")) return false;
+    // Waiting on a blocking door is not a stall. Leave native walk/aim untouched,
+    // but do not run recovery or add a hop while the normal punch cools down.
+    if (GetGameTime() < g_nextPunch[tank]
+        || GetEntPropFloat(claw, Prop_Send, "m_flNextPrimaryAttack") > GetGameTime()) return door;
     buttons &= ~(IN_JUMP | IN_DUCK);
     buttons |= IN_ATTACK;
     g_nextPunch[tank] = GetGameTime() + 1.5;
+    TankEvent(tank, door ? "door" : "hittable", "request normal in-range claw attack");
     return true;
 }
-
 bool HullClear(int tank, const float from[3], const float to[3], const float mins[3], const float maxs[3]) {
     Handle trace = TR_TraceHullFilterEx(from, to, mins, maxs, MASK_PLAYERSOLID, TraceNotSelf, tank);
     bool clear = !TR_DidHit(trace) && !TR_StartSolid(trace) && !TR_AllSolid(trace);
@@ -95,6 +163,11 @@ bool HasTopSupport(int tank, const float point[3]) {
     return supported >= 3;
 }
 
+float g_jumpExit[MAXPLAYERS + 1][3], g_jumpRouteCheck[MAXPLAYERS + 1];
+bool g_jumpLanded[MAXPLAYERS + 1];
+float g_candidateAfter[MAXPLAYERS + 1][25], g_candidatePoint[MAXPLAYERS + 1][25][3];
+int g_jumpCandidate[MAXPLAYERS + 1];
+
 bool TryObstacleJump(int tank, int target, const float position[3], const float targetPos[3], int &buttons, float vel[3]) {
     if (!g_obstacleJump.BoolValue || !InFront(tank, targetPos, 0.5)) return false;
     float toward[3]; MakeVectorFromPoints(position, targetPos, toward); toward[2] = 0.0;
@@ -121,11 +194,20 @@ bool TryObstacleJump(int tank, int target, const float position[3], const float 
             float sample[3], landing[3];
             for (int axis = 0; axis < 3; axis++) sample[axis] = position[axis] + direction[axis] * distance;
             sample[2] = position[2] + 82.0;
+            int slot = candidate * 5 + step;
+            if (g_candidateAfter[tank][slot] > GetGameTime()
+                && GetVectorDistance(sample, g_candidatePoint[tank][slot]) < 48.0) continue;
+            // Budget failures as well as launches. At most 25 candidates per
+            // recovery search, with the existing 1.25s recovery search interval.
+            g_candidatePoint[tank][slot] = sample;
+            g_candidateAfter[tank][slot] = GetGameTime() + 3.0;
             if (!FindTop(tank, sample, position[2] + 18.0, landing)) continue;
             float rise = landing[2] - position[2];
             if (rise < 20.0 || rise > 80.0 || !HasTopSupport(tank, landing)) continue;
             landing[2] += 2.0;
             if (!HullClear(tank, landing, landing, mins, maxs)) continue;
+            float exitPoint[3];
+            if (!TankObstacleExit(tank, landing, targetPos, exitPoint)) continue;
             float remaining[3]; MakeVectorFromPoints(landing, targetPos, remaining); remaining[2] = 0.0;
             // A seat can be an intermediate step even before the raised table is reachable.
             if (GetVectorLength(remaining) >= targetDistance) continue;
@@ -156,60 +238,88 @@ bool TryObstacleJump(int tank, int target, const float position[3], const float 
             vel[0] = vel[1] = 0.0;
             g_jumpUntil[tank] = GetGameTime() + time + 1.5;
             g_jumpTarget[tank] = GetClientUserId(target);
+            g_jumpExit[tank] = exitPoint;
+            g_jumpLanded[tank] = false;
+            g_jumpCandidate[tank] = slot;
+            g_candidateAfter[tank][slot] = GetGameTime() + 5.0;
             for (int axis = 0; axis < 3; axis++) g_jumpLanding[tank][axis] = landing[axis];
+            TankEvent(tank, "obstacle", "stalled native route: tested launch + supported exit acquired");
             return true;
         }
     }
     return false;
 }
 
-bool ContinueObstacleJump(int tank, int target, int &buttons, float vel[3]) {
-    if (g_jumpUntil[tank] <= GetGameTime() || !g_obstacleJump.BoolValue
-        || g_jumpTarget[tank] != GetClientUserId(target)) { g_jumpUntil[tank] = 0.0; return false; }
-    buttons &= ~(IN_JUMP | IN_DUCK);
-    if (!(GetEntityFlags(tank) & FL_ONGROUND)) {
-        // Do not add bhop impulse or air steering on top of the tested launch arc.
-        vel[0] = vel[1] = 0.0;
-        buttons &= ~(IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT);
-        return true;
+void EndObstacleJump(int tank, const char[] reason, bool failed) {
+    if (g_jumpUntil[tank] > 0.0) {
+        TankEvent(tank, "obstacle", reason);
+        if (failed && g_jumpCandidate[tank] >= 0)
+            g_candidateAfter[tank][g_jumpCandidate[tank]] = GetGameTime() + 5.0;
     }
-    float position[3], targetPos[3], next[3], direction[3], mins[3], maxs[3];
-    GetClientAbsOrigin(tank, position); GetClientAbsOrigin(target, targetPos);
-    if (FloatAbs(position[2] - g_jumpLanding[tank][2]) > 10.0 || !HasTopSupport(tank, position)) {
-        g_jumpUntil[tank] = 0.0; return false;
-    }
-    // A higher target needs another reachable step; a distant target should not
-    // leave the Tank waiting on a table. Re-enter the normal opportunity scan.
-    if (targetPos[2] > position[2] + 18.0 || GetVectorDistance(position, targetPos) > 180.0) {
-        g_jumpUntil[tank] = 0.0;
-        return false;
-    }
-    // Briefly evaluate from the top instead of instantly following a side-switch down.
-    // Keep Valve's aim and attack; only permit horizontal movement onto supported top.
-    MakeVectorFromPoints(position, targetPos, direction); direction[2] = 0.0;
-    // Check the actual navigation command too: the NAV may request a sideways
-    // detour off the seat even when the straight line toward the target is supported.
-    if (FloatAbs(vel[0]) + FloatAbs(vel[1]) > 1.0) {
-        float facing[3], forwardVector[3], right[3];
-        GetClientEyeAngles(tank, facing); facing[0] = 0.0;
-        GetAngleVectors(facing, forwardVector, right, NULL_VECTOR);
-        direction[0] = forwardVector[0] * vel[0] + right[0] * vel[1];
-        direction[1] = forwardVector[1] * vel[0] + right[1] * vel[1];
-    }
-    NormalizeVector(direction, direction);
-    for (int axis = 0; axis < 3; axis++) next[axis] = position[axis] + direction[axis] * 24.0;
-    GetEntPropVector(tank, Prop_Send, "m_vecMins", mins); GetEntPropVector(tank, Prop_Send, "m_vecMaxs", maxs);
-    if (GetVectorDistance(position, targetPos) < 85.0
-        || !HasTopSupport(tank, next) || !HullClear(tank, position, next, mins, maxs)) {
-        vel[0] = vel[1] = 0.0;
-        buttons &= ~(IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT);
-        float motion[3]; GetEntPropVector(tank, Prop_Data, "m_vecVelocity", motion);
-        motion[0] = motion[1] = 0.0;
-        TeleportEntity(tank, NULL_VECTOR, NULL_VECTOR, motion);
-    }
-    return true;
+    g_jumpUntil[tank] = 0.0;
+    g_jumpLanded[tank] = false;
+    g_jumpCandidate[tank] = -1;
 }
 
+bool TankObstacleExit(int tank, const float landing[3], const float targetPos[3], float exitPoint[3]) {
+    float direction[3]; MakeVectorFromPoints(landing, targetPos, direction); direction[2] = 0.0;
+    if (NormalizeVector(direction, direction) < 48.0) return false;
+    // Confirm a supported continuation beyond the landing, not just the top of
+    // an isolated seat. Existing hull/support checks include the full footprint.
+    float sample[3], top[3];
+    for (int axis = 0; axis < 3; axis++) sample[axis] = landing[axis] + direction[axis] * 48.0;
+    sample[2] += 18.0;
+    if (!FindTop(tank, sample, landing[2] - 18.0, top, 0.7)) return false;
+    exitPoint = top;
+    return TankRetreatClear(tank, landing, exitPoint);
+}
+
+bool ContinueObstacleJump(int tank, int target, int &buttons, float vel[3], const float angles[3]) {
+    if (g_jumpUntil[tank] <= 0.0) return false;
+    if (!g_obstacleJump.BoolValue || g_jumpTarget[tank] != GetClientUserId(target)) {
+        EndObstacleJump(tank, "disabled/victim changed: return native navigation", false); return false;
+    }
+    if (g_jumpUntil[tank] <= GetGameTime()) {
+        EndObstacleJump(tank, "local route timeout: cool candidate and return native navigation", true); return false;
+    }
+    if (!(GetEntityFlags(tank) & FL_ONGROUND)) {
+        // Only the tested launch arc owns flight; no extra jump/air steering.
+        buttons &= ~(IN_JUMP | IN_DUCK | IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT);
+        vel[0] = vel[1] = 0.0;
+        return true;
+    }
+    float position[3], targetPos[3];
+    GetClientAbsOrigin(tank, position); GetClientAbsOrigin(target, targetPos);
+    if (!g_jumpLanded[tank]) {
+        if (FloatAbs(position[2] - g_jumpLanding[tank][2]) > 12.0
+            || TankDistance2D(position, g_jumpLanding[tank]) > 40.0 || !HasTopSupport(tank, position)) {
+            EndObstacleJump(tank, "missed landing: cool candidate and return native navigation", true); return false;
+        }
+        g_jumpLanded[tank] = true;
+        g_jumpRouteCheck[tank] = 0.0;
+        TankEvent(tank, "obstacle", "landed: own supported local exit before handback");
+    }
+    if (TankDistance2D(position, g_jumpExit[tank]) <= 12.0
+        || (GetVectorDistance(position, targetPos) < 85.0 && VisiblePoint(tank, target, targetPos))) {
+        EndObstacleJump(tank, "exit reached/combat opportunity: return native navigation", false); return false;
+    }
+    if (GetGameTime() >= g_jumpRouteCheck[tank]) {
+        g_jumpRouteCheck[tank] = GetGameTime() + 0.1;
+        if (!TankRetreatClear(tank, position, g_jumpExit[tank])) {
+            EndObstacleJump(tank, "exit became blocked: cool candidate and return native navigation", true); return false;
+        }
+    }
+    float direction[3], yaw[3], forwardVector[3], right[3];
+    MakeVectorFromPoints(position, g_jumpExit[tank], direction); direction[2] = 0.0;
+    NormalizeVector(direction, direction);
+    yaw[1] = angles[1]; GetAngleVectors(yaw, forwardVector, right, NULL_VECTOR);
+    vel[0] = GetVectorDotProduct(direction, forwardVector) * 160.0;
+    vel[1] = GetVectorDotProduct(direction, right) * 160.0;
+    buttons &= ~(IN_JUMP | IN_DUCK | IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT);
+    buttons |= vel[0] >= 0.0 ? IN_FORWARD : IN_BACK;
+    buttons |= vel[1] >= 0.0 ? IN_MOVERIGHT : IN_MOVELEFT;
+    return true;
+}
 // Short local recovery owns only usercmd movement, never persistent CommandABot
 // MOVE. Every exit immediately returns navigation to Valve (Anne command lifecycle).
 float g_stallSince[MAXPLAYERS + 1], g_stallOrigin[MAXPLAYERS + 1][3];
@@ -325,11 +435,14 @@ void TankAirControl(int tank, const float position[3], float velocity[3], const 
 }
 
 void CancelTankRecovery(int tank) {
+    if (g_retreatUntil[tank] > 0.0 || g_recoveryFlightUntil[tank] > 0.0)
+        TankEvent(tank, "recovery", "release local recovery command to native navigation");
     g_stallSince[tank] = 0.0;
     g_retreatUntil[tank] = 0.0;
     g_recoveryFlightUntil[tank] = 0.0;
 }
 void ResetTankMovement(int tank) {
+    EndObstacleJump(tank, "movement reset: return native navigation", false);
     CancelTankRecovery(tank);
     ResetTankHop(tank);
     g_hopPaused[tank] = false;
@@ -338,6 +451,10 @@ void ResetTankMovement(int tank) {
     g_haveGround[tank] = false;
     g_recoveryAttempts[tank] = 0;
     g_lastRecoveryCandidate[tank] = -1;
+    for (int candidate = 0; candidate < 25; candidate++) g_candidateAfter[tank][candidate] = 0.0;
+    g_doorRef[tank] = INVALID_ENT_REFERENCE;
+    g_doorDecision[tank] = 0;
+    g_doorUntil[tank] = 0.0;
 }
 bool TankAttackBusy(int tank) {
     int sequence = GetEntProp(tank, Prop_Send, "m_nSequence");
@@ -499,6 +616,7 @@ bool TankRecover(int tank, int target, const float position[3], const float targ
             vel[0] = vel[1] = 0.0;
             g_recoveryFlightUntil[tank] = now + 1.0;
             g_lastRecoveryCandidate[tank] = 7;
+            TankEvent(tank, "recovery", "blocked walk: acquire tested short escape arc");
             return true;
         }
     }
@@ -518,6 +636,7 @@ bool TankRecover(int tank, int target, const float position[3], const float targ
         g_retreatGoal[tank] = goal;
         g_retreatCheck[tank] = now + 0.1;
         g_retreatUntil[tank] = now + 0.35;
+        TankEvent(tank, "recovery", "stalled: acquire supported short retreat command");
         return TankRecover(tank, target, position, targetPos, moving, wish, buttons, vel, angles);
     }
     return false;

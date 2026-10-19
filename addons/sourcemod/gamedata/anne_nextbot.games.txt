@@ -1,0 +1,71 @@
+"Games"
+{
+    "left4dead2"
+    {
+        "Signatures"
+        {
+            "NextBotManager::ShouldUpdate"
+            {
+                "library"   "server"
+                "linux"     "@_ZN14NextBotManager12ShouldUpdateEP8INextBot"
+                "windows"   "\x55\x8B\xEC\x83\xEC\x08\x57\x8B\xF9\x83\x7F\x24\x01"
+            }
+            "NextBotManager::Register"
+            {
+                "library"   "server"
+                "linux"     "@_ZN14NextBotManager8RegisterEP8INextBot"
+                "windows"   "\x2A\x2A\x2A\x2A\x2A\x2A\x79\x08\x6A\x00"
+            }
+            "NextBotManager::UnRegister"
+            {
+                "library"   "server"
+                "linux"     "@_ZN14NextBotManager10UnRegisterEP8INextBot"
+                "windows"   "\x2A\x2A\x2A\x2A\x2A\x2A\x53\x56\x57\x8B\x78\x08"
+            }
+            "PathFollower::Update"
+            {
+                "library"   "server"
+                "linux"     "@_ZN12PathFollower6UpdateEP8INextBot"
+                "windows"   "\x55\x8B\xEC\x83\xEC\x70\xA1\x2A\x2A\x2A\x2A\x53\x56\x33\xF6\x89\x75\xE8\x89\x75\xEC\x57\x8B\xF9\x39\x70\x08\x74\x37\x8B\x40\x08\x68\x2A\x2A\x2A\x2A"
+            }
+        }
+        "Offsets"
+        {
+            "PathFollower::m_goal"
+            {
+                "windows"   "18264"
+                "linux"     "18264"
+            }
+            "INextBot::GetEntity"
+            {
+                "linux"     "45"
+                "windows"   "44"
+            }
+            "Path::GetCurrentGoal"
+            {
+                "windows"   "8"
+                "linux"     "9"
+            }
+            "Path::Invalidate"
+            {
+                "windows"   "17"
+                "linux"     "18"
+            }
+            "Path::NextSegment"
+            {
+                "windows"   "21"
+                "linux"     "22"
+            }
+            "Path::PriorSegment"
+            {
+                "windows"   "22"
+                "linux"     "23"
+            }
+            "Path::LastSegment"
+            {
+                "windows"   "23"
+                "linux"     "24"
+            }
+        }
+    }
+}
