@@ -77,7 +77,7 @@ public Plugin myinfo =
 	name = "Coop ready and pause",
 	author = "CanadaRox, 海洋空氣, norths7ar",
 	description = "Per-player readiness, loading gate and start/resume countdowns",
-	version = "1.3.2"
+	version = "1.3.3"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -491,6 +491,12 @@ void SetReadyFrozen(int client, bool frozen)
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon)
 {
 	if (g_readyPhase) StartArea_ObserveInput(client, buttons, vel);
+	if (StartArea_FreeNoclip(client))
+	{
+		g_startLimited[client] = false;
+		g_startLoopCount[client] = 0;
+		return Plugin_Continue;
+	}
 	if (!g_readyPhase || (!g_readyEnabled.BoolValue && !g_startPlacement && g_countdownTimer == null) || !g_startLimited[client]
 		|| !IsClientInGame(client) || GetClientTeam(client) != TEAM_SURVIVORS || !IsPlayerAlive(client)) return Plugin_Continue;
 	// Suppress voluntary movement, not gravity, moving platforms or map teleports.

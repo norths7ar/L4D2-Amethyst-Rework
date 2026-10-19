@@ -58,6 +58,12 @@ void StartArea_ClearRequest(int client)
     g_startCounted[client] = false;
 }
 
+bool StartArea_FreeNoclip(int client)
+{
+    return g_readyPhase && !g_startPlacement && g_countdownTimer == null
+        && IsReadySurvivor(client) && GetEntityMoveType(client) == MOVETYPE_NOCLIP;
+}
+
 void StartArea_ResetClient(int client)
 {
     StartArea_ClearRequest(client);
@@ -303,6 +309,7 @@ void StartArea_BuildCandidates(int client)
 void StartArea_RequestReturn(int client, bool notify = false, bool boundary = false)
 {
     if (!IsReadySurvivor(client)) return;
+    if (boundary && StartArea_FreeNoclip(client)) return;
     if (boundary && (g_startLimited[client] || g_startPlacement || g_countdownTimer != null)) return;
     if (g_startReturn[client] == StartRequested || g_startReturn[client] == StartConfirming) return;
     StartArea_ClearRequest(client);
@@ -405,6 +412,19 @@ void StartArea_Tick()
     {
         if (!IsReadySurvivor(client)) continue;
         bool active = g_startReturn[client] == StartRequested || g_startReturn[client] == StartConfirming;
+        if (StartArea_FreeNoclip(client))
+        {
+            // Noclip may be enabled after the boundary request was queued.
+            // Explicit !return still works; countdown placement never exempts noclip.
+            if (g_startBoundary[client])
+            {
+                StartArea_ClearRequest(client);
+                active = false;
+            }
+            g_startLimited[client] = false;
+            g_startLoopCount[client] = 0;
+            if (!active) continue;
+        }
         if (!active && StartArea_ActualSafe(client))
         {
             float actual[3];
