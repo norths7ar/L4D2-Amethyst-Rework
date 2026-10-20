@@ -7,7 +7,8 @@
 #include <colors>
 #include <player_management>
 
-#define ZC_TANK	 8
+#define ZC_CHARGER 6
+#define ZC_TANK	   8
 
 #define GAMEDATA "l4d2_si_ability"
 
@@ -16,7 +17,7 @@ public Plugin myinfo =
 	name		= "Player Management Plugin",
 	author		= "CanadaRox",
 	description = "Player management!  Swap players/teams and spectate!",
-	version		= "7.1.3",
+	version		= "7.1.4",
 	url			= ""
 };
 
@@ -201,7 +202,7 @@ Action Spectate_Cmd(int client, int args)
 	}
 	else if (team == L4D2Team_Infected)
 	{
-		if (GetZombieClass(client) != ZC_TANK && !IsGhost(client))
+		if (GetZombieClass(client) != ZC_TANK && !IsGhost(client) && !IsChargerInCharge(client))
 		{
 			ForcePlayerSuicide(client);
 		}
@@ -290,6 +291,18 @@ Action SwapTeams_Cmd(int client, int args)
 bool IsGhost(int client)
 {
 	return !!GetEntProp(client, Prop_Send, "m_isGhost", 1);
+}
+
+bool IsChargerInCharge(int client)
+{
+	if (!IsPlayerAlive(client) || GetZombieClass(client) != ZC_CHARGER)
+		return false;
+
+	int ability = GetEntPropEnt(client, Prop_Send, "m_customAbility");
+	if (ability != -1 && GetEntProp(ability, Prop_Send, "m_isCharging"))
+		return true;
+
+	return GetEntPropEnt(client, Prop_Send, "m_carryVictim") != -1 || (GetEntityFlags(client) & FL_FROZEN);
 }
 
 Action Swap_Cmd(int client, int args)
@@ -403,7 +416,7 @@ stock void ApplySwaps(int sender, bool force)
 			clientTeam = GetClientTeamEx(client);
 			if (clientTeam != pendingSwaps[client] && pendingSwaps[client] != L4D2Team_None)
 			{
-				if (clientTeam == L4D2Team_Infected && GetZombieClass(client) != ZC_TANK)
+				if (clientTeam == L4D2Team_Infected && GetZombieClass(client) != ZC_TANK && !IsChargerInCharge(client))
 					ForcePlayerSuicide(client);
 				ChangeClientTeamEx(client, L4D2Team_Spectator, true);
 			}
