@@ -18,6 +18,9 @@
 
 
 
+// Archived: replaced by fixes/l4d2_clipsize_reload_fix for shared reload prediction repair.
+// The separate >= 15-shell shotgun reload fix is retained here for reference;
+// current modes do not need it. Reassess the replacement before restoring this plugin.
 #define PLUGIN_VERSION		"1.3a"
 
 /*======================================================================================
