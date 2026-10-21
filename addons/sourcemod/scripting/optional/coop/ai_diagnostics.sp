@@ -4,6 +4,7 @@
 #include <sourcemod>
 #include <sdktools>
 #include <sdkhooks>
+#include <profiler>
 #define AIDIAG_IMPLEMENTATION
 #include <ai_diagnostics>
 #include <anne_nextbot>
@@ -14,14 +15,18 @@
 // scheduler configuration. ai_tank alone owns the Tank path consumer bit.
 public Plugin myinfo = {
     name = "AI Diagnostics", author = "AstRedux",
-    description = "Automatic complete Tank/SI sessions with bounded asynchronous logging",
+    description = "Automatic complete Tank/SI sessions with bounded buffered logging",
     version = AIDIAG_VERSION
 };
 
 #define QUEUE_SIZE 2048
 #define LINE_SIZE 768
 #define CONTROL_RESERVE 96
+#define LIFECYCLE_RESERVE 32
 #define FLUSH_LINES 64
+#define WRITE_BYTES 16384
+#define SYNC_BYTES 65536
+#define SYNC_INTERVAL_MS 2000
 #define FILE_SLOTS 512
 #define DIRECTORY_STEPS 16
 #define OWNER_SLOTS 8
@@ -31,18 +36,22 @@ public Plugin myinfo = {
 #define MIB 1048576
 
 ConVar g_enable, g_fileMB, g_totalMB;
-bool g_running, g_mapLive, g_actions, g_paths, g_boundaryPending;
+bool g_running, g_mapLive, g_mapStarted, g_actions, g_paths, g_boundaryPending;
 bool g_featuresReady, g_featuresReported;
 char g_missingActions[256];
 int g_actionHooks, g_actionCallbacks;
-char g_pendingPrefix[160], g_pendingMeta[384], g_inventoryName[PLATFORM_MAX_PATH];
+char g_pendingPrefix[160], g_pendingMeta[560], g_inventoryName[PLATFORM_MAX_PATH];
+char g_earlyRoundStart[LINE_SIZE], g_writeBuffer[WRITE_BYTES + 1];
 char g_queue[QUEUE_SIZE][LINE_SIZE];
 bool g_boundary[QUEUE_SIZE];
 int g_head, g_count, g_peak, g_dropped, g_truncated, g_throttled;
 int g_ioErrors, g_ownerDrops, g_written, g_deleted, g_uncertainWrites;
-int g_unflushed;
+int g_unflushed, g_unflushedBytes, g_unflushedSince;
 int g_reportedDrops, g_reportedTruncated, g_reportedOwnerDrops, g_reportedIO;
 float g_captureMS, g_flushMS, g_flushMaxMS;
+float g_writeMS, g_writeMaxMS, g_syncMS, g_syncMaxMS, g_inventoryMS, g_inventoryMaxMS;
+Profiler g_captureProfile, g_batchProfile, g_writeProfile, g_syncProfile, g_inventoryProfile;
+int g_writeCalls, g_syncCalls, g_writeBytes, g_lastService, g_serviceGapMax;
 float g_lastFrame, g_frameSum, g_frameMax;
 int g_frames, g_slowFrames;
 float g_nextSummary, g_nextRetry;
@@ -129,6 +138,11 @@ public void OnLibraryRemoved(const char[] name) { RefreshFeatures(); }
 
 public void OnPluginStart()
 {
+    g_captureProfile = new Profiler();
+    g_batchProfile = new Profiler();
+    g_writeProfile = new Profiler();
+    g_syncProfile = new Profiler();
+    g_inventoryProfile = new Profiler();
     g_enable = CreateConVar("ai_diagnostics_enable", "1", "Automatically record complete Tank and SI sessions", _, true, 0.0, true, 1.0);
     g_fileMB = CreateConVar("ai_diagnostics_file_mb", "4", "Maximum size of each diagnostic log part (MiB)", _, true, 1.0, true, 64.0);
     g_totalMB = CreateConVar("ai_diagnostics_total_mb", "128", "Total retained diagnostic logs (MiB), oldest parts removed first", _, true, 8.0, true, 1024.0);
@@ -166,11 +180,14 @@ public void OnMapStart()
     FormatEx(prefix, sizeof(prefix), "aid_%s_%s_%d_%d", map, stamp, GetSysTickCount(), ++g_mapSerial);
     if (g_boundaryPending) g_dropped++; // A whole map boundary could not be queued.
     strcopy(g_pendingPrefix, sizeof(g_pendingPrefix), prefix);
-    FormatEx(g_pendingMeta, sizeof(g_pendingMeta), "schema=1 plugin=%s map=%s sample_hz=5 command_hz_per_owner=5 queue=%d flush_lines=%d path_window_nodes=%d actions=%d paths=%d privacy=entity_indices_only capture_scope=service_and_accepted_native",
-        AIDIAG_VERSION, map, QUEUE_SIZE, FLUSH_LINES, PATH_NODES, g_actions, g_paths);
+    FormatEx(g_pendingMeta, sizeof(g_pendingMeta), "schema=1 plugin=%s map=%s sample_hz=5 command_hz_per_owner=5 queue=%d flush_lines=%d path_window_nodes=%d actions=%d paths=%d privacy=entity_indices_only capture_scope=service_and_accepted_native write_buffer_bytes=%d sync_ms=%d sync_bytes=%d crash_tail=queue_and_stdio flush_not_fsync=1",
+        AIDIAG_VERSION, map, QUEUE_SIZE, FLUSH_LINES, PATH_NODES, g_actions, g_paths, WRITE_BYTES, SYNC_INTERVAL_MS, SYNC_BYTES);
     g_boundaryPending = true;
+    g_mapStarted = true;
     g_mapLive = true;
     g_lastFrame = 0.0;
+    ResetIntervalStats();
+    g_lastService = 0;
     g_nextSummary = GetEngineTime() + 5.0;
     if (g_running)
     {
@@ -184,7 +201,8 @@ void QueueMapBoundary()
 {
     // Do not mislabel new-map records as belonging to the preceding map if an
     // overloaded queue has not made room for its boundary yet.
-    if (!g_boundaryPending || g_count >= QUEUE_SIZE) return;
+    int needed = 1 + (g_running ? 1 : 0) + (g_earlyRoundStart[0] ? 1 : 0);
+    if (!g_mapStarted || !g_boundaryPending || g_count + needed >= QUEUE_SIZE) return;
     int slot = (g_head + g_count) % QUEUE_SIZE;
     g_count++;
     if (g_count > g_peak) g_peak = g_count;
@@ -192,38 +210,52 @@ void QueueMapBoundary()
     strcopy(g_queue[slot], LINE_SIZE, g_pendingPrefix);
     g_boundaryPending = false;
     if (g_running) Emit(0, "map_begin", g_pendingMeta, true);
+    if (g_earlyRoundStart[0])
+    {
+        slot = Reserve(true);
+        if (slot >= 0) strcopy(g_queue[slot], LINE_SIZE, g_earlyRoundStart);
+        g_earlyRoundStart[0] = '\0';
+    }
 }
 
 public void OnMapEnd()
 {
     EndAll("map_end");
     if (g_running) Emit(0, "map_end", "automatic=1", true);
+    g_mapStarted = false;
     g_mapLive = false;
-    FlushBatch(FLUSH_LINES);
+    FlushBatch(FLUSH_LINES, true);
 }
 
 public void OnPluginEnd()
 {
     EndAll("plugin_unload");
     // Never drain an unbounded backlog during unload. The omitted tail is
-    // explicitly counted in both the last part and SourceMod's server log.
+    // explicitly counted in the current map's last part when available, and
+    // in SourceMod's server log. Never put its summary in a preceding map.
     FlushBatch(FLUSH_LINES - 2);
     if (g_count > 0)
     {
         g_dropped += g_count;
         g_count = 0;
     }
+    if (g_earlyRoundStart[0]) { g_dropped++; g_earlyRoundStart[0] = '\0'; }
     char tail[360];
     FormatEx(tail, sizeof(tail), "dropped=%d truncated=%d owner_drops=%d io_errors=%d uncertain_writes=%d written=%d",
         g_dropped, g_truncated, g_ownerDrops, g_ioErrors, g_uncertainWrites, g_written);
-    Emit(0, "unload_summary", tail, true);
+    if (!g_boundaryPending && StrEqual(g_prefix, g_pendingPrefix)) Emit(0, "unload_summary", tail, true);
     FlushBatch(2);
     if (g_count) { g_dropped += g_count; g_count = 0; }
+    ClosePart();
     if (g_dropped || g_ioErrors || g_truncated || g_ownerDrops)
         LogMessage("[AIDiag] unload: dropped=%d truncated=%d owner_drops=%d io_errors=%d written=%d",
             g_dropped, g_truncated, g_ownerDrops, g_ioErrors, g_written);
-    ClosePart();
     delete g_inventory;
+    delete g_captureProfile;
+    delete g_batchProfile;
+    delete g_writeProfile;
+    delete g_syncProfile;
+    delete g_inventoryProfile;
 }
 
 public void EnableChanged(ConVar cvar, const char[] oldValue, const char[] newValue)
@@ -322,12 +354,24 @@ public void TeamChanged(Event event, const char[] name, bool dontBroadcast)
 }
 public void RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
+    // Engine round_start can precede SourceMod's OnMapStart. Retain its
+    // original clocks, but do not revive capture into the preceding map file.
+    if (!g_mapStarted)
+    {
+        if (g_running)
+        {
+            if (g_earlyRoundStart[0]) g_dropped++;
+            FormatRecord(g_earlyRoundStart, 0, "round_start", "automatic=1 deferred_until_map_start=1");
+        }
+        return;
+    }
     EndAll("round_restart");
     g_mapLive = true;
     if (g_running) Emit(0, "round_start", "automatic=1", true);
 }
 public void RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
+    if (!g_mapStarted) return;
     EndAll(name);
     if (g_running) Emit(0, "round_end", name, true);
     g_mapLive = false;
@@ -394,8 +438,9 @@ public any NativeEvent(Handle plugin, int params)
     int client = GetNativeCell(1);
     EnsureSession(client, "native_event");
     if (client < 1 || client > MaxClients || !g_session[client]) return 0;
-    if (g_count >= QUEUE_SIZE - CONTROL_RESERVE) { g_dropped++; return 0; }
-    float began = GetEngineTime();
+    bool sampled = params >= 4 && GetNativeCell(4) != 0;
+    if (g_count >= QUEUE_SIZE - (sampled ? CONTROL_RESERVE : LIFECYCLE_RESERVE)) { g_dropped++; return 0; }
+    g_captureProfile.Start();
     char category[48], detail[384];
     int length;
     GetNativeStringLength(2, length);
@@ -404,8 +449,8 @@ public any NativeEvent(Handle plugin, int params)
     if (length >= sizeof(detail)) g_truncated++;
     GetNativeString(2, category, sizeof(category));
     GetNativeString(3, detail, sizeof(detail));
-    Emit(client, category, detail);
-    g_captureMS += (GetEngineTime() - began) * 1000.0;
+    Emit(client, category, detail, false, sampled);
+    g_captureMS += ProfileMS(g_captureProfile);
     return 0;
 }
 
@@ -428,14 +473,15 @@ public any NativeCommand(Handle plugin, int params)
     }
     g_hasCommandTarget[client] = true;
     if (!CommandDue(client, ownerSlot)) return 0;
-    float began = GetEngineTime(), raw[3], finalVel[3];
+    g_captureProfile.Start();
+    float raw[3], finalVel[3];
     GetNativeArray(5, raw, 3);
     GetNativeArray(7, finalVel, 3);
     int length;
     GetNativeStringLength(3, length);
     if (length >= sizeof(owner)) g_truncated++;
     WriteCommand(client, target, owner, GetNativeCell(4), raw, GetNativeCell(6), finalVel);
-    g_captureMS += (GetEngineTime() - began) * 1000.0;
+    g_captureMS += ProfileMS(g_captureProfile);
     return 0;
 }
 
@@ -474,12 +520,16 @@ void WriteCommand(int client, int target, const char[] owner, int rawButtons, co
     Clean(safeOwner);
     FormatEx(detail, sizeof(detail), "target=%d owner=%s raw_buttons=%d raw_vel=%.2f,%.2f,%.2f final_buttons=%d final_vel=%.2f,%.2f,%.2f",
         target, safeOwner, rawButtons, rawVel[0], rawVel[1], rawVel[2], finalButtons, finalVel[0], finalVel[1], finalVel[2]);
-    Emit(client, "command", detail);
+    Emit(client, "command", detail, false, true);
 }
 
 public Action Service(Handle timer)
 {
-    float began = GetEngineTime();
+    int now = GetSysTickCount();
+    int gap = now - g_lastService;
+    if (g_lastService && gap > g_serviceGapMax) g_serviceGapMax = gap;
+    g_lastService = now;
+    g_captureProfile.Start();
     QueueMapBoundary();
     if (g_running && g_mapLive)
     {
@@ -493,13 +543,17 @@ public Action Service(Handle timer)
         }
         ScanDoors();
     }
-    g_captureMS += (GetEngineTime() - began) * 1000.0;
-    if (GetEngineTime() >= g_nextSummary && (g_running || g_count))
+    g_captureMS += ProfileMS(g_captureProfile);
+    if (g_mapStarted && GetEngineTime() >= g_nextSummary && (g_running || g_count))
     {
         EmitSummary();
         g_nextSummary = GetEngineTime() + 5.0;
     }
+    g_inventoryProfile.Start();
     InventoryStep();
+    float elapsed = ProfileMS(g_inventoryProfile);
+    g_inventoryMS += elapsed;
+    if (elapsed > g_inventoryMaxMS) g_inventoryMaxMS = elapsed;
     FlushBatch(FLUSH_LINES);
     return Plugin_Continue;
 }
@@ -514,7 +568,7 @@ void Sample(int client)
     FormatEx(detail, sizeof(detail), "pos=%.2f,%.2f,%.2f velocity=%.2f,%.2f,%.2f target=%d command_target_valid=%d observed_victim=%d enemy=%d seq=%d move=%d flags=%d hp=%d action=%s",
         pos[0], pos[1], pos[2], velocity[0], velocity[1], velocity[2], g_hasCommandTarget[client] ? g_target[client] : g_observedVictim[client], g_hasCommandTarget[client], g_observedVictim[client], enemy,
         g_sequence[client], g_moveType[client], g_flags[client], GetClientHealth(client), g_action[client]);
-    Emit(client, "sample", detail);
+    Emit(client, "sample", detail, false, true);
     MarkMovement(client, pos);
 }
 
@@ -654,7 +708,7 @@ void CapturePath(int client)
     char detail[300];
     FormatEx(detail, sizeof(detail), "available=%d valid=%d count=%d current=%d complete=%d age=%.3f first=%d stop=%d omitted=%d",
         g_paths, valid, count, current, complete, age, start, stop, count > PATH_NODES ? count - (stop - start) : 0);
-    Emit(client, "path_snapshot", detail);
+    Emit(client, "path_snapshot", detail, false, true);
     if (!valid) return;
     for (int index = start; index < stop; index++)
     {
@@ -664,12 +718,12 @@ void CapturePath(int client)
         if (!AnneNextBot_GetPathSegment(client, index, area, traverse, goal, type, forwardVector, length, distance))
         {
             FormatEx(detail, sizeof(detail), "index=%d valid=0", index);
-            Emit(client, "path_segment", detail);
+            Emit(client, "path_segment", detail, false, true);
             continue;
         }
         FormatEx(detail, sizeof(detail), "index=%d valid=1 nav=%x traverse=%d type=%d goal=%.2f,%.2f,%.2f forward=%.3f,%.3f,%.3f length=%.2f distance=%.2f",
             index, area, traverse, type, goal[0], goal[1], goal[2], forwardVector[0], forwardVector[1], forwardVector[2], length, distance);
-        Emit(client, "path_segment", detail);
+        Emit(client, "path_segment", detail, false, true);
     }
 }
 
@@ -758,6 +812,10 @@ void EmitSummary()
         g_frames, g_frames ? g_frameSum * 1000.0 / g_frames : 0.0, g_frameMax * 1000.0, g_slowFrames,
         g_captureMS, g_flushMS, g_flushMaxMS, g_count, g_peak, g_dropped, g_truncated, g_ownerDrops, g_throttled, g_ioErrors, g_uncertainWrites, g_written, g_diskBytes, g_deleted, g_actions, g_paths);
     Emit(0, "performance", detail, true);
+    FormatEx(detail, sizeof(detail), "write_ms=%.3f write_max_ms=%.3f sync_ms=%.3f sync_max_ms=%.3f inventory_ms=%.3f inventory_max_ms=%.3f write_calls=%d sync_calls=%d write_bytes=%d unflushed_records=%d unflushed_bytes=%d service_gap_max_ms=%d timing=profiler flush_scope=batch_including_retention capture_excludes_state_action_command_hooks=1",
+        g_writeMS, g_writeMaxMS, g_syncMS, g_syncMaxMS, g_inventoryMS, g_inventoryMaxMS,
+        g_writeCalls, g_syncCalls, g_writeBytes, g_unflushed, g_unflushedBytes, g_serviceGapMax);
+    Emit(0, "io_performance", detail, true);
     if (g_reportedDrops != g_dropped || g_reportedTruncated != g_truncated || g_reportedOwnerDrops != g_ownerDrops || g_reportedIO != g_ioErrors)
     {
         LogMessage("[AIDiag] budget/storage counters: dropped=%d truncated=%d owner_drops=%d io_errors=%d queue=%d peak=%d",
@@ -767,8 +825,14 @@ void EmitSummary()
         g_reportedOwnerDrops = g_ownerDrops;
         g_reportedIO = g_ioErrors;
     }
+    ResetIntervalStats();
+}
+void ResetIntervalStats()
+{
     g_frames = g_slowFrames = 0;
     g_frameSum = g_frameMax = g_captureMS = g_flushMS = g_flushMaxMS = 0.0;
+    g_writeMS = g_writeMaxMS = g_syncMS = g_syncMaxMS = g_inventoryMS = g_inventoryMaxMS = 0.0;
+    g_writeCalls = g_syncCalls = g_writeBytes = g_serviceGapMax = 0;
 }
 public Action StatusCommand(int client, int args)
 {
@@ -783,31 +847,56 @@ public Action StatusCommand(int client, int args)
         g_frames, g_frames ? g_frameSum * 1000.0 / g_frames : 0.0, g_frameMax * 1000.0, g_slowFrames, g_captureMS, g_flushMS, g_flushMaxMS, g_currentPath);
     ReplyToCommand(client, "[AIDiag] action_hooks=%d action_callbacks=%d missing_action_natives=%s",
         g_actionHooks, g_actionCallbacks, g_actions ? "none" : g_missingActions);
+    ReplyToCommand(client, "[AIDiag] write=%.3fms max=%.3fms calls=%d sync=%.3fms max=%.3fms calls=%d inventory=%.3fms unflushed=%d records/%d bytes sync_limit=%dms/%d bytes service_gap_max=%dms",
+        g_writeMS, g_writeMaxMS, g_writeCalls, g_syncMS, g_syncMaxMS, g_syncCalls, g_inventoryMS,
+        g_unflushed, g_unflushedBytes, SYNC_INTERVAL_MS, SYNC_BYTES, g_serviceGapMax);
     return Plugin_Handled;
 }
 
-int Reserve(bool control = false)
+float ProfileMS(Profiler profile)
 {
-    if (g_count >= (control ? QUEUE_SIZE - 1 : QUEUE_SIZE - CONTROL_RESERVE)) { g_dropped++; return -1; }
+    profile.Stop();
+    return profile.Time * 1000.0;
+}
+
+int Reserve(bool control = false, bool sampled = false)
+{
+    // Events can outlive sample pressure, without consuming the final slots
+    // needed for session/map lifecycle records. Native callers explicitly mark
+    // repeated snapshots; older three-argument calls retain event priority.
+    int ceiling = control ? QUEUE_SIZE - 1 : QUEUE_SIZE - (sampled ? CONTROL_RESERVE : LIFECYCLE_RESERVE);
+    if (g_count >= ceiling) { g_dropped++; return -1; }
     int slot = (g_head + g_count) % QUEUE_SIZE;
     g_count++;
     if (g_count > g_peak) g_peak = g_count;
     g_boundary[slot] = false;
     return slot;
 }
-void Emit(int client, const char[] category, const char[] detail, bool control = false)
+void Emit(int client, const char[] category, const char[] detail, bool control = false, bool sampled = false)
 {
     if (g_boundaryPending) { g_dropped++; return; }
-    int slot = Reserve(control);
+    int slot = Reserve(control, sampled);
     if (slot < 0) return;
     char safeCategory[64], safeDetail[560];
     if (strlen(category) >= sizeof(safeCategory) || strlen(detail) >= sizeof(safeDetail)) g_truncated++;
     strcopy(safeCategory, sizeof(safeCategory), category);
     strcopy(safeDetail, sizeof(safeDetail), detail);
     Clean(safeCategory); Clean(safeDetail);
-    int length = FormatEx(g_queue[slot], LINE_SIZE, "t=%.3f tick=%d session=%d client=%d class=%d kind=%s %s\n",
-        GetGameTime(), GetGameTickCount(), client ? g_session[client] : 0, client, client ? g_class[client] : 0, safeCategory, safeDetail);
-    if (length >= LINE_SIZE - 1) g_truncated++;
+    FormatRecord(g_queue[slot], client, safeCategory, safeDetail);
+}
+void FormatRecord(char[] record, int client, const char[] category, const char[] detail)
+{
+    // Integer system milliseconds do not lose precision with server uptime.
+    // wall is epoch seconds; mono_ms wraps with the system tick counter.
+    int length = FormatEx(record, LINE_SIZE, "t=%.3f tick=%d session=%d client=%d class=%d kind=%s %s wall=%d mono_ms=%d\n",
+        GetGameTime(), GetGameTickCount(), client ? g_session[client] : 0,
+        client, client ? g_class[client] : 0, category, detail, GetTime(), GetSysTickCount());
+    if (length >= LINE_SIZE - 1)
+    {
+        g_truncated++;
+        record[LINE_SIZE - 2] = '\n';
+        record[LINE_SIZE - 1] = '\0';
+    }
 }
 void Clean(char[] value)
 {
@@ -929,7 +1018,7 @@ bool OpenPart()
     g_times[slot] = GetTime();
     char header[256];
     FormatEx(header, sizeof(header), "schema=1 plugin=%s stream=%s part=%d sample_hz=5 privacy=no_names_no_ids_no_ips\n", AIDIAG_VERSION, g_prefix, g_part);
-    if (WriteLineBounded(header)) return true;
+    if (WriteBlockBounded(header, strlen(header), 1)) return true;
     // Never let data follow a missing/partial metadata header.
     g_dropped++;
     ClosePart();
@@ -937,44 +1026,62 @@ bool OpenPart()
     return false;
 }
 
-bool WriteLineBounded(const char[] line)
+bool WriteBlockBounded(const char[] block, int bytes, int records)
 {
-    int bytes = strlen(line);
     if (g_file == null || g_currentFile < 0 || g_diskBytes > g_totalMB.IntValue * MIB - bytes
         || g_sizes[g_currentFile] + bytes > PartBytes()) return false;
-    if (!g_file.WriteString(line, false))
+    g_writeProfile.Start();
+    bool success = g_file.WriteString(block, false);
+    float elapsed = ProfileMS(g_writeProfile);
+    g_writeMS += elapsed;
+    if (elapsed > g_writeMaxMS) g_writeMaxMS = elapsed;
+    g_writeCalls++;
+    if (!success)
     {
         g_ioErrors++;
+        // A failed bulk write may contain an unknown complete/partial prefix.
+        // Do not replay any of it; account every affected record as uncertain.
+        g_uncertainWrites += records;
+        // Size() can exclude pending stdio output. Charge the full attempted
+        // block conservatively, so a later close cannot bypass the quota.
+        int accounted = g_sizes[g_currentFile] + bytes;
         int actual = g_file.Size();
-        if (actual >= 0)
-        {
-            g_diskBytes += actual - g_sizes[g_currentFile];
-            g_sizes[g_currentFile] = actual;
-        }
+        if (actual > accounted) accounted = actual;
+        g_diskBytes += accounted - g_sizes[g_currentFile];
+        g_sizes[g_currentFile] = accounted;
         return false;
     }
     g_sizes[g_currentFile] += bytes;
     g_diskBytes += bytes;
-    g_written++;
-    g_unflushed++;
+    g_written += records;
+    if (!g_unflushed) g_unflushedSince = GetSysTickCount();
+    g_unflushed += records;
+    g_unflushedBytes += bytes;
+    g_writeBytes += bytes;
     return true;
 }
 
 bool FlushCurrent()
 {
     if (g_file == null || !g_unflushed) return true;
+    g_syncProfile.Start();
     bool success = g_file.Flush();
+    float elapsed = ProfileMS(g_syncProfile);
+    g_syncMS += elapsed;
+    if (elapsed > g_syncMaxMS) g_syncMaxMS = elapsed;
+    g_syncCalls++;
     if (!success)
     {
         g_ioErrors++;
         g_uncertainWrites += g_unflushed;
     }
     g_unflushed = 0;
+    g_unflushedBytes = 0;
     return success;
 }
 void ClosePart()
 {
-    FlushCurrent();
+    if (!FlushCurrent()) g_nextRetry = GetEngineTime() + 5.0;
     delete g_file;
     g_currentFile = -1;
 }
@@ -986,10 +1093,10 @@ int PartBytes()
     return bytes < halfTotal ? bytes : halfTotal;
 }
 
-void FlushBatch(int limit)
+void FlushBatch(int limit, bool forceSync = false)
 {
     if (!g_storageReady || GetEngineTime() < g_nextRetry) return;
-    float began = GetEngineTime();
+    g_batchProfile.Start();
     if (g_file != null && (g_sizes[g_currentFile] + LINE_SIZE * 2 > PartBytes()
         || g_diskBytes > g_totalMB.IntValue * MIB - LINE_SIZE * 2))
     {
@@ -1002,7 +1109,7 @@ void FlushBatch(int limit)
         if (!DeleteOldest()) break;
     }
     int wroteAtStart = g_written;
-    for (int done = 0; done < limit && g_count; done++)
+    for (int done = 0; done < limit && g_count && GetEngineTime() >= g_nextRetry; )
     {
         if (g_written - wroteAtStart >= limit) break;
         int slot = g_head;
@@ -1011,37 +1118,72 @@ void FlushBatch(int limit)
             ClosePart();
             strcopy(g_prefix, sizeof(g_prefix), g_queue[slot]);
             g_part = 0;
+            g_head = (g_head + 1) % QUEUE_SIZE;
+            g_count--;
+            done++;
+            continue;
         }
         else
         {
             if (g_file != null && g_sizes[g_currentFile] + strlen(g_queue[slot]) > PartBytes())
             {
                 ClosePart();
+                if (GetEngineTime() < g_nextRetry) break;
             }
             if (g_diskBytes > g_totalMB.IntValue * MIB - LINE_SIZE * 2) break;
             if (g_file == null)
             {
                 if (g_written - wroteAtStart >= limit - 1 || !OpenPart()) break;
             }
-            if (!WriteLineBounded(g_queue[slot]))
+            int bytes, records;
+            int budget = limit - done;
+            int writeBudget = limit - (g_written - wroteAtStart);
+            if (budget > writeBudget) budget = writeBudget;
+            // Assemble whole LF-terminated records only. Never cross a map
+            // marker, part limit or total quota within a WriteString call.
+            while (records < budget && records < g_count)
+            {
+                int next = (g_head + records) % QUEUE_SIZE;
+                if (g_boundary[next]) break;
+                int length = strlen(g_queue[next]);
+                if (bytes + length > WRITE_BYTES || g_sizes[g_currentFile] + bytes + length > PartBytes()
+                    || g_diskBytes > g_totalMB.IntValue * MIB - bytes - length) break;
+                strcopy(g_writeBuffer[bytes], sizeof(g_writeBuffer) - bytes, g_queue[next]);
+                bytes += length;
+                records++;
+            }
+            if (!records) break;
+            // Keep the explicit-flush byte tail at or below SYNC_BYTES. A
+            // failed flush leaves this not-yet-attempted block in the queue.
+            if (g_unflushedBytes + bytes > SYNC_BYTES && !FlushCurrent())
+            {
+                ClosePart();
+                g_nextRetry = GetEngineTime() + 5.0;
+                break;
+            }
+            if (!WriteBlockBounded(g_writeBuffer, bytes, records))
             {
                 // A partial/failed write is not retried blindly (may duplicate).
-                // Drop exactly this record and retry opening on the next service.
-                g_dropped++;
+                // Drop this attempted block, retaining the rest of the queue.
+                g_dropped += records;
                 ClosePart();
                 g_nextRetry = GetEngineTime() + 5.0;
             }
+            g_head = (g_head + records) % QUEUE_SIZE;
+            g_count -= records;
+            done += records;
         }
-        g_head = (g_head + 1) % QUEUE_SIZE;
-        g_count--;
-        if (GetEngineTime() < g_nextRetry) break;
     }
-    if (g_written > wroteAtStart && !FlushCurrent())
+    // This is synchronous stdio, not async I/O or fsync. A crash can lose the
+    // bounded queue plus this stdio tail. Check elapsed real time even with an
+    // empty queue; the service timer itself can be delayed by stalls/hibernation.
+    if (g_unflushed && (forceSync || g_unflushedBytes >= SYNC_BYTES
+        || GetSysTickCount() - g_unflushedSince >= SYNC_INTERVAL_MS) && !FlushCurrent())
     {
         g_nextRetry = GetEngineTime() + 5.0;
         ClosePart();
     }
-    float elapsed = (GetEngineTime() - began) * 1000.0;
+    float elapsed = ProfileMS(g_batchProfile);
     g_flushMS += elapsed;
     if (elapsed > g_flushMaxMS) g_flushMaxMS = elapsed;
 }

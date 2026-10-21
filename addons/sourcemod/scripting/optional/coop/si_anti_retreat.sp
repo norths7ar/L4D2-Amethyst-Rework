@@ -15,15 +15,17 @@ BehaviorAction g_retreat[MAXPLAYERS + 1];
 bool g_pending[MAXPLAYERS + 1], g_owned[MAXPLAYERS + 1], g_release[MAXPLAYERS + 1];
 int g_victim[MAXPLAYERS + 1], g_commandVictim[MAXPLAYERS + 1];
 float g_deadline[MAXPLAYERS + 1], g_nextCommand[MAXPLAYERS + 1];
-float g_destination[MAXPLAYERS + 1][3], g_nextDiagnostic[MAXPLAYERS + 1];
+float g_destination[MAXPLAYERS + 1][3];
 char g_lastDiagnostic[MAXPLAYERS + 1][64];
+int g_diagVictim[MAXPLAYERS + 1];
+bool g_diagOwned[MAXPLAYERS + 1];
 
 public Plugin myinfo =
 {
     name = "SI native anti-retreat",
     author = "OpenAI",
     description = "Bounded pursuit during confirmed Charger and Smoker retreat actions",
-    version = "1.0.0"
+    version = "1.0.1"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
@@ -141,7 +143,7 @@ public void IssuePursuit(any userid)
     g_commandVictim[client] = GetClientUserId(target);
     g_deadline[client] = GetGameTime() + g_duration.FloatValue;
     bool accepted = L4D2_CommandABot(client, target, BOT_CMD_MOVE, g_destination[client]);
-    Diagnostic(client, accepted ? "pursuit_issued" : "pursuit_issued_result_false");
+    Diagnostic(client, accepted ? "pursuit_issued" : "pursuit_issued_result_false", true);
 }
 
 public void OnRetreatEnd(BehaviorAction action, int actor, BehaviorAction nextAction, ActionResult result)
@@ -219,7 +221,7 @@ void ReleaseCommand(int client, const char[] reason)
         && IsPlayerAlive(client) && GetClientTeam(client) == 3)
     {
         L4D2_CommandABot(client, 0, BOT_CMD_RESET);
-        Diagnostic(client, reason);
+        Diagnostic(client, reason, true);
     }
 }
 
@@ -286,11 +288,15 @@ bool IsSurvivor(int client)
     return client > 0 && client <= MaxClients && IsClientInGame(client) && IsPlayerAlive(client) && GetClientTeam(client) == 2;
 }
 
-void Diagnostic(int client, const char[] reason)
+void Diagnostic(int client, const char[] reason, bool operation = false)
 {
-    if (StrEqual(g_lastDiagnostic[client], reason) || GetGameTime() < g_nextDiagnostic[client]) return;
+    // Suppress identical observations, never issued commands or ownership handoffs.
+    // Compare target identity as well as reason so a reused client slot is a change.
+    if (!operation && StrEqual(g_lastDiagnostic[client], reason)
+        && g_diagVictim[client] == g_victim[client] && g_diagOwned[client] == g_owned[client]) return;
     strcopy(g_lastDiagnostic[client], sizeof(g_lastDiagnostic[]), reason);
-    g_nextDiagnostic[client] = GetGameTime() + 1.0;
+    g_diagVictim[client] = g_victim[client];
+    g_diagOwned[client] = g_owned[client];
     char detail[160];
     FormatEx(detail, sizeof(detail), "class=%d target=%d owned=%d reason=%s",
         GetEntProp(client, Prop_Send, "m_zombieClass"), GetClientOfUserId(g_victim[client]), g_owned[client], reason);
@@ -346,6 +352,7 @@ void ClearClient(int client)
     g_commandVictim[client] = 0;
     g_deadline[client] = 0.0;
     g_nextCommand[client] = 0.0;
-    g_nextDiagnostic[client] = 0.0;
+    g_diagVictim[client] = 0;
+    g_diagOwned[client] = false;
     g_lastDiagnostic[client][0] = '\0';
 }

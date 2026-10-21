@@ -50,6 +50,8 @@ float g_travel[MAXPLAYERS + 1];
 char g_actionName[MAXPLAYERS + 1][ACTION_NAME_LENGTH];
 char g_diagReason[MAXPLAYERS + 1][64];
 char g_diagAction[MAXPLAYERS + 1][ACTION_NAME_LENGTH];
+int g_diagVictim[MAXPLAYERS + 1];
+bool g_diagRepath[MAXPLAYERS + 1], g_diagLoop[MAXPLAYERS + 1];
 float g_nextDiag[MAXPLAYERS + 1], g_nextActionSample[MAXPLAYERS + 1];
 bool g_retryNotified[MAXPLAYERS + 1];
 bool g_centerShown[MAXPLAYERS + 1];
@@ -63,7 +65,7 @@ public Plugin myinfo =
 	name = "SI Unstuck",
 	author = "OpenAI",
 	description = "Moves a stuck live AI special infected to a safe hidden nav position",
-	version = "1.3.0",
+	version = "1.3.1",
 	url = ""
 };
 
@@ -240,7 +242,7 @@ public Action Timer_Monitor(Handle timer)
 			g_repathTried[client] = true;
 			if (!YieldRetreatMovement(client)) L4D2_CommandABot(client, 0, BOT_CMD_RESET);
 			g_nextAttempt[client] = now + g_cvRetryDelay.FloatValue;
-			ReportState(client, loop ? "loop_repath_reset_issued" : "repath_reset_issued");
+			ReportState(client, loop ? "loop_repath_reset_issued" : "repath_reset_issued", true);
 			continue;
 		}
 
@@ -260,7 +262,7 @@ public Action Timer_Monitor(Handle timer)
 		}
 
 		if (tank) NotifySurvivors("Tank 已传送脱困");
-		else ReportState(client, "relocated_hidden");
+		else ReportState(client, "relocated_hidden", true);
 		g_retryNotified[client] = false;
 		GetClientAbsOrigin(client, g_lastOrigin[client]);
 		g_lastProgress[client] = now;
@@ -680,19 +682,24 @@ void ObserveAction(BehaviorAction action, int client)
 	action.GetName(name, sizeof(name));
 	if (StrEqual(name, g_actionName[client])) return;
 	strcopy(g_actionName[client], sizeof(g_actionName[]), name);
-	ReportState(client, "action_changed");
+	ReportState(client, "action_changed", true);
 }
 
-void ReportState(int client, const char[] reason)
+void ReportState(int client, const char[] reason, bool operation = false)
 {
 	if (!IsNormalBot(client)) return;
 	float now = GetGameTime();
-	bool changed = !StrEqual(g_diagReason[client], reason) || !StrEqual(g_diagAction[client], g_actionName[client]);
-	// Both state changes and snapshots have a per-client ceiling. A suppressed
-	// change is retried next observation; identical skip reasons do not spam.
-	if (now < g_nextDiag[client] || (!changed && g_cvDiagnostics.FloatValue == 0.0)) return;
+	bool changed = !StrEqual(g_diagReason[client], reason) || !StrEqual(g_diagAction[client], g_actionName[client])
+		|| g_diagVictim[client] != g_siVictim[client] || g_diagRepath[client] != g_repathTried[client]
+		|| g_diagLoop[client] != g_loopStalled[client];
+	// Only repeated snapshots are timed. One-shot recovery operations and state
+	// transitions cannot be recovered by a later snapshot and must be emitted now.
+	if (!operation && !changed && (now < g_nextDiag[client] || g_cvDiagnostics.FloatValue == 0.0)) return;
 	strcopy(g_diagReason[client], sizeof(g_diagReason[]), reason);
 	strcopy(g_diagAction[client], sizeof(g_diagAction[]), g_actionName[client]);
+	g_diagVictim[client] = g_siVictim[client];
+	g_diagRepath[client] = g_repathTried[client];
+	g_diagLoop[client] = g_loopStalled[client];
 	float interval = g_cvDiagnostics.FloatValue;
 	if (interval < 1.0) interval = 1.0;
 	g_nextDiag[client] = now + interval;
@@ -704,7 +711,7 @@ void ReportState(int client, const char[] reason)
 		reason, GetEntProp(client, Prop_Send, "m_zombieClass"), GetClientOfUserId(g_siVictim[client]),
 		origin[0], origin[1], origin[2], GetVectorLength(velocity), g_actionName[client],
 		now - g_lastProgress[client], now - g_lastMoveInput[client], now - g_lastCombatInput[client], g_repathTried[client], g_loopStalled[client]);
-	AIDiag_TryEvent(client, "si_unstuck", detail);
+	AIDiag_TryEvent(client, "si_unstuck", detail, !operation && !changed);
 }
 
 void ResetObservation(int client)
@@ -712,6 +719,9 @@ void ResetObservation(int client)
 	g_actionName[client][0] = '\0';
 	g_diagReason[client][0] = '\0';
 	g_diagAction[client][0] = '\0';
+	g_diagVictim[client] = 0;
+	g_diagRepath[client] = false;
+	g_diagLoop[client] = false;
 	g_nextDiag[client] = 0.0;
 	g_nextActionSample[client] = 0.0;
 }
