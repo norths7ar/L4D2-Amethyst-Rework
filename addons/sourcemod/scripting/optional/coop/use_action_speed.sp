@@ -39,7 +39,7 @@ public void OnMapStart()
 		g_buttonRef[client] = INVALID_ENT_REFERENCE;
 }
 
-public void L4D2_OnStartUseAction_Post(any action, int client, int entity)
+public void L4D2_OnStartUseAction_Post(L4D2UseAction action, int client, int entity)
 {
 	if (client < 1 || client > MaxClients || !IsClientInGame(client)) return;
 	// A new native action has already reset its own timer. Never restore an old

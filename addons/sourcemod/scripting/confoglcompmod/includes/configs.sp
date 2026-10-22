@@ -59,26 +59,39 @@ bool SetCustomCfg(const char[] cfgname)
 		return true;
 	}
 
-	FormatEx(customCfgPath, sizeof(customCfgPath), "%s%s%c%s", cfgPath, customCfgDir, DirSeparator, cfgname);
-	if (!DirExists(customCfgPath)) {
-		Debug_LogError(CONFIGS_MODULE_NAME, "Custom config directory %s does not exist!", customCfgPath);
-		// Revert customCfgPath
-		customCfgPath[0] = 0;
+	char path[PLATFORM_MAX_PATH];
+	if (!BuildCustomCfgPath(path, sizeof(path), cfgname)) {
 		return false;
 	}
 
-	int thislen = strlen(customCfgPath);
-	if ((thislen + 1) < sizeof(customCfgPath)) {
-		customCfgPath[thislen] = DirSeparator;
-		customCfgPath[(thislen + 1)] = 0;
-	} else {
-		Debug_LogError(CONFIGS_MODULE_NAME, "Custom config directory %s path too long!", customCfgPath);
-		customCfgPath[0] = 0;
-		return false;
-	}
-
+	strcopy(customCfgPath, sizeof(customCfgPath), path);
 	strcopy(customCfgName, sizeof(customCfgName), cfgname);
 	hCustomConfig.SetString(cfgname);
+
+	return true;
+}
+
+// Resolve and validate without changing the active config or its reload cvar.
+bool BuildCustomCfgPath(char[] path, const int maxlength, const char[] cfgname)
+{
+	if (!strlen(cfgname)) {
+		return false;
+	}
+
+	FormatEx(path, maxlength, "%s%s%c%s", cfgPath, customCfgDir, DirSeparator, cfgname);
+	if (!DirExists(path)) {
+		Debug_LogError(CONFIGS_MODULE_NAME, "Custom config directory %s does not exist!", path);
+		return false;
+	}
+
+	int thislen = strlen(path);
+	if ((thislen + 1) < maxlength) {
+		path[thislen] = DirSeparator;
+		path[(thislen + 1)] = 0;
+	} else {
+		Debug_LogError(CONFIGS_MODULE_NAME, "Custom config directory %s path too long!", path);
+		return false;
+	}
 
 	return true;
 }
