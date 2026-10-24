@@ -1,0 +1,148 @@
+"Games"
+{
+	"left4dead2"
+	{
+		// Linux ELF32 layout verified against server_srv.so SHA256:
+		// fe817d1774130f21fc05579ded84333ffc7cf3f92f84d8166be816be99863831
+		// Windows is unsupported: no unverified offsets or signatures provided.
+		"Offsets"
+		{
+			"OS"
+			{
+				"linux"   "1"
+				"windows" "0"
+			}
+			"TerrorNavArea::Flow0"
+			{
+				"linux" "340" // +0x154, type0; converted to forward flow on success
+			}
+			"TerrorNavArea::Flow1"
+			{
+				"linux" "344" // +0x158, type1
+			}
+			"TerrorNavArea::SpawnAttributes"
+			{
+				"linux" "300" // +0x12c; restore only ESCAPE_ROUTE (0x20000)
+			}
+			"TerrorNavMesh::MaxFlow"
+			{
+				"linux" "1524" // +0x5f4
+			}
+			"TerrorNavMesh::MaxFlowOutsideCheckpoint"
+			{
+				"linux" "1528" // +0x5f8
+			}
+			"TerrorNavMesh::MinBattleStationFlow"
+			{
+				"linux" "1532" // +0x5fc
+			}
+			"TerrorNavMesh::StartArea"
+			{
+				"linux" "1536" // +0x600
+			}
+			"TerrorNavMesh::RescueVehicleArea"
+			{
+				"linux" "1540" // +0x604
+			}
+			"TerrorNavMesh::GoalArea"
+			{
+				"linux" "1544" // +0x608
+			}
+			"CEscapeRoute::NodeCount"
+			{
+				"linux" "7232" // +0x1c40, includes FinishPath's terminal node
+			}
+			"CEscapeRoute::PathLength"
+			{
+				"linux" "7236" // +0x1c44, FinishPath does not increase this
+			}
+			"CEscapeRoute::NodeAreas"
+			{
+				"linux" "7240" // +0x1c48, inline area-pointer array
+			}
+			"CEscapeRoute::NodeCapacity"
+			{
+				"linux" "512" // AddArea/AddNode reject count > 511
+			}
+		}
+		"Functions"
+		{
+			"TerrorNavMesh::OnRoundRestart"
+			{
+				"signature" "TerrorNavMesh::OnRoundRestart"
+				"callconv"  "thiscall"
+				"return"    "void"
+				"this"      "address"
+			}
+			"TerrorNavMesh::ComputeFlowDistances"
+			{
+				"signature" "TerrorNavMesh::ComputeFlowDistances"
+				"callconv"  "thiscall"
+				// EAX is the real start-area pointer on success, NULL on failure.
+				"return"    "int"
+				"this"      "address"
+			}
+			"ZombieManager::BuildEscapeRoute"
+			{
+				"signature" "ZombieManager::BuildEscapeRoute"
+				"callconv"  "thiscall"
+				"return"    "void"
+				"this"      "address"
+				"arguments"
+				{
+					"startArea"
+					{
+						"type" "int"
+					}
+				}
+			}
+			"CEscapeRoute::AddArea"
+			{
+				"signature" "CEscapeRoute::AddArea"
+				"callconv"  "thiscall"
+				"return"    "void"
+				"this"      "address"
+				"arguments"
+				{
+					"area"
+					{
+						"type" "int"
+					}
+				}
+			}
+		}
+		"Signatures"
+		{
+			"TerrorNavMesh::OnRoundRestart"
+			{
+				"library" "server"
+				"linux"   "@_ZN13TerrorNavMesh14OnRoundRestartEv"
+			}
+			"TerrorNavMesh::ComputeFlowDistances"
+			{
+				"library" "server"
+				"linux"   "@_ZN13TerrorNavMesh20ComputeFlowDistancesEv"
+			}
+			"ZombieManager::BuildEscapeRoute"
+			{
+				"library" "server"
+				"linux"   "@_ZNK13ZombieManager16BuildEscapeRouteEP13TerrorNavArea"
+			}
+			"CEscapeRoute::ResetPath"
+			{
+				"library" "server"
+				"linux"   "@_ZN12CEscapeRoute9ResetPathEv"
+			}
+			"CEscapeRoute::AddArea"
+			{
+				"library" "server"
+				"linux"   "@_ZN12CEscapeRoute7AddAreaEP13TerrorNavArea"
+			}
+			"CEscapeRoute::FinishPath"
+			{
+				"library" "server"
+				"linux"   "@_ZN12CEscapeRoute10FinishPathEv"
+			}
+		}
+	}
+}
