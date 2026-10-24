@@ -29,8 +29,12 @@ float g_startBirth[MAXPLAYERS + 1][3];
 float g_startLanding[MAXPLAYERS + 1][3];
 bool g_startHasBirth[MAXPLAYERS + 1];
 bool g_startHasLanding[MAXPLAYERS + 1];
+bool g_startNativeBirth[MAXPLAYERS + 1];
+bool g_startAwaitLanding[MAXPLAYERS + 1];
+bool g_startCaptureBirth = true;
 float g_startNextNotice[MAXPLAYERS + 1];
 float g_startCandidates[MAXPLAYERS + 1][START_CANDIDATES][3];
+bool g_startCandidateNative[MAXPLAYERS + 1][START_CANDIDATES];
 int g_startCandidateCount[MAXPLAYERS + 1];
 int g_startCandidateIndex[MAXPLAYERS + 1];
 float g_startNav[START_NAV_POINTS][3];
@@ -72,6 +76,8 @@ void StartArea_ResetClient(int client)
     g_startLoopCount[client] = 0;
     g_startHasBirth[client] = false;
     g_startHasLanding[client] = false;
+    g_startNativeBirth[client] = false;
+    g_startAwaitLanding[client] = false;
     g_startNextNotice[client] = 0.0;
 }
 
@@ -90,6 +96,7 @@ void StartArea_CancelRequests()
 void StartArea_ResetRound()
 {
     StartArea_CancelRequests();
+    g_startCaptureBirth = true;
     g_startNavCount = 0;
     g_startSourcesLoaded = false;
     g_startHasHint = false;
@@ -97,12 +104,18 @@ void StartArea_ResetRound()
     for (int client = 1; client <= MaxClients; client++) StartArea_ResetClient(client);
 }
 
-// Spawn is recorded before validation. Never infer birth from a later timer.
-void StartArea_CaptureBirth(int client)
+// Capture even before round_start/OnMapStart. Only a spawn event is native
+// evidence; a late-load snapshot remains an ordinary fallback record.
+void StartArea_CaptureBirth(int client, bool nativeSpawn = true)
 {
-    if (!g_readyPhase || !IsReadySurvivor(client) || g_startHasBirth[client]) return;
+    if (!g_startCaptureBirth || !IsReadySurvivor(client)) return;
+    // A real spawn supersedes a late-load snapshot, never an existing native birth.
+    if (g_startHasBirth[client] && (!nativeSpawn || g_startNativeBirth[client])) return;
     GetClientAbsOrigin(client, g_startBirth[client]);
     g_startHasBirth[client] = true;
+    g_startNativeBirth[client] = nativeSpawn;
+    g_startAwaitLanding[client] = nativeSpawn;
+    StartArea_ObserveLanding(client);
 }
 
 public void StartArea_PlayerSpawn(Event event, const char[] name, bool dontBroadcast)
@@ -112,7 +125,7 @@ public void StartArea_PlayerSpawn(Event event, const char[] name, bool dontBroad
 
 public void StartArea_PlayerReplace(Event event, const char[] name, bool dontBroadcast)
 {
-    if (!g_readyPhase) return;
+    if (!g_startCaptureBirth) return;
     int player = GetClientOfUserId(event.GetInt("player"));
     int bot = GetClientOfUserId(event.GetInt("bot"));
     if (!player || !bot) return;
@@ -120,10 +133,17 @@ public void StartArea_PlayerReplace(Event event, const char[] name, bool dontBro
     int source = toPlayer ? bot : player;
     int target = toPlayer ? player : bot;
     StartArea_ClearRequest(target);
-    g_startHasBirth[target] = g_startHasBirth[source];
-    g_startHasLanding[target] = g_startHasLanding[source];
-    g_startBirth[target] = g_startBirth[source];
-    g_startLanding[target] = g_startLanding[source];
+    // A replacement may already have received its own spawn event. An empty
+    // outgoing slot must not erase it; otherwise history follows the body.
+    if (g_startHasBirth[source])
+    {
+        g_startHasBirth[target] = true;
+        g_startHasLanding[target] = g_startHasLanding[source];
+        g_startBirth[target] = g_startBirth[source];
+        g_startLanding[target] = g_startLanding[source];
+        g_startNativeBirth[target] = g_startNativeBirth[source];
+        g_startAwaitLanding[target] = g_startAwaitLanding[source];
+    }
     g_startLimited[target] = g_startLimited[source];
     g_startLoopCount[target] = 0;
     // The outgoing entity no longer owns this survivor's history.
@@ -135,7 +155,12 @@ void StartArea_ObserveInput(int client, int buttons, const float velocity[3])
     bool moving = (buttons & (IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT | IN_JUMP | IN_DUCK | IN_LEFT | IN_RIGHT)) != 0
         || velocity[0] != 0.0 || velocity[1] != 0.0 || velocity[2] != 0.0;
     g_startInput[client] = moving;
-    if (moving) g_startLoopCount[client] = 0;
+    if (moving)
+    {
+        g_startLoopCount[client] = 0;
+        // Never promote a later ready-phase walk/jump into the initial landing.
+        g_startAwaitLanding[client] = false;
+    }
 }
 
 void StartArea_Notice(int client, bool loop)
@@ -177,11 +202,13 @@ void StartArea_LoadSources()
     {
         Address area = view_as<Address>(areas.Get(i));
         if (!(L4D_GetNavArea_SpawnAttributes(area) & (NAV_SPAWN_PLAYER_START | NAV_SPAWN_CHECKPOINT))) continue;
+        float flow = L4D2Direct_GetTerrorNavAreaFlow(area);
+        if (flow < 0.0) continue;
         float point[3];
         L4D_GetNavAreaCenter(area, point);
         point[2] += 2.0;
-        if (!L4D_IsPositionInFirstCheckpoint(point)) continue;
-        float distance = g_startHasHint ? GetVectorDistance(point, g_startHint, true) : L4D2Direct_GetTerrorNavAreaFlow(area);
+        if (!StartArea_InFirstCheckpoint(point)) continue;
+        float distance = g_startExplicit ? GetVectorDistance(point, g_startHint, true) : flow;
         int slot = g_startNavCount;
         if (slot == START_NAV_POINTS)
         {
@@ -225,54 +252,83 @@ bool StartArea_PhysicalPoint(const float seed[3], float point[3])
     return !(TR_GetPointContents(top) & MASK_WATER);
 }
 
-bool StartArea_Classify(const float point[3])
+bool StartArea_InFirstCheckpoint(const float point[3])
 {
+    // Match Left4DHooks' lookup, but reject negative flow (including -9999).
+    Address area = view_as<Address>(L4D_GetNearestNavArea(point, 1000.0, true, true, false));
+    if (area == Address_Null || L4D2Direct_GetTerrorNavAreaFlow(area) < 0.0) return false;
     float position[3];
     position = point;
-    if (L4D_IsPositionInFirstCheckpoint(position)) return true;
+    return L4D_IsPositionInFirstCheckpoint(position);
+}
+
+bool StartArea_Classify(const float point[3])
+{
+    if (StartArea_InFirstCheckpoint(point)) return true;
     if (!g_startExplicit || FloatAbs(point[2] - g_startHint[2]) > 160.0) return false;
     float dx = point[0] - g_startHint[0], dy = point[1] - g_startHint[1];
     // Explicit MapInfo remains a fallback hint, not the Director boundary.
     return dx * dx + dy * dy <= g_startHintRadius * g_startHintRadius;
 }
 
-bool StartArea_ActualSafe(int client, bool returning = false)
+bool StartArea_PhysicallySafe(int client)
 {
-    if (!(GetEntityFlags(client) & FL_ONGROUND)
-        || GetEntProp(client, Prop_Send, "m_nWaterLevel") >= 2
-        || GetEntProp(client, Prop_Send, "m_isIncapacitated")
-        || GetEntProp(client, Prop_Send, "m_isHangingFromLedge")) return false;
-    float actual[3];
-    GetClientAbsOrigin(client, actual);
-    return returning ? StartArea_Classify(actual) : L4D_IsPositionInFirstCheckpoint(actual);
+    return (GetEntityFlags(client) & FL_ONGROUND) != 0
+        && GetEntProp(client, Prop_Send, "m_nWaterLevel") < 2
+        && !GetEntProp(client, Prop_Send, "m_isIncapacitated")
+        && !GetEntProp(client, Prop_Send, "m_isHangingFromLedge");
 }
 
-bool StartArea_RecordSuitable(const float point[3])
+bool StartArea_ActualSafe(int client, bool returning = false, bool nativePoint = false)
+{
+    if (!StartArea_PhysicallySafe(client)) return false;
+    if (nativePoint) return true;
+    float actual[3];
+    GetClientAbsOrigin(client, actual);
+    return returning ? StartArea_Classify(actual) : StartArea_InFirstCheckpoint(actual);
+}
+
+bool StartArea_RecordSuitable(const float point[3], bool nativePoint)
 {
     float waist[3];
     waist = point;
     waist[2] += 36.0;
-    return StartArea_Classify(point) && !(TR_GetPointContents(waist) & MASK_WATER);
+    return (nativePoint || StartArea_Classify(point)) && !(TR_GetPointContents(waist) & MASK_WATER);
 }
 
-void StartArea_SaveLanding(int client, const float point[3])
+void StartArea_ObserveLanding(int client)
 {
-    if (g_startHasLanding[client] || !g_startHasBirth[client]) return;
-    if (GetVectorDistance(point, g_startBirth[client], true) < 256.0) return;
-    g_startLanding[client] = point;
+    if (!g_startAwaitLanding[client] || !IsReadySurvivor(client)) return;
+    if (GetEntityMoveType(client) == MOVETYPE_NOCLIP)
+    {
+        g_startAwaitLanding[client] = false;
+        return;
+    }
+    if (!(GetEntityFlags(client) & FL_ONGROUND)) return;
+    // Observe only the first natural landing, before any return teleport/input.
+    g_startAwaitLanding[client] = false;
+    if (!StartArea_PhysicallySafe(client)) return;
+    float actual[3];
+    GetClientAbsOrigin(client, actual);
+    if (GetVectorDistance(actual, g_startBirth[client], true) < 256.0) return;
+    g_startLanding[client] = actual;
     g_startHasLanding[client] = true;
 }
 
-void StartArea_AddCandidate(int client, const float seed[3], bool generated = false)
+void StartArea_AddCandidate(int client, const float seed[3], bool generated = false, bool nativePoint = false)
 {
     if (g_startCandidateCount[client] >= START_CANDIDATES) return;
     float point[3];
     point = seed;
     if (generated && !StartArea_PhysicalPoint(seed, point)) return;
-    if (!StartArea_RecordSuitable(point)) return;
+    if (!StartArea_RecordSuitable(point, nativePoint)) return;
+    // A late-load snapshot must not deduplicate a later native record.
     for (int i = 0; i < g_startCandidateCount[client]; i++)
-        if (GetVectorDistance(point, g_startCandidates[client][i], true) < 256.0) return;
-    g_startCandidates[client][g_startCandidateCount[client]++] = point;
+        if (GetVectorDistance(point, g_startCandidates[client][i], true) < 256.0
+            && (!nativePoint || g_startCandidateNative[client][i])) return;
+    int slot = g_startCandidateCount[client]++;
+    g_startCandidates[client][slot] = point;
+    g_startCandidateNative[client][slot] = nativePoint;
 }
 
 void StartArea_AddNearby(int client, const float center[3], int limit)
@@ -295,15 +351,16 @@ void StartArea_BuildCandidates(int client)
 {
     g_startCandidateCount[client] = 0;
     g_startCandidateIndex[client] = 0;
-    if (g_startHasBirth[client]) StartArea_AddCandidate(client, g_startBirth[client]);
-    if (g_startHasLanding[client]) StartArea_AddCandidate(client, g_startLanding[client]);
+    if (g_startHasBirth[client]) StartArea_AddCandidate(client, g_startBirth[client], false, g_startNativeBirth[client]);
+    if (g_startHasLanding[client]) StartArea_AddCandidate(client, g_startLanding[client], false, true);
     for (int other = 1; other <= MaxClients; other++)
-        if (other != client && IsReadySurvivor(other) && g_startHasLanding[other])
-            StartArea_AddCandidate(client, g_startLanding[other]);
+    {
+        if (other == client || !IsReadySurvivor(other)) continue;
+        if (g_startHasBirth[other]) StartArea_AddCandidate(client, g_startBirth[other], false, g_startNativeBirth[other]);
+        if (g_startHasLanding[other]) StartArea_AddCandidate(client, g_startLanding[other], false, true);
+    }
     if (g_startHasHint) StartArea_AddNearby(client, g_startHint, 5);
     for (int i = 0; i < g_startNavCount; i++) StartArea_AddCandidate(client, g_startNav[i], true);
-    for (int i = 0; i < g_startCandidateCount[client] && !g_startHasLanding[client]; i++)
-        StartArea_SaveLanding(client, g_startCandidates[client][i]);
 }
 
 void StartArea_RequestReturn(int client, bool notify = false, bool boundary = false)
@@ -317,6 +374,7 @@ void StartArea_RequestReturn(int client, bool notify = false, bool boundary = fa
     g_startNotify[client] = notify;
     g_startBoundary[client] = boundary;
     g_startRequestDeadline[client] = GetEngineTime() + START_REQUEST_TIMEOUT;
+    g_startAwaitLanding[client] = false;
     StartArea_BuildCandidates(client);
 }
 
@@ -427,9 +485,6 @@ void StartArea_Tick()
         }
         if (!active && StartArea_ActualSafe(client))
         {
-            float actual[3];
-            GetClientAbsOrigin(client, actual);
-            StartArea_SaveLanding(client, actual);
             g_startLimited[client] = false;
         }
         if ((g_startPlacement || g_countdownTimer != null) && g_startReturn[client] == StartIdle)
@@ -446,11 +501,10 @@ void StartArea_Tick()
             GetClientAbsOrigin(client, actual);
             if (GetGameTickCount() > g_startTeleportTick[client]
                 && GetVectorDistance(actual, g_startTarget[client], true) <= 576.0
-                && StartArea_ActualSafe(client, true))
+                && StartArea_ActualSafe(client, true, g_startCandidateNative[client][g_startCandidateIndex[client] - 1]))
             {
                 if (StartArea_ActualSafe(client))
                 {
-                    StartArea_SaveLanding(client, actual);
                     g_startLimited[client] = false;
                 }
                 StartArea_Finish(client);

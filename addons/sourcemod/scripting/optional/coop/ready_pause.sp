@@ -77,7 +77,7 @@ public Plugin myinfo =
 	name = "Coop ready and pause",
 	author = "CanadaRox, 海洋空氣, norths7ar",
 	description = "Per-player readiness, loading gate and start/resume countdowns",
-	version = "1.3.4"
+	version = "1.3.5"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -165,9 +165,8 @@ public void OnPluginStart()
 
 public void OnMapStart()
 {
-	// round_start can precede OnMapStart. OnMapEnd clears the previous map,
-	// so an observed boundary here belongs to this map and must survive setup.
-	bool preserveStartRecords = g_roundInitialized;
+	// Spawn and round_start can precede OnMapStart. End callbacks clear the
+	// previous round's records; setup must retain this round's early spawns.
 	bool roundInitialized = g_roundInitialized || g_lateLoad;
 	g_configsExecuted = false;
 	g_roundInitialized = false;
@@ -193,9 +192,9 @@ public void OnMapStart()
 	// Mode loads and the first map must also enter ready-up, not only restarts.
 	// A plugin loaded into a running map missed round_start. Ordinary map loads
 	// must observe the real round boundary before allowing a start countdown.
-	BeginReadyPhase(roundInitialized, false, preserveStartRecords);
+	BeginReadyPhase(roundInitialized);
 	if (g_lateLoad)
-		for (int client = 1; client <= MaxClients; client++) StartArea_CaptureBirth(client);
+		for (int client = 1; client <= MaxClients; client++) StartArea_CaptureBirth(client, false);
 	g_lateLoad = false;
 }
 
@@ -216,6 +215,7 @@ public void OnMapEnd()
 	CancelTimer(g_boundaryTimer);
 	ResetPauseState(true);
 	g_readyPhase = false;
+	StartArea_ResetRound();
 }
 
 public void OnPluginEnd()
@@ -245,7 +245,7 @@ public void OnConfigsExecuted()
 
 public void OnReadyEnabledChanged(ConVar convar, const char[] oldValue, const char[] newValue)
 {
-	if (g_readyPhase) BeginReadyPhase(g_roundInitialized, !IsStartInitialized() && g_forceStarted, true);
+	if (g_readyPhase) BeginReadyPhase(g_roundInitialized, !IsStartInitialized() && g_forceStarted);
 }
 
 public void OnPauseEnabledChanged(ConVar convar, const char[] oldValue, const char[] newValue)
@@ -306,6 +306,7 @@ void StartRound()
 	if (!g_readyPhase || !IsStartInitialized() || !RequireStartHuman()) return;
 	InvokeForward(g_forwardLivePre);
 	g_readyPhase = false;
+	g_startCaptureBirth = false;
 	StartArea_CancelRequests();
 	ToggleVoteCommandListener(false);
 	SetReadyProtection(false);
@@ -345,17 +346,18 @@ public Action EventRoundBoundary(Event event, const char[] name, bool dontBroadc
 	CancelTimer(g_readyPanelCommandTimer);
 	CancelTimer(g_boundaryTimer);
 	g_readyPhase = false;
+	StartArea_ResetRound();
 	return Plugin_Continue;
 }
 
-void BeginReadyPhase(bool roundInitialized, bool forceStartPending = false, bool preserveStartRecords = false)
+void BeginReadyPhase(bool roundInitialized, bool forceStartPending = false)
 {
 	g_roundInitialized = false;
 	// Keep the pre-live lifecycle active even when the loading gate is disabled.
 	// Consumers still receive OnRoundIsLive on the first real saferoom exit.
 	g_readyPhase = true;
-	if (preserveStartRecords) StartArea_CancelRequests();
-	else StartArea_ResetRound();
+	// Records are reset at round/map end, not after early player_spawn events.
+	StartArea_CancelRequests();
 	g_forceStarted = forceStartPending;
 	SetReadyProtection(g_readyEnabled.BoolValue);
 	g_countdownRemaining = 0;
@@ -491,7 +493,7 @@ void SetReadyFrozen(int client, bool frozen)
 
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon)
 {
-	if (g_readyPhase) StartArea_ObserveInput(client, buttons, vel);
+	if (g_startCaptureBirth) StartArea_ObserveInput(client, buttons, vel);
 	if (StartArea_FreeNoclip(client))
 	{
 		g_startLimited[client] = false;
@@ -510,6 +512,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 
 public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float vel[3], const float angles[3], int weapon, int subtype, int cmdnum, int tickcount, int seed, const int mouse[2])
 {
+	if (g_startCaptureBirth) StartArea_ObserveLanding(client);
 	// readyup.sp: activity only controls the panel's [AFK] marker.
 	if (g_readyPhase && IsClientInGame(client) && !IsFakeClient(client))
 	{
