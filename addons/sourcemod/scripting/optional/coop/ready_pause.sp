@@ -5,6 +5,7 @@
 #include <sdktools>
 #include <left4dhooks>
 #include <builtinvotes>
+#include <colors>
 #undef REQUIRE_PLUGIN
 #include <player_manager>
 #include <caster_system>
@@ -77,7 +78,7 @@ public Plugin myinfo =
 	name = "Coop ready and pause",
 	author = "CanadaRox, 海洋空氣, norths7ar",
 	description = "Per-player readiness, loading gate and start/resume countdowns",
-	version = "1.3.5"
+	version = "1.3.6"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -104,6 +105,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
 public void OnPluginStart()
 {
 	LoadTranslations("ready_pause.phrases");
+	LoadTranslations("pause.phrases"); // Reuse Rework's pause countdown messages.
 	g_footer = new ArrayList(ByteCountToCells(MAX_FOOTER_LEN));
 	SetupReadyPanel();
 	l4d_ready_enable_sound = CreateConVar("l4d_ready_enable_sound", "1", "Enable ready sounds.", _, true, 0.0, true, 1.0);
@@ -633,6 +635,7 @@ void StartCountdown()
 		for (int client = 1; client <= MaxClients; client++)
 			g_countdownParticipant[client] = IsHumanSurvivor(client) ? GetClientSerial(client) : 0;
 		g_countdownRemaining = g_unpauseDelay.IntValue;
+		CPrintToChatAll("%t %t", "Tag", "CountdownCancelNotify");
 		ArmCountdownTimer();
 		return;
 	}
@@ -681,7 +684,13 @@ void ArmCountdownTimer()
 }
 void ShowCountdown()
 {
-	PrintHintTextToAll("%t", g_isPaused ? "PauseCountdown" : "RoundCountdown", g_countdownRemaining);
+	// While engine-paused, HintText updates an already-visible window but does not
+	// reveal a hidden one (observed in-game, 2026-10-24). Follow Rework's pause.sp:
+	// count down in chat; EndPause sends the hint only after unpausing the engine.
+	if (g_isPaused)
+		CPrintToChatAll("%t %t", "Tag", "CountdownReadyDelay", g_countdownRemaining);
+	else
+		PrintHintTextToAll("%t", "RoundCountdown", g_countdownRemaining);
 	if (!g_isPaused && g_readyBlips.BoolValue) PlayCountdownSound();
 }
 

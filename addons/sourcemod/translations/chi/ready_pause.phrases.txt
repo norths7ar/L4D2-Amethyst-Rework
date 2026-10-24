@@ -160,11 +160,6 @@
 	    "#format" "{1:N}"
 	    "chi" "{1} 取消准备。"
 	}
-	"PauseCountdown"
-	{
-	    "#format" "{1:d}"
-	    "chi" "将在 {1} 秒后继续。"
-	}
 	"PauseCountdownCancelled"
 	{
 	    "#format" "{1:N}"

@@ -160,11 +160,6 @@
 	    "#format" "{1:N}"
 	    "en" "{1} is no longer ready."
 	}
-	"PauseCountdown"
-	{
-	    "#format" "{1:d}"
-	    "en" "Continuing in {1} seconds."
-	}
 	"PauseCountdownCancelled"
 	{
 	    "#format" "{1:N}"
