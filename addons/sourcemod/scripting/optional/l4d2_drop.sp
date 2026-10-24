@@ -1,15 +1,14 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "1.5.1"
+#define PLUGIN_VERSION "1.5.3"
 	
 #include <sourcemod>
 #include <sdktools>
 #include <sdkhooks>
-#include <left4dhooks>
+#include <readyup>
 
-bool GameStarted;
-Handle hDropMeleeUnsafe;
+bool RoundLive;
 
 float PressTime[MAXPLAYERS+1];
  
@@ -66,8 +65,6 @@ public Plugin myinfo =
 public void OnPluginStart()
 {
 	CreateConVar("sm_drop_version", PLUGIN_VERSION, "[L4D2] Weapon Drop Version", FCVAR_SPONLY|FCVAR_REPLICATED);
-	hDropMeleeUnsafe = CreateConVar("sm_drop_melee_unsafe", "1", "Enable drop melee weapon out unsafe area.");
-	
 	HookEvent("round_start", Event_RoundStart);
 
 	LoadTranslations("common.phrases");
@@ -75,24 +72,30 @@ public void OnPluginStart()
 
 public void OnMapStart()
 {
-	GameStarted = false;
+	RoundLive = false;
 	MODEL_DEFIB = PrecacheModel("models/w_models/weapons/w_eq_defibrillator.mdl", true);
 }
 
-public Action L4D_OnFirstSurvivorLeftSafeArea(int client)
+public void OnConfigsExecuted()
 {
-	GameStarted = true;
+	// Match swimming, including a plugin loaded after preparation has ended.
+	RoundLive = !IsInReady();
 }
 
-// Same live boundary as survivor inventory initialization and starting pills.
-public void OnRoundIsLive()
+public void OnReadyUpInitiate()
 {
-	GameStarted = true;
+	RoundLive = false;
+	for (int client = 1; client <= MaxClients; client++) PressTime[client] = 0.0;
+}
+
+public void OnRoundIsLivePre()
+{
+	RoundLive = true;
 }
 
 public void Event_RoundStart(Handle event, char[] name, bool dontBroadcast)
 {
-	GameStarted = false;
+	RoundLive = false;
 	for (int client = 1; client <= MaxClients; client++) PressTime[client] = 0.0;
 }
 
@@ -114,6 +117,8 @@ public Action OnPlayerRunCmd(int client, int& buttons, int& impuls, float vel[3]
 
 public Action Command_Drop(int client, int args)
 {
+	if (RoundLive || !IsInReady()) return Plugin_Handled;
+
 	int slot;
 	char weapon[32];
 	GetClientWeapon(client, weapon, sizeof(weapon));
@@ -126,13 +131,6 @@ public Action Command_Drop(int client, int args)
 			case 24: slot = 3;
 			case 28: slot = 4;
 			case 30: slot = 5;
-		}
-
-		if (GameStarted) {
-			if ( GetConVarBool(hDropMeleeUnsafe) ) {
-				if (slot != 1) continue;
-			}
-			else continue;
 		}
 
 		if (StrEqual(weapon, WeaponNames[count]))
