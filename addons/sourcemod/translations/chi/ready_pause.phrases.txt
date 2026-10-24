@@ -192,16 +192,6 @@
 	    "#format" "{1:N}"
 	    "chi" "☐ {1}"
 	}
-	"PauseChat"
-	{
-	    "#format" "{1:N},{2:s}"
-	    "chi" "{1}：{2}"
-	}
-	"PauseTeamChat"
-	{
-	    "#format" "{1:N},{2:s}"
-	    "chi" "（团队）{1}：{2}"
-	}
 	"PausePlayerJoined"
 	{
 	    "#format" "{1:N}"

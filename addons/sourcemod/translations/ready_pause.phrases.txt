@@ -192,16 +192,6 @@
 	    "#format" "{1:N}"
 	    "en" "☐ {1}"
 	}
-	"PauseChat"
-	{
-	    "#format" "{1:N},{2:s}"
-	    "en" "{1}: {2}"
-	}
-	"PauseTeamChat"
-	{
-	    "#format" "{1:N},{2:s}"
-	    "en" "(team) {1}: {2}"
-	}
 	"PausePlayerJoined"
 	{
 	    "#format" "{1:N}"

@@ -3,7 +3,9 @@
 
 #include <sourcemod>
 #include <clientprefs>
-#include <chat-processor>
+#include <colorvariables>
+#undef REQUIRE_PLUGIN
+#include <basecomm>
 #define TAG_CONFIG "configs/chat_tags.cfg"
 #define CUSTOM_BYTES 49
 #define CUSTOM_ID "__custom"
@@ -17,8 +19,8 @@ public Plugin myinfo =
 {
     name = "Chat Tags",
     author = "HexTags, AstRedux maintainers",
-    description = "Configurable and custom chat tags using Chat Processor.",
-    version = "1.1.0"
+    description = "Configurable and custom chat tags with direct chat delivery.",
+    version = "1.2.0"
 };
 
 public void OnPluginStart()
@@ -191,22 +193,49 @@ public int MenuHandlerTag(Menu menu, MenuAction action, int client, int item)
     else if (action == MenuAction_End) delete menu;
     return 0;
 }
-public Action CP_OnChatMessage(int &author, ArrayList recipients, char[] flagstring, char[] name, char[] message, bool &processcolors, bool &removecolors)
+// Anne HexTags Lite's command-level relay, using our existing tag selection.
+// Leave SourceMod chat triggers and BaseChat @ aliases to their existing handlers.
+public Action OnClientSayCommand(int client, const char[] command, const char[] sArgs)
 {
-    if (author <= 0 || author > MaxClients || !IsClientInGame(author) || IsFakeClient(author))
-        return Plugin_Continue;
+    if (client <= 0 || !IsClientInGame(client) || IsFakeClient(client)) return Plugin_Continue;
+    if (!StrEqual(command, "say") && !StrEqual(command, "say_team")) return Plugin_Continue;
+    if (IsChatTrigger() || sArgs[0] == '@') return Plugin_Continue;
+    if (GetFeatureStatus(FeatureType_Native, "BaseComm_IsClientGagged") == FeatureStatus_Available
+        && BaseComm_IsClientGagged(client)) return Plugin_Handled;
 
-    char tag[128];
-    GetEffectiveTag(author, tag, sizeof(tag));
-    if (!tag[0])
-        return Plugin_Continue;
+    char message[256];
+    strcopy(message, sizeof(message), sArgs);
+    if (!message[0]) return Plugin_Continue;
 
-    // Chat Processor has already selected recipients and preserves its native
-    // team/dead/mute behavior. Only change its author-name field.
-    Format(name, MAXLENGTH_NAME, "[%s] %s", tag, name);
-    processcolors = false;
-    return Plugin_Changed;
+    char name[MAX_NAME_LENGTH], tag[128], formatted[256];
+    GetClientName(client, name, sizeof(name));
+    GetEffectiveTag(client, tag, sizeof(tag));
+    if (tag[0])
+        FormatEx(formatted, sizeof(formatted), "\x01[%s] \x03%s\x01", tag, name);
+    else
+        FormatEx(formatted, sizeof(formatted), "\x03%s\x01", name);
+
+    bool teamOnly = StrEqual(command, "say_team");
+    int team = GetClientTeam(client);
+    for (int target = 1; target <= MaxClients; target++)
+    {
+        if (!IsClientInGame(target) || (teamOnly && GetClientTeam(target) != team)) continue;
+        char channel[48], status[48];
+        if (teamOnly || team == 1)
+        {
+            if (team == 2) FormatEx(channel, sizeof(channel), "%T", "TagChatSurvivor", target);
+            else if (team == 3) FormatEx(channel, sizeof(channel), "%T", "TagChatInfected", target);
+            else FormatEx(channel, sizeof(channel), "%T", "TagChatSpectator", target);
+        }
+        if (team != 1 && !IsPlayerAlive(client))
+            FormatEx(status, sizeof(status), "%T", "TagChatDead", target);
+        // Keep the real author for team colors and client-side author filtering.
+        CSetNextAuthor(client);
+        CPrintToChat(target, "\x01%s%s%s : %s", status, channel, formatted, message);
+    }
+    return Plugin_Handled;
 }
+
 void GetEffectiveTag(int client, char[] tag, int maxlength)
 {
     tag[0] = '\0';
@@ -271,7 +300,7 @@ bool IsValidCustom(const char[] text)
         }
         if ((bytes == 3 && code < 0x800) || (bytes == 4 && code < 0x10000)
             || (code >= 0xD800 && code <= 0xDFFF) || code > 0x10FFFF) return false;
-        // CP substitutes brace tokens even without color processing.
+        // Keep custom tags plain text; the chat formatter interprets brace colors.
         if (code < 0x20 || (code >= 0x7F && code <= 0x9F)
             || code == '{' || code == '}' || code == 0xAD || code == 0x61C
             || code == 0x180E || (code >= 0x200B && code <= 0x200F)

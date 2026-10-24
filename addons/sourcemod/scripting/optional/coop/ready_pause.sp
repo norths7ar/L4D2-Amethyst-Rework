@@ -77,7 +77,7 @@ public Plugin myinfo =
 	name = "Coop ready and pause",
 	author = "CanadaRox, 海洋空氣, norths7ar",
 	description = "Per-player readiness, loading gate and start/resume countdowns",
-	version = "1.3.3"
+	version = "1.3.4"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -152,8 +152,9 @@ public void OnPluginStart()
 
 	AddCommandListener(BlockEngineUnpause, "unpause");
 	AddCommandListener(BlockEngineUnpause, "pause");
-	AddCommandListener(ForwardSay, "say");
-	AddCommandListener(ForwardTeamSay, "say_team");
+	AddCommandListener(ObserveChatInput, "say");
+	AddCommandListener(ObserveChatInput, "say_team");
+    HookEvent("player_say", EventPlayerSay, EventHookMode_Post);
 	HookEvent("round_start", EventRoundBoundary, EventHookMode_Pre);
 	HookEvent("round_end", EventRoundBoundary, EventHookMode_PostNoCopy);
 	HookEvent("player_team", EventPlayerTeam, EventHookMode_Post);
@@ -1143,29 +1144,24 @@ public Action BlockEngineUnpause(int client, const char[] command, int argc)
 	return g_isPaused ? Plugin_Handled : Plugin_Continue;
 }
 
-public Action ForwardSay(int client, const char[] command, int argc)
+public Action ObserveChatInput(int client, const char[] command, int argc)
 {
-	if (client > 0) g_panelButtonTime[client] = GetEngineTime();
-	if (!g_isPaused || client <= 0) return Plugin_Continue;
-	char message[256];
-	GetCmdArgString(message, sizeof(message));
-	StripQuotes(message);
-	if (!message[0] || message[0] == '!' || message[0] == '/') return Plugin_Continue;
-	PrintToChatAll("%t", "PauseChat", client, message);
-	return Plugin_Handled;
+    if (client > 0) g_panelButtonTime[client] = GetEngineTime();
+    return Plugin_Continue;
 }
 
-public Action ForwardTeamSay(int client, const char[] command, int argc)
+public void EventPlayerSay(Event event, const char[] name, bool dontBroadcast)
 {
-	if (client > 0) g_panelButtonTime[client] = GetEngineTime();
-	if (!g_isPaused || client <= 0) return Plugin_Continue;
-	char message[256];
-	GetCmdArgString(message, sizeof(message));
-	StripQuotes(message);
-	if (!message[0] || message[0] == '!' || message[0] == '/') return Plugin_Continue;
-	for (int target = 1; target <= MaxClients; target++)
-		if (IsClientInGame(target) && GetClientTeam(target) == GetClientTeam(client)) PrintToChat(target, "%t", "PauseTeamChat", client, message);
-	return Plugin_Handled;
+    if (g_isPaused) RequestFrame(FrameResetPlayerTalkTime, event.GetInt("userid"));
+}
+
+void FrameResetPlayerTalkTime(any userid)
+{
+    int client = GetClientOfUserId(userid);
+    if (client < 1 || !g_isPaused) return;
+    // Rework pause: curtime stops while paused. Reset the chat cooldown after
+    // native delivery so subsequent messages keep working when not relayed.
+    SetEntPropFloat(client, Prop_Data, "m_fLastPlayerTalkTime", 0.0);
 }
 
 bool CanPauseNow()

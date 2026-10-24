@@ -105,4 +105,24 @@
         "chi" "[称号] 已更新该玩家的称号设置。"
         "en" "[Tag] The player's tag settings have been updated."
     }
+    "TagChatSurvivor"
+    {
+        "chi" "(生还者) "
+        "en" "(Survivor) "
+    }
+    "TagChatInfected"
+    {
+        "chi" "(感染者) "
+        "en" "(Infected) "
+    }
+    "TagChatSpectator"
+    {
+        "chi" "(旁观者) "
+        "en" "(Spectator) "
+    }
+    "TagChatDead"
+    {
+        "chi" "*死亡* "
+        "en" "*DEAD* "
+    }
 }
