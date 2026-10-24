@@ -185,6 +185,10 @@
 	{
 		"en" "Teleport team to end saferoom"
 	}
+	"AdminCheckpointFailed"
+	{
+		"en" "No valid end-saferoom found. Some player stayed."
+	}
 	"AdminAllDest"
 	{
 		"en" "All survivors -> choose destination"

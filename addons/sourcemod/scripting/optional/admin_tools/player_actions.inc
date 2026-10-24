@@ -2,6 +2,8 @@
 // Target identities travel with each menu item, not in global selection state.
 
 TopMenu hTopMenu;
+Handle g_adminLastCheckpoint;
+Handle g_adminCheckpointSpawn;
 
 static const char g_playerActionIds[][] = {
 	"a4d_health_menu", "a4d_ammo_menu", "a4d_respawn_menu", "a4d_teleport_menu"
@@ -12,7 +14,34 @@ static const char g_playerActionLabels[][] = {
 
 void InitPlayerActions()
 {
+	InitCheckpointTeleport();
 	if (LibraryExists("adminmenu")) OnAdminMenuReady(GetAdminTopMenu());
+}
+
+void InitCheckpointTeleport()
+{
+	GameData data = new GameData("admin_tools");
+	if (data != null)
+	{
+		StartPrepSDKCall(SDKCall_Raw);
+		if (PrepSDKCall_SetFromConf(data, SDKConf_Signature, "TerrorNavMesh::GetLastCheckpoint"))
+		{
+			PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
+			g_adminLastCheckpoint = EndPrepSDKCall();
+		}
+		StartPrepSDKCall(SDKCall_Raw);
+		if (PrepSDKCall_SetFromConf(data, SDKConf_Signature, "Checkpoint::GetSpawnPosition"))
+		{
+			PrepSDKCall_AddParameter(SDKType_Vector, SDKPass_ByRef, 0, VENCODE_FLAG_COPYBACK);
+			PrepSDKCall_AddParameter(SDKType_Vector, SDKPass_ByRef, 0, VENCODE_FLAG_COPYBACK);
+			PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
+			PrepSDKCall_SetReturnInfo(SDKType_Bool, SDKPass_Plain);
+			g_adminCheckpointSpawn = EndPrepSDKCall();
+		}
+		delete data;
+	}
+	if (g_adminLastCheckpoint == null || g_adminCheckpointSpawn == null)
+		LogError("End-saferoom teleport disabled: cannot prepare admin_tools checkpoint SDK calls.");
 }
 
 public void OnLibraryRemoved(const char[] name)
@@ -113,7 +142,7 @@ public int PlayerActionTargetHandler(Menu menu, MenuAction event, int client, in
 		{
 			if (StrEqual(fields[1], "checkpoint"))
 			{
-				// This engine command necessarily moves everyone; respect target immunity.
+				// This operation moves the whole team; respect target immunity.
 				for (int target = 1; target <= MaxClients; target++)
 					if (IsActionTarget(target, true) && !CanUserTarget(client, target))
 					{
@@ -121,8 +150,7 @@ public int PlayerActionTargetHandler(Menu menu, MenuAction event, int client, in
 						ShowPlayerActionTargets(client, action);
 						return 0;
 					}
-				ExecutePlayerCheat(client, "warp_all_survivors_to_checkpoint", "");
-				LogAction(client, -1, "\"%L\" warped survivors to checkpoint", client);
+				TeleportTeamToCheckpoint(client);
 				ShowPlayerActionTargets(client, action);
 			}
 			else ShowTeleportDestinations(client, fields[1]);
@@ -141,6 +169,41 @@ public int PlayerActionTargetHandler(Menu menu, MenuAction event, int client, in
 		ShowPlayerActionTargets(client, action);
 	}
 	return 0;
+}
+
+void TeleportTeamToCheckpoint(int client)
+{
+	if (g_adminLastCheckpoint == null || g_adminCheckpointSpawn == null)
+	{
+		PrintToChat(client, "[SM] %t", "AdminCheckpointFailed");
+		return;
+	}
+	// L4D_GetCheckpointLast returns a door entity, not the engine Checkpoint.
+	Address checkpoint = view_as<Address>(SDKCall(g_adminLastCheckpoint, L4D_GetPointer(POINTER_NAVMESH)));
+	if (checkpoint == Address_Null)
+	{
+		PrintToChat(client, "[SM] %t", "AdminCheckpointFailed");
+		return;
+	}
+	int moved;
+	bool failed;
+	for (int target = 1; target <= MaxClients; target++)
+	{
+		if (!IsActionTarget(target, true)) continue;
+		float position[3], angles[3], velocity[3];
+		// Match WarpToCheckpoint's per-player selection, but honor its bool result.
+		// The engine command ignores failure and teleports to vec3_origin instead.
+		if (!SDKCall(g_adminCheckpointSpawn, checkpoint, position, angles, 0))
+		{
+			failed = true;
+			continue;
+		}
+		TeleportEntity(target, position, angles, velocity);
+		if (GetEntProp(target, Prop_Send, "m_isIncapacitated")) L4D_ReviveSurvivor(target);
+		moved++;
+	}
+	if (moved > 0) LogAction(client, -1, "\"%L\" warped survivors to checkpoint", client);
+	if (failed) PrintToChat(client, "[SM] %t", "AdminCheckpointFailed");
 }
 
 void ShowTeleportDestinations(int client, const char[] source)

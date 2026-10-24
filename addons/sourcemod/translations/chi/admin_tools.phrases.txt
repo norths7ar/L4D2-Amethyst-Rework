@@ -182,6 +182,10 @@
 	{
 		"chi" "全队传送到终点安全屋"
 	}
+	"AdminCheckpointFailed"
+	{
+		"chi" "未找到终点安全区位置，无法传送玩家。"
+	}
 	"AdminAllDest"
 	{
 		"chi" "所有生还者 → 选择目的地"

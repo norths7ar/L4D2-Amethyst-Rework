@@ -1,0 +1,23 @@
+"Games"
+{
+	"left4dead2"
+	{
+		"Signatures"
+		{
+			"TerrorNavMesh::GetLastCheckpoint"
+			{
+				"library" "server"
+				"linux" "@_ZNK13TerrorNavMesh17GetLastCheckpointEv"
+				// Windows pattern from CompetitiveWithAnne's rygive gamedata.
+				"windows" "\x2A\x2A\x2A\x2A\x2A\x2A\x56\x33\x2A\x57\x85\x2A\x7E\x2A\x8B\xB1\x2A\x2A\x2A\x2A\x8B\x2A\x8B"
+			}
+			"Checkpoint::GetSpawnPosition"
+			{
+				"library" "server"
+				"linux" "@_ZNK10Checkpoint16GetSpawnPositionEP6VectorP6QAnglePP13TerrorNavArea"
+				// Windows pattern from l4d_consistent_escaperoute gamedata.
+				"windows" "\x53\x8B\xDC\x83\xEC\x08\x83\xE4\xF0\x83\xC4\x04\x55\x8B\x6B\x04\x89\x6C\x24\x04\x8B\xEC\x81\xEC\x28\x01\x00\x00\xA1\x2A\x2A\x2A\x2A\x33\xC5\x89\x45\xFC\x8B\x43\x08\x56"
+			}
+		}
+	}
+}

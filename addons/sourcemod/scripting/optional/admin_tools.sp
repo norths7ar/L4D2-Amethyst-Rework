@@ -20,7 +20,7 @@ public Plugin myinfo =
 	name = "Coop admin tools",
 	author = "海洋空氣, norths7ar",
 	description = "Administrator player operations and emergency controls for Coop",
-	version = "1.5.1"
+	version = "1.5.2"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
