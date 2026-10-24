@@ -10,7 +10,7 @@
 public Plugin myinfo = {
     name = "AI Tank", author = "Breezy, norths7ar",
     description = "AI Tank movement, throws and opportunistic obstacle interaction",
-    version = "1.5.0"
+    version = "1.5.1"
 };
 
 ConVar g_enable, hCvarTankBhop, hCvarTankRock, hCvarTankBhopStopDistance;
@@ -239,14 +239,13 @@ Action TankRunCommand(int tank, int &buttons, float vel[3], float angles[3]) {
         strcopy(g_commandOwner[tank], sizeof(g_commandOwner[]), "door");
         return Plugin_Changed;
     }
-    // Keep an already validated local route until its exit. Native steering may
-    // legitimately turn away while airborne; only a traversal hazard cancels it.
-    bool localOwned = g_jumpUntil[tank] > 0.0 || g_retreatUntil[tank] > 0.0 || g_recoveryFlightUntil[tank] > 0.0;
-    bool pathAllows = !g_pathBlocked[tank] && (localOwned || TankPathAllowsAddedMove(tank, wish, moving));
-    if (!pathAllows) {
+    // Path transitions govern the next ground launch, not an existing flight.
+    // Ordinary steering belongs to native movement and TankAirControl; a path
+    // snapshot pointing elsewhere is not a reason to brake a normal chase hop.
+    if (g_pathBlocked[tank] && (GetEntityFlags(tank) & FL_ONGROUND)) {
         CancelTankRecovery(tank);
-        EndObstacleJump(tank, "yield native path transition/turn", false);
-        if (g_pathLadder[tank] || g_hopUntil[tank] > GetGameTime()) TankLadderBrake(tank);
+        EndObstacleJump(tank, "yield native path transition", false);
+        if (g_pathLadder[tank] || g_hopUntil[tank] > GetGameTime()) TankTraversalBrake(tank);
         ResetTankHop(tank);
         return Plugin_Changed;
     }

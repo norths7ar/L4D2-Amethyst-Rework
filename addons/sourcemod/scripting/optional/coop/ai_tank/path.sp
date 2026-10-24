@@ -5,9 +5,7 @@
 ConVar g_pathEnable;
 bool g_pathConsumer;
 bool g_pathFresh[MAXPLAYERS + 1], g_pathBlocked[MAXPLAYERS + 1], g_pathLadder[MAXPLAYERS + 1];
-float g_pathCheck[MAXPLAYERS + 1], g_pathReadAt[MAXPLAYERS + 1];
-float g_pathDirection[MAXPLAYERS + 1][3];
-bool g_pathHasDirection[MAXPLAYERS + 1];
+float g_pathCheck[MAXPLAYERS + 1];
 
 bool TankPathReady() {
     return GetFeatureStatus(FeatureType_Native, "AnneNextBot_IsActive") == FeatureStatus_Available
@@ -37,7 +35,7 @@ public void OnPathEnableChanged(ConVar cvar, const char[] oldValue, const char[]
     for (int tank = 1; tank <= MaxClients; tank++) ResetTankPath(tank);
 }
 void ResetTankPath(int tank) {
-    g_pathFresh[tank] = g_pathBlocked[tank] = g_pathLadder[tank] = g_pathHasDirection[tank] = false;
+    g_pathFresh[tank] = g_pathBlocked[tank] = g_pathLadder[tank] = false;
     g_pathCheck[tank] = 0.0;
 }
 float TankDistance2D(const float a[3], const float b[3]) {
@@ -45,30 +43,15 @@ float TankDistance2D(const float a[3], const float b[3]) {
     return SquareRoot(x * x + y * y);
 }
 
-// Physical ladder fallback uses distance to the box, not its mid-air origin.
-bool TankNearLadder(const float position[3]) {
-    int entity = -1;
-    while ((entity = FindEntityByClassname(entity, "func_simpleladder")) != -1) {
-        float origin[3], mins[3], maxs[3], gap[3];
-        GetEntPropVector(entity, Prop_Send, "m_vecOrigin", origin);
-        GetEntPropVector(entity, Prop_Send, "m_vecMins", mins);
-        GetEntPropVector(entity, Prop_Send, "m_vecMaxs", maxs);
-        for (int axis = 0; axis < 3; axis++) {
-            float low = origin[axis] + mins[axis], high = origin[axis] + maxs[axis];
-            gap[axis] = position[axis] < low ? low - position[axis] : (position[axis] > high ? position[axis] - high : 0.0);
-        }
-        if (gap[2] <= 72.0 && SquareRoot(gap[0] * gap[0] + gap[1] * gap[1]) <= 180.0) return true;
-    }
-    return false;
-}
 void TankPathUpdate(int tank, const float position[3]) {
     float now = GetGameTime();
     if (now < g_pathCheck[tank]) return;
     g_pathCheck[tank] = now + 0.1;
     bool wasFresh = g_pathFresh[tank], wasBlocked = g_pathBlocked[tank];
-    g_pathFresh[tank] = g_pathBlocked[tank] = g_pathLadder[tank] = g_pathHasDirection[tank] = false;
-    // The module switch also disables its physical fallback. Missing extension
-    // with the switch ON is different: ordinary collision/ladder guards remain.
+    g_pathFresh[tank] = g_pathBlocked[tank] = g_pathLadder[tank] = false;
+    // Only a current route establishes an upcoming traversal. A nearby ladder
+    // may belong to another route; native ladder handling and hull checks still
+    // apply when no snapshot is available.
     if (!g_pathEnable.BoolValue) return;
     int count, current;
     bool complete;
@@ -77,7 +60,6 @@ void TankPathUpdate(int tank, const float position[3]) {
         && AnneNextBot_GetPathSnapshotInfo(tank, count, current, complete, age)
         && count > 0 && current >= 0 && current < count && age >= 0.0 && age <= 0.35) {
         g_pathFresh[tank] = true;
-        g_pathReadAt[tank] = now - age;
         float previous[3]; previous = position;
         float reach;
         int end = current + 10;
@@ -96,34 +78,22 @@ void TankPathUpdate(int tank, const float position[3]) {
             // Ladder goal is the entrance; other transitions start at the previous goal.
             if (ladder && reach <= 180.0) g_pathLadder[tank] = true;
             if ((ladder && reach <= 180.0) || (special && !ladder && start <= 160.0)
-                || (FloatAbs(goal[2] - previous[2]) > 56.0 && start <= 160.0)) g_pathBlocked[tank] = true;
+                // The first point is the Tank's position, not a path-floor point.
+                // Its height while jumping must not create a false transition.
+                || ((index > current || (GetEntityFlags(tank) & FL_ONGROUND))
+                    && FloatAbs(goal[2] - previous[2]) > 56.0 && start <= 160.0)) g_pathBlocked[tank] = true;
             if (special) break;
-            // Look ahead along the native route, but do not cut a corner. Keep
-            // the first meaningful goal rather than aiming through later walls.
-            if (!g_pathHasDirection[tank] && TankDistance2D(position, goal) >= 32.0) {
-                MakeVectorFromPoints(position, goal, g_pathDirection[tank]);
-                g_pathDirection[tank][2] = 0.0;
-                NormalizeVector(g_pathDirection[tank], g_pathDirection[tank]);
-                g_pathHasDirection[tank] = true;
-            }
             previous = goal;
             if (reach > 320.0) break;
         }
     }
     if (!g_pathFresh[tank]) {
-        g_pathHasDirection[tank] = false;
-        g_pathLadder[tank] = TankNearLadder(position);
-        g_pathBlocked[tank] = g_pathLadder[tank];
+        g_pathBlocked[tank] = g_pathLadder[tank] = false;
     }
-    if (wasFresh != g_pathFresh[tank]) TankEvent(tank, "path", g_pathFresh[tank] ? "snapshot fresh" : "snapshot unavailable/stale; physical fallback");
+    if (wasFresh != g_pathFresh[tank]) TankEvent(tank, "path", g_pathFresh[tank] ? "snapshot fresh" : "snapshot unavailable/stale; native traversal");
     if (wasBlocked != g_pathBlocked[tank]) TankEvent(tank, "path", g_pathBlocked[tank] ? "traversal ahead: yield added movement" : "ordinary route: release traversal guard");
 }
-bool TankPathAllowsAddedMove(int tank, const float wish[3], bool moving) {
-    if (g_pathBlocked[tank]) return false;
-    if (!g_pathFresh[tank] || GetGameTime() - g_pathReadAt[tank] > 0.45) return true;
-    return !moving || !g_pathHasDirection[tank] || GetVectorDotProduct(wish, g_pathDirection[tank]) >= 0.7;
-}
-void TankLadderBrake(int tank) {
+void TankTraversalBrake(int tank) {
     float motion[3]; GetEntPropVector(tank, Prop_Data, "m_vecVelocity", motion);
     float speed = SquareRoot(motion[0] * motion[0] + motion[1] * motion[1]);
     float run = TankRunSpeed(tank);
