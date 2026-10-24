@@ -65,7 +65,6 @@ public void OnAdminMenuReady(Handle topmenu)
 		if (parent != INVALID_TOPMENUOBJECT)
 			menu.AddItem(g_playerActionIds[i], PlayerActionTopMenu, parent, g_playerActionIds[i], ADMFLAG_CHEATS);
 	}
-	menu.AddItem("sm_guns", GunsTopMenu, category, "sm_guns", ADMFLAG_CHEATS);
 }
 
 public void PlayerAssistanceCategory(TopMenu menu, TopMenuAction action, TopMenuObject objectId,
@@ -107,7 +106,7 @@ void ShowPlayerActionTargets(int client, int action)
 	Menu menu = new Menu(PlayerActionTargetHandler);
 	char label[128];
 	Format(label, sizeof(label), "%T", g_playerActionLabels[action], client);
-	menu.SetTitle("%T", "AdminSelectPlayer", client, label);
+	menu.SetTitle("%T", action == 3 ? "AdminSelectTarget" : "AdminSelectPlayer", client, label);
 	menu.ExitBackButton = true;
 	if (action == 3)
 	{

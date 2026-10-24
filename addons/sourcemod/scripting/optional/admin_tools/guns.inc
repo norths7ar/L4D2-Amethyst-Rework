@@ -41,18 +41,6 @@ Action CommandGuns(int client, int args)
 	return Plugin_Handled;
 }
 
-public void GunsTopMenu(TopMenu menu, TopMenuAction action, TopMenuObject objectId,
-	int client, char[] buffer, int maxlength)
-{
-	if (action == TopMenuAction_DisplayOption)
-		Format(buffer, maxlength, "%T", "AdminBasicGuns", client);
-	else if (action == TopMenuAction_SelectOption)
-	{
-		SpawnBasicGuns(client);
-		menu.Display(client, TopMenuPosition_LastCategory);
-	}
-}
-
 void SpawnBasicGuns(int client)
 {
 	if (client == 0 || !IsClientInGame(client))

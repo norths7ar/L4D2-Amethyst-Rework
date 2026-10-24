@@ -99,10 +99,6 @@
 	{
 		"en" "[Map Rules] Change failed. Check feature availability and the server log."
 	}
-	"AdminBasicGuns"
-	{
-		"en" "Spawn T1 weapons"
-	}
 	"AdminGunsInGame"
 	{
 		"en" "Use this command in game."
@@ -180,6 +176,11 @@
 	{
 		"#format" "{1:s}"
 		"en" "{1}: select a player"
+	}
+	"AdminSelectTarget"
+	{
+		"#format" "{1:s}"
+		"en" "{1}: select a target"
 	}
 	"AdminCheckpoint"
 	{

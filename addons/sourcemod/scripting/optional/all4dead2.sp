@@ -24,7 +24,7 @@ Copyright 2009 James Richardson
 // Define constants
 #define PLUGIN_NAME					"All4Dead"
 #define PLUGIN_TAG					"[A4D] "
-#define PLUGIN_VERSION			"2.3.3"
+#define PLUGIN_VERSION			"2.3.4"
 #define MENU_DISPLAY_TIME		MENU_TIME_FOREVER
 
 // Include necessary files
@@ -516,6 +516,7 @@ public Action:Menu_CreateWeaponMenu(client, args) {
 	SetMenuExitButton(menu, true);
 	AddGenerationMenuItem(menu, client, "6", "A4DUzi");
 	AddGenerationMenuItem(menu, client, "7", "A4DSilencedSmg");
+	AddGenerationMenuItem(menu, client, "8", "A4DMp5");
 	AddGenerationMenuItem(menu, client, "2", "A4DPumpShotgun");
 	AddGenerationMenuItem(menu, client, "3", "A4DChromeShotgun");
 	AddGenerationMenuItem(menu, client, "15", "A4DScout");
@@ -523,7 +524,6 @@ public Action:Menu_CreateWeaponMenu(client, args) {
 	AddGenerationMenuItem(menu, client, "1", "A4DMagnum");
 	AddGenerationMenuItem(menu, client, "4", "A4DAutoShotgun");
 	AddGenerationMenuItem(menu, client, "5", "A4DSpasShotgun");
-	AddGenerationMenuItem(menu, client, "8", "A4DMp5");
 	AddGenerationMenuItem(menu, client, "9", "A4DM16");
 	AddGenerationMenuItem(menu, client, "10", "A4DAk47");
 	AddGenerationMenuItem(menu, client, "11", "A4DScar");

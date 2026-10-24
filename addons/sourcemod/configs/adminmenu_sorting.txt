@@ -8,6 +8,8 @@
 {
 	"PlayerCommands"
 	{
+		"item"		"a4d_teleport_menu"
+		"item"		"sm_noclip"
 		"item"		"sm_slay"
 		"item"		"sm_slap"
 		"item"		"sm_kick"
@@ -15,8 +17,6 @@
 		"item"		"sm_gag"
 		"item"		"sm_rename"
 		"item"		"sm_who"
-		"item"		"a4d_teleport_menu"
-		"item"		"sm_noclip"
 		"item"		"sm_burn"		
 		"item"		"sm_beacon"
 		"item"		"sm_freeze"
@@ -30,7 +30,6 @@
 		"item" "a4d_health_menu"
 		"item" "a4d_ammo_menu"
 		"item" "a4d_respawn_menu"
-		"item" "sm_guns"
 		"item" "a4d_guns_menu"
 		"item" "a4d_melee_menu"
 		"item" "a4d_items_menu"

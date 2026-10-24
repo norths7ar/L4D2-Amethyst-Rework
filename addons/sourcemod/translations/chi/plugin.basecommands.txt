@@ -67,7 +67,7 @@
 
 	"Identify player"
 	{
-		"chi"		"玩家认证"
+		"chi"		"查看玩家权限"
 	}
 
 	"Choose Map"

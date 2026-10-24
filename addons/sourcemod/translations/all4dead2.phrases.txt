@@ -6,27 +6,27 @@
 	}
 	"A4DGuns"
 	{
-		"en" "Guns"
+		"en" "Spawn guns"
 	}
 	"A4DMeleeWeapons"
 	{
-		"en" "Melee weapons"
+		"en" "Spawn melee weapons"
 	}
 	"A4DSuppliesAndProps"
 	{
-		"en" "Supplies and props"
+		"en" "Spawn supplies and props"
 	}
 	"A4DSpecialInfectedAndHorde"
 	{
-		"en" "Special infected and horde"
+		"en" "Spawn special infected and horde"
 	}
 	"A4DUncommonInfected"
 	{
-		"en" "Uncommon infected"
+		"en" "Spawn uncommon infected"
 	}
 	"A4DSpawnSpecialInfected"
 	{
-		"en" "Spawn special infected"
+		"en" "Spawn special infected and horde"
 	}
 	"A4DSpawnUncommonInfected"
 	{
@@ -34,7 +34,7 @@
 	}
 	"A4DSpawnItems"
 	{
-		"en" "Spawn items"
+		"en" "Spawn supplies and props"
 	}
 	"A4DSpawnGuns"
 	{

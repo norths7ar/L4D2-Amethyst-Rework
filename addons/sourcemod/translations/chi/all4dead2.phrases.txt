@@ -6,35 +6,35 @@
 	}
 	"A4DGuns"
 	{
-		"chi" "枪械"
+		"chi" "生成枪械"
 	}
 	"A4DMeleeWeapons"
 	{
-		"chi" "近战武器"
+		"chi" "生成近战武器"
 	}
 	"A4DSuppliesAndProps"
 	{
-		"chi" "补给与道具"
+		"chi" "生成补给与道具"
 	}
 	"A4DSpecialInfectedAndHorde"
 	{
-		"chi" "特殊感染者与尸潮"
+		"chi" "生成特感与尸潮"
 	}
 	"A4DUncommonInfected"
 	{
-		"chi" "特殊普通感染者"
+		"chi" "生成特殊小僵尸"
 	}
 	"A4DSpawnSpecialInfected"
 	{
-		"chi" "生成特殊感染者"
+		"chi" "生成特感与尸潮"
 	}
 	"A4DSpawnUncommonInfected"
 	{
-		"chi" "生成特殊普通感染者"
+		"chi" "生成特殊小僵尸"
 	}
 	"A4DSpawnItems"
 	{
-		"chi" "生成物品"
+		"chi" "生成补给与道具"
 	}
 	"A4DSpawnGuns"
 	{

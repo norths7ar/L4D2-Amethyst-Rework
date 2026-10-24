@@ -96,10 +96,6 @@
 	{
 		"chi" "[地图规则] 修改失败，请检查功能是否可用及服务器日志。"
 	}
-	"AdminBasicGuns"
-	{
-		"chi" "生成 T1 武器"
-	}
 	"AdminGunsInGame"
 	{
 		"chi" "请在游戏内使用此指令。"
@@ -177,6 +173,11 @@
 	{
 		"#format" "{1:s}"
 		"chi" "{1}：选择玩家"
+	}
+	"AdminSelectTarget"
+	{
+		"#format" "{1:s}"
+		"chi" "{1}：选择目标"
 	}
 	"AdminCheckpoint"
 	{
