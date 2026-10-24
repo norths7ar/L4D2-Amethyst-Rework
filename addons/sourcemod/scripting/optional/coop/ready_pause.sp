@@ -78,7 +78,7 @@ public Plugin myinfo =
 	name = "Coop ready and pause",
 	author = "CanadaRox, 海洋空氣, norths7ar",
 	description = "Per-player readiness, loading gate and start/resume countdowns",
-	version = "1.3.6"
+	version = "1.3.7"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -264,7 +264,11 @@ public void OnClientPutInServer(int client)
 	g_panelHidden[client] = false;
 	g_playerReady[client] = false;
 	g_panelButtonTime[client] = GetEngineTime();
-	if (g_isPaused && !IsFakeClient(client)) PrintToChatAll("%t", "PausePlayerJoined", client);
+	if (g_isPaused && !IsFakeClient(client))
+	{
+		SetEntPropFloat(client, Prop_Data, "m_fLastPlayerTalkTime", 0.0);
+		PrintToChatAll("%t", "PausePlayerJoined", client);
+	}
 }
 
 public void OnClientDisconnect(int client)
@@ -874,6 +878,11 @@ public Action TimerEnginePause(Handle timer)
 {
 	g_enginePauseTimer = null;
 	if (!g_isPaused) return Plugin_Stop;
+	// Rework also clears the existing cooldown on pause entry. Waiting for
+	// player_say alone can strand the first message behind frozen curtime.
+	for (int client = 1; client <= MaxClients; client++)
+		if (IsClientInGame(client) && !IsFakeClient(client))
+			SetEntPropFloat(client, Prop_Data, "m_fLastPlayerTalkTime", 0.0);
 	if (!SetEnginePaused(true)) { ResetPauseState(false); return Plugin_Stop; }
 	g_enginePaused = true;
 	PrintToChatAll("%t", g_adminPause ? "PauseAdmin" : "PauseStarted");

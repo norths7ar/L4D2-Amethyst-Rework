@@ -3,15 +3,13 @@
 
 #include <sourcemod>
 #include <clientprefs>
-#include <colorvariables>
-#undef REQUIRE_PLUGIN
-#include <basecomm>
 #define TAG_CONFIG "configs/chat_tags.cfg"
 #define CUSTOM_BYTES 49
 #define CUSTOM_ID "__custom"
 
 Handle g_cookie, g_customCookie, g_banCookie;
 ArrayList g_ids, g_names, g_values, g_selectable;
+StringMap g_chatFormats;
 char g_selected[MAXPLAYERS + 1][64], g_custom[MAXPLAYERS + 1][CUSTOM_BYTES];
 bool g_visible[MAXPLAYERS + 1], g_loaded[MAXPLAYERS + 1], g_banned[MAXPLAYERS + 1];
 
@@ -19,13 +17,15 @@ public Plugin myinfo =
 {
     name = "Chat Tags",
     author = "HexTags, AstRedux maintainers",
-    description = "Configurable and custom chat tags with direct chat delivery.",
-    version = "1.2.0"
+    description = "Configurable and custom tags on native chat messages.",
+    version = "1.2.1"
 };
 
 public void OnPluginStart()
 {
     LoadTranslations("chat_tags.phrases");
+    LoadChatFormats();
+    HookUserMessage(GetUserMessageId("SayText2"), OnSayText2, true);
     g_cookie = RegClientCookie("chat_tag", "Selected chat tag id; empty uses the configured default.", CookieAccess_Protected);
     g_customCookie = RegClientCookie("chat_tag_custom", "Saved plain-text custom tag.", CookieAccess_Private);
     g_banCookie = RegClientCookie("chat_tag_custom_ban", "Custom tag permission revoked.", CookieAccess_Private);
@@ -193,47 +193,125 @@ public int MenuHandlerTag(Menu menu, MenuAction action, int client, int item)
     else if (action == MenuAction_End) delete menu;
     return 0;
 }
-// Anne HexTags Lite's command-level relay, using our existing tag selection.
-// Leave SourceMod chat triggers and BaseChat @ aliases to their existing handlers.
-public Action OnClientSayCommand(int client, const char[] command, const char[] sArgs)
+void LoadChatFormats()
 {
-    if (client <= 0 || !IsClientInGame(client) || IsFakeClient(client)) return Plugin_Continue;
-    if (!StrEqual(command, "say") && !StrEqual(command, "say_team")) return Plugin_Continue;
-    if (IsChatTrigger() || sArgs[0] == '@') return Plugin_Continue;
-    if (GetFeatureStatus(FeatureType_Native, "BaseComm_IsClientGagged") == FeatureStatus_Available
-        && BaseComm_IsClientGagged(client)) return Plugin_Handled;
-
-    char message[256];
-    strcopy(message, sizeof(message), sArgs);
-    if (!message[0]) return Plugin_Continue;
-
-    char name[MAX_NAME_LENGTH], tag[128], formatted[256];
-    GetClientName(client, name, sizeof(name));
-    GetEffectiveTag(client, tag, sizeof(tag));
-    if (tag[0])
-        FormatEx(formatted, sizeof(formatted), "\x01[%s] \x03%s\x01", tag, name);
-    else
-        FormatEx(formatted, sizeof(formatted), "\x03%s\x01", name);
-
-    bool teamOnly = StrEqual(command, "say_team");
-    int team = GetClientTeam(client);
-    for (int target = 1; target <= MaxClients; target++)
+    g_chatFormats = new StringMap();
+    char path[PLATFORM_MAX_PATH];
+    BuildPath(Path_SM, path, sizeof(path), "configs/chat_tags_formats.cfg");
+    KeyValues formats = new KeyValues("ChatTagFormats");
+    if (!formats.ImportFromFile(path) || !formats.GotoFirstSubKey())
     {
-        if (!IsClientInGame(target) || (teamOnly && GetClientTeam(target) != team)) continue;
-        char channel[48], status[48];
-        if (teamOnly || team == 1)
-        {
-            if (team == 2) FormatEx(channel, sizeof(channel), "%T", "TagChatSurvivor", target);
-            else if (team == 3) FormatEx(channel, sizeof(channel), "%T", "TagChatInfected", target);
-            else FormatEx(channel, sizeof(channel), "%T", "TagChatSpectator", target);
-        }
-        if (team != 1 && !IsPlayerAlive(client))
-            FormatEx(status, sizeof(status), "%T", "TagChatDead", target);
-        // Keep the real author for team colors and client-side author filtering.
-        CSetNextAuthor(client);
-        CPrintToChat(target, "\x01%s%s%s : %s", status, channel, formatted, message);
+        LogError("Cannot load %s; leaving native chat unchanged.", path);
+        delete formats;
+        return;
     }
+    do
+    {
+        char language[16];
+        formats.GetSectionName(language, sizeof(language));
+        if (!formats.GotoFirstSubKey(false)) continue;
+        do
+        {
+            char token[64], key[96], text[256];
+            formats.GetSectionName(token, sizeof(token));
+            formats.GetString(NULL_STRING, text, sizeof(text));
+            ReplaceString(text, sizeof(text), "{default}", "\x01");
+            ReplaceString(text, sizeof(text), "{team}", "\x03");
+            FormatEx(key, sizeof(key), "%s:%s", language, token);
+            g_chatFormats.SetString(key, text);
+        }
+        while (formats.GotoNextKey(false));
+        formats.GoBack();
+    }
+    while (formats.GotoNextKey());
+    delete formats;
+}
+
+bool GetChatFormat(int client, const char[] token, char[] text, int size)
+{
+    char language[16], key[96];
+    GetLanguageInfo(GetClientLanguage(client), language, sizeof(language));
+    FormatEx(key, sizeof(key), "%s:%s", language, token);
+    if (g_chatFormats.GetString(key, text, size)) return true;
+    FormatEx(key, sizeof(key), "en:%s", token);
+    return g_chatFormats.GetString(key, text, size);
+}
+
+// Decorate the engine's message, not the say command. The engine and SourceMod
+// retain command/gag handling, channel selection and the exact recipient list.
+// Deferred delivery follows chat-processor's native SayText2 forwarding path.
+public Action OnSayText2(UserMsg id, Handle input, const int[] players, int count, bool reliable, bool init)
+{
+    int client = BfReadByte(input);
+    int chat = BfReadByte(input);
+    if (client <= 0 || client > MaxClients || !IsClientInGame(client) || !chat) return Plugin_Continue;
+    char token[256], tag[128];
+    BfReadString(input, token, sizeof(token));
+    if (StrContains(token, "L4D_Chat_") != 0) return Plugin_Continue;
+    GetEffectiveTag(client, tag, sizeof(tag));
+    if (!tag[0]) return Plugin_Continue;
+
+    char name[256], message[256], extra1[256], extra2[256];
+    BfReadString(input, name, sizeof(name));
+    BfReadString(input, message, sizeof(message));
+    if (BfGetNumBytesLeft(input)) BfReadString(input, extra1, sizeof(extra1));
+    if (BfGetNumBytesLeft(input)) BfReadString(input, extra2, sizeof(extra2));
+    // Native player-chat templates use only name/text. Leave extensions alone.
+    if (extra1[0] || extra2[0]) return Plugin_Continue;
+    char key[96], text[256];
+    FormatEx(key, sizeof(key), "en:%s", token);
+    if (!g_chatFormats.GetString(key, text, sizeof(text))) return Plugin_Continue;
+
+    DataPack pack = new DataPack();
+    pack.WriteCell(GetClientUserId(client));
+    pack.WriteCell(USERMSG_BLOCKHOOKS | (reliable ? USERMSG_RELIABLE : 0) | (init ? USERMSG_INITMSG : 0));
+    pack.WriteCell(chat);
+    pack.WriteString(token);
+    pack.WriteString(name);
+    pack.WriteString(message);
+    pack.WriteString(tag);
+    pack.WriteCell(count);
+    for (int i = 0; i < count; i++) pack.WriteCell(GetClientUserId(players[i]));
+    RequestFrame(SendTaggedChat, pack);
     return Plugin_Handled;
+}
+
+public void SendTaggedChat(DataPack pack)
+{
+    pack.Reset();
+    int author = GetClientOfUserId(pack.ReadCell());
+    int flags = pack.ReadCell();
+    int chat = pack.ReadCell();
+    char token[256], name[256], message[256], tag[128], tagged[132];
+    pack.ReadString(token, sizeof(token));
+    pack.ReadString(name, sizeof(name));
+    pack.ReadString(message, sizeof(message));
+    pack.ReadString(tag, sizeof(tag));
+    FormatEx(tagged, sizeof(tagged), "[%s]", tag);
+    int count = pack.ReadCell();
+    for (int i = 0; i < count; i++)
+    {
+        int target = GetClientOfUserId(pack.ReadCell());
+        if (!author || !IsClientInGame(author) || !target || !IsClientInGame(target)) continue;
+        char text[256];
+        // L4D2 strips color codes from name/text parameters. Copy the native
+        // localized template and put colors there, leaving those parameters
+        // untouched. Param 3 carries the plain tag, not a replacement name.
+        bool decorate = GetChatFormat(target, token, text, sizeof(text));
+        // Preserve long messages intact rather than truncating text for a tag.
+        if (2 + strlen(text) + strlen(name) + strlen(message) + strlen(tagged) + 5 > 255)
+            decorate = false;
+        Handle output = StartMessageOne("SayText2", target, flags);
+        BfWriteByte(output, author);
+        BfWriteByte(output, chat);
+        BfWriteString(output, decorate ? text : token);
+        BfWriteString(output, name);
+        BfWriteString(output, message);
+        BfWriteString(output, decorate ? tagged : "");
+        BfWriteString(output, "");
+        EndMessage();
+    }
+    delete pack;
 }
 
 void GetEffectiveTag(int client, char[] tag, int maxlength)
@@ -300,7 +378,7 @@ bool IsValidCustom(const char[] text)
         }
         if ((bytes == 3 && code < 0x800) || (bytes == 4 && code < 0x10000)
             || (code >= 0xD800 && code <= 0xDFFF) || code > 0x10FFFF) return false;
-        // Keep custom tags plain text; the chat formatter interprets brace colors.
+        // Keep custom tags plain text, without color markup or invisible controls.
         if (code < 0x20 || (code >= 0x7F && code <= 0x9F)
             || code == '{' || code == '}' || code == 0xAD || code == 0x61C
             || code == 0x180E || (code >= 0x200B && code <= 0x200F)
