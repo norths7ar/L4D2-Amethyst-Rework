@@ -329,6 +329,10 @@
         /* Context: !reset clears temporary snapshots for every 1P-4P profile and reapplies the current baseline. */
         "en" "All player-count overrides were cleared and the current baseline was restored."
     }
+    "ResetFailed"
+    {
+        "en" "Reset incomplete."
+    }
     "SurvivorsOnly"
     {
         "en" "This option is available to survivors only."

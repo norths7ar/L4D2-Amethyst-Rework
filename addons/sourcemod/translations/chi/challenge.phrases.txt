@@ -329,6 +329,10 @@
         /* Context: !reset clears temporary snapshots for every 1P-4P profile and reapplies the current baseline. */
         "chi" "已清除所有人数档位的临时调整，并恢复默认设定。"
     }
+    "ResetFailed"
+    {
+        "chi" "重置未完成。"
+    }
     "SurvivorsOnly"
     {
         "chi" "只有生还者可以使用这个选项。"

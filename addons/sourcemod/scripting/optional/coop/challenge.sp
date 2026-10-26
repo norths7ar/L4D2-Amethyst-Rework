@@ -56,7 +56,7 @@ public Plugin myinfo =
 	name = "Coop Challenge",
 	author = "海洋空氣, norths7ar",
 	description = "Difficulty Controller for Coop.",
-	version = "2.10.1",
+	version = "2.10.2",
 	url = "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
 };
 
@@ -538,12 +538,14 @@ public int Menu_SIDamageHandler(Handle menu, MenuAction action, int client, int 
 public void ResetSettings(bool announce)
 {
 	ClearAllSlotOverrides();
-	if (CanUseWaveSpawner()) WaveSpawner_ResetAllOverrides();
+	bool wavesReset = CanUseWaveSpawner();
+	if (wavesReset) WaveSpawner_ResetAllOverrides();
 	else LogError("[Ast] wave_spawner.smx is not available; wave overrides were not reset.");
-	if (CanUseProfileController()) ProfileController_Reapply();
+	bool baselineRestored;
+	if (CanUseProfileController()) baselineRestored = ProfileController_Reapply();
 	else LogError("[Ast] profile_controller.smx is not available; profile baseline was not reapplied.");
 	if (announce) {
-		PrintToChatAll("\x04[Ast] \x01%t", "ResetComplete");
+		PrintToChatAll("\x04[Ast] \x01%t", wavesReset && baselineRestored ? "ResetComplete" : "ResetFailed");
 	}
 }
 

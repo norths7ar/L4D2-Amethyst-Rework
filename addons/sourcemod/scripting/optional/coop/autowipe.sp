@@ -17,7 +17,7 @@ public Plugin myinfo =
     name = "AutoWipe",
     author = "Breezy, 海洋空氣, norths7ar",
     description = "Automatically rescues survivors when every living teammate is pinned.",
-    version = "1.6.0"
+    version = "1.6.1"
 };
 
 ConVar g_cvEnabled;
@@ -218,7 +218,6 @@ void WipeSurvivors()
     // Capture settlement before releasing attackers: release callbacks can change health/state.
     bool wasIncapped[MAXPLAYERS + 1];
     int health[MAXPLAYERS + 1], reviveCounts[MAXPLAYERS + 1], penalties[MAXPLAYERS + 1];
-    int dying[MAXPLAYERS + 1], thirdStrikes[MAXPLAYERS + 1];
     float tempHealth[MAXPLAYERS + 1];
     for (int client = 1; client <= MaxClients; client++)
     {
@@ -231,8 +230,6 @@ void WipeSurvivors()
         penalties[client] = g_cvWipeDamage.IntValue - lostHealth;
         if (penalties[client] < 0) penalties[client] = 0;
         reviveCounts[client] = GetEntProp(client, Prop_Send, "m_currentReviveCount");
-        dying[client] = GetEntProp(client, Prop_Send, "m_isGoingToDie");
-        thirdStrikes[client] = GetEntProp(client, Prop_Send, "m_bIsOnThirdStrike");
     }
     ResetPins();
     // Release attackers before restoring survivors, regardless of client slot order.
@@ -256,16 +253,13 @@ void WipeSurvivors()
             int remainingHealth = standingHealth - penalties[client];
             float remainingTotal = standingTempHealth + float(remainingHealth);
 
-            // OnRevived restores the hidden secondary weapon. This incap was already
-            // charged by the game: preserve its count/black-and-white state and do not
-            // charge the standing rescue fee a second time.
+            // OnRevived restores the hidden secondary weapon and charges this
+            // natural incap on revival, including the resulting third-strike state.
+            // Keep that engine result; do not also apply the standing rescue fee.
             int reviveCount = reviveCounts[client];
             if (wasIncapped[client])
             {
                 L4D_ReviveSurvivor(client);
-                SetEntProp(client, Prop_Send, "m_currentReviveCount", reviveCount);
-                SetEntProp(client, Prop_Send, "m_isGoingToDie", dying[client]);
-                SetEntProp(client, Prop_Send, "m_bIsOnThirdStrike", thirdStrikes[client]);
                 SetEntityHealth(client, 1);
                 L4D_SetTempHealth(client, g_cvReviveHealth.FloatValue);
                 continue;
