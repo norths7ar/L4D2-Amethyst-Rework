@@ -32,6 +32,7 @@ void ApplyLimits()
 	{
 		if (!IsValidEntity(entity)) continue;
 		if (IsPlayerEquipment(entity)) continue;
+		if (FinaleSupplies_IsProtected(entity) || FinaleSupplies_IsPending(entity)) continue;
 		char name[64];
 		GetResourceName(entity, name, sizeof(name));
 		if (!name[0] || IsAllowed(name)) continue; // Campaign compatibility vote takes priority.

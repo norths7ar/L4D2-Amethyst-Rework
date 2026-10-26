@@ -8,6 +8,8 @@
 #include <actions>
 #define REQUIRE_EXTENSIONS
 #include <ai_diagnostics>
+#define SI_UNSTUCK_IMPLEMENTATION
+#include <si_unstuck>
 
 native bool IsInPause();
 // Optional: ai_tank owns only its bounded obstacle jump/local recovery windows.
@@ -59,13 +61,19 @@ char g_centerNotice[192];
 float g_centerNoticeUntil;
 bool g_paused;
 float g_pauseStarted;
+GlobalForward g_tankStallChanged;
+bool g_tankStalled[MAXPLAYERS + 1];
+int g_tankStallEpisode[MAXPLAYERS + 1];
+float g_tankStallStarted[MAXPLAYERS + 1];
+int g_tankStallSequence;
+bool g_tankStallRoundEnded;
 
 public Plugin myinfo =
 {
 	name = "SI Unstuck",
 	author = "OpenAI",
 	description = "Moves a stuck live AI special infected to a safe hidden nav position",
-	version = "1.3.1",
+	version = "1.4.0",
 	url = ""
 };
 
@@ -74,11 +82,15 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
 	MarkNativeAsOptional("IsInPause");
 	MarkNativeAsOptional("AI_Tank_IsMovementOwned");
 	MarkNativeAsOptional("SI_AntiRetreat_YieldMovement");
+	RegPluginLibrary("si_unstuck");
+	CreateNative("SIUnstuck_GetTankStall", Native_GetTankStall);
 	return APLRes_Success;
 }
 
 public void OnPluginStart()
 {
+	g_tankStallChanged = new GlobalForward("SIUnstuck_OnTankStallChanged", ET_Ignore,
+		Param_Cell, Param_Cell, Param_Cell, Param_Float);
 	g_cvEnable = CreateConVar("si_unstuck_enable", "1", "Enable stuck AI SI relocation", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_cvStuckTime = CreateConVar("si_unstuck_time", "4.0", "Stationary time before relocation", FCVAR_NONE, true, 1.0);
 	g_cvMoveTolerance = CreateConVar("si_unstuck_move_tolerance", "24.0", "Distance which counts as movement", FCVAR_NONE, true, 1.0);
@@ -89,8 +101,13 @@ public void OnPluginStart()
 	g_cvTankMinDistance = CreateConVar("tank_unstuck_min_distance", "300.0", "Minimum Tank destination distance from every living survivor", FCVAR_NONE, true, 100.0);
 	g_cvRepath = CreateConVar("si_unstuck_repath", "1", "Try one native RESET per stationary normal SI episode before hidden relocation", _, true, 0.0, true, 1.0);
 	g_cvDiagnostics = CreateConVar("si_unstuck_diagnostics_interval", "2.0", "Normal SI movement snapshot interval; 0 disables periodic snapshots, not state events", _, true, 0.0);
+	g_cvTankEnable.AddChangeHook(OnTankWatchdogSettingChanged);
 
 	HookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
+	HookEvent("player_death", Event_StallEnded, EventHookMode_Post);
+	HookEvent("player_team", Event_StallTeamChanged, EventHookMode_Post);
+	HookEvent("round_start", Event_StallRoundReset, EventHookMode_PostNoCopy);
+	HookEvent("round_end", Event_StallRoundReset, EventHookMode_PostNoCopy);
 	CreateTimer(0.5, Timer_Monitor, _, TIMER_REPEAT);
 	if (GetFeatureStatus(FeatureType_Native, "ActionsManager.Iterator") == FeatureStatus_Available)
 	{
@@ -101,6 +118,7 @@ public void OnPluginStart()
 
 public void OnMapStart()
 {
+	g_tankStallRoundEnded = false;
 	g_paused = false;
 	g_centerNoticeUntil = 0.0;
 	for (int client = 1; client <= MaxClients; client++)
@@ -175,6 +193,7 @@ public Action Timer_Monitor(Handle timer)
 		bool moved = g_lastProgress[client] == 0.0 || GetVectorDistance(origin, g_lastOrigin[client]) >= g_cvMoveTolerance.FloatValue;
 		if (moved && !loop)
 		{
+			EndTankStall(client);
 			CopyVector(origin, g_lastOrigin[client]);
 			g_lastProgress[client] = now;
 			g_retryNotified[client] = false;
@@ -185,6 +204,7 @@ public Action Timer_Monitor(Handle timer)
 
 		if (IsBusySI(client, now))
 		{
+			EndTankStall(client);
 			CopyVector(origin, g_lastOrigin[client]);
 			g_lastProgress[client] = now;
 			g_retryNotified[client] = false;
@@ -199,6 +219,10 @@ public Action Timer_Monitor(Handle timer)
 			g_lastProgress[client] = now - stuckTime;
 
 		bool chase = tank && IsLivingSurvivor(GetClientOfUserId(g_tankVictim[client]));
+		// Observe the existing 2s warning qualification. A failed search/retry
+		// retains this episode even after the countdown itself stops displaying.
+		if (tank && now - g_lastProgress[client] >= 2.0
+			&& (chase || now - g_lastMoveInput[client] <= 1.0)) BeginTankStall(client, now);
 		if (tank && now - g_lastProgress[client] >= 2.0
 			&& !g_retryNotified[client] && (chase || now - g_lastMoveInput[client] <= 1.0))
 		{
@@ -261,6 +285,7 @@ public Action Timer_Monitor(Handle timer)
 			continue;
 		}
 
+		EndTankStall(client);
 		if (tank) NotifySurvivors("Tank 已传送脱困");
 		else ReportState(client, "relocated_hidden", true);
 		g_retryNotified[client] = false;
@@ -312,8 +337,88 @@ void ShowTankCountdown(int remaining)
 
 public void OnPluginEnd()
 {
+	EndAllTankStalls();
 	g_centerNoticeUntil = 0.0;
 	ShowTankCountdown(0);
+}
+
+// Display-facing observation is independent of ai_diagnostics and does not
+// change watchdog thresholds, timer cadence, pursuit or relocation decisions.
+public any Native_GetTankStall(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	bool active = client > 0 && client <= MaxClients && g_tankStalled[client]
+		&& IsEligibleSI(client) && GetEntProp(client, Prop_Send, "m_zombieClass") == 8;
+	SetNativeCellRef(2, active ? g_tankStallEpisode[client] : 0);
+	SetNativeCellRef(3, active ? view_as<int>(g_tankStallStarted[client]) : 0);
+	return active;
+}
+
+void BeginTankStall(int client, float now)
+{
+	if (g_tankStallRoundEnded || g_tankStalled[client]) return;
+	g_tankStalled[client] = true;
+	g_tankStallEpisode[client] = ++g_tankStallSequence;
+	g_tankStallStarted[client] = now;
+	EmitTankStall(client, true);
+}
+
+void EndTankStall(int client)
+{
+	if (!g_tankStalled[client]) return;
+	g_tankStalled[client] = false;
+	EmitTankStall(client, false);
+	g_tankStallEpisode[client] = 0;
+	g_tankStallStarted[client] = 0.0;
+}
+
+void EmitTankStall(int client, bool active)
+{
+	Call_StartForward(g_tankStallChanged);
+	Call_PushCell(client);
+	Call_PushCell(active);
+	Call_PushCell(g_tankStallEpisode[client]);
+	Call_PushFloat(g_tankStallStarted[client]);
+	Call_Finish();
+}
+
+void EndAllTankStalls()
+{
+	for (int client = 1; client <= MaxClients; client++) EndTankStall(client);
+}
+
+public void OnMapEnd()
+{
+	g_tankStallRoundEnded = true;
+	EndAllTankStalls();
+}
+
+void OnTankWatchdogSettingChanged(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+	if (!convar.BoolValue) EndAllTankStalls();
+}
+
+void Event_StallEnded(Event event, const char[] name, bool dontBroadcast)
+{
+	int client = GetClientOfUserId(event.GetInt("userid"));
+	if (client > 0) EndTankStall(client);
+}
+
+void Event_StallTeamChanged(Event event, const char[] name, bool dontBroadcast)
+{
+	RequestFrame(RefreshTankStallEligibility, event.GetInt("userid"));
+}
+
+void RefreshTankStallEligibility(int userid)
+{
+	int client = GetClientOfUserId(userid);
+	if (client > 0 && !IsEligibleSI(client)) EndTankStall(client);
+}
+
+void Event_StallRoundReset(Event event, const char[] name, bool dontBroadcast)
+{
+	g_tankStallRoundEnded = StrEqual(name, "round_end");
+	EndAllTankStalls();
 }
 
 public void OnPause() { SetWatchdogPaused(true); }
@@ -560,6 +665,7 @@ bool IsTankDestinationFarEnough(const float position[3])
 
 void ResetTracking(int client)
 {
+	EndTankStall(client);
 	g_lastOrigin[client][0] = 0.0;
 	g_lastOrigin[client][1] = 0.0;
 	g_lastOrigin[client][2] = 0.0;

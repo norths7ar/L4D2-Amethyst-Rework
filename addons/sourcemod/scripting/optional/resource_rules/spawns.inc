@@ -2,6 +2,7 @@
 // after spawning, so the Director can resolve weapon clusters consistently.
 public void OnMapInit(const char[] mapName)
 {
+	FinaleSupplies_NewMap();
 	// ServerActivate can dispatch the initial round events before OnMapStart.
 	// Reset here so their Director notification survives until configs are ready.
 	g_configsReady = false;

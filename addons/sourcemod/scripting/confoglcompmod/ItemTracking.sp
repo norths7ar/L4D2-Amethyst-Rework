@@ -216,7 +216,7 @@ static bool IT_Run(bool applyLimits)
 
 void IT_OnModuleStart()
 {
-    g_hItemReplayed = new GlobalForward("LGO_OnItemReplayed", ET_Ignore, Param_Cell);
+    g_hItemReplayed = new GlobalForward("LGO_OnItemReplayed", ET_Ignore, Param_Cell, Param_Cell);
     g_hCvarEnabled = CreateConVarEx("enable_itemtracking", "0", "Enable the itemtracking module", _, true, 0.0, true, 1.0);
     g_hCvarConsistentSpawns = CreateConVarEx("itemtracking_savespawns", "0", "Keep item spawns the same on both rounds", _, true, 0.0, true, 1.0);
     g_hCvarMapSpecificSpawns = CreateConVarEx("itemtracking_mapspecific", "0", "Change how mapinfo.txt overrides work. 0 = ignore mapinfo.txt, 1 = allow limit reduction, 2 = allow limit increases.", _, true, 0.0, true, 3.0);
@@ -556,10 +556,11 @@ static void EnumerateSpawns(bool applyLimits = true)
     }
 }
 
-static void IT_NotifyReplayed(int entity)
+static void IT_NotifyReplayed(int entity, int previousRef = INVALID_ENT_REFERENCE)
 {
     Call_StartForward(g_hItemReplayed);
     Call_PushCell(entity);
+    Call_PushCell(previousRef);
     Call_Finish();
 }
 
@@ -832,9 +833,10 @@ static bool IT_ReplayPolicy()
             }
             used[entity] = true;
             item.IT_entity = entity;
+            int previousRef = item.IT_ref;
             item.IT_ref = EntIndexToEntRef(entity);
             g_hItemSpawns[type].SetArray(i, item, sizeof(item));
-            IT_NotifyReplayed(entity);
+            IT_NotifyReplayed(entity, previousRef);
         }
     }
     if (ok) {

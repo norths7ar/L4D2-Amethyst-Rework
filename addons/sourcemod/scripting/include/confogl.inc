@@ -53,7 +53,9 @@ forward void LGO_OnMatchModeLoaded();
 forward void LGO_OnMatchModeUnloaded();
 
 // Emitted for each successfully restored/reconciled ItemTracking resource.
-forward void LGO_OnItemReplayed(int entity);
+// previousRef identifies the previous policy-snapshot entity (possibly destroyed),
+// or INVALID_ENT_REFERENCE for the framework replay path.
+forward void LGO_OnItemReplayed(int entity, int previousRef);
 
 /* NATIVES */
 

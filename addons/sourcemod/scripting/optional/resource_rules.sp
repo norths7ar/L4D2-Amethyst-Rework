@@ -30,6 +30,9 @@
 #include <sourcemod>
 #include <sdktools>
 #include <sdkhooks>
+#undef REQUIRE_EXTENSIONS
+#include <dhooks>
+#define REQUIRE_EXTENSIONS
 #include <entitylump>
 #include <imatchext>
 #include <left4dhooks>
@@ -54,6 +57,8 @@ int g_meleePickups;
 bool g_limitPassPending;
 
 #include "resource_rules/config.inc"
+#include "resource_rules/finale_supplies.inc"
+#include "resource_rules/scavenge_supplies.inc"
 #include "resource_rules/spawns.inc"
 #include "resource_rules/replacement.inc"
 #include "resource_rules/limits.inc"
@@ -68,7 +73,7 @@ public Plugin myinfo =
 	name = "Map Resource Rules",
 	author = "ProdigySim, norths7ar",
 	description = "Owns map supplies, weapon replacements and campaign resource exceptions.",
-	version = "2.2.0"
+	version = "2.3.0"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -91,6 +96,8 @@ public void OnPluginStart()
 	WI_OnModuleStart();
 	SafeItems_Init();
 	StartKits_Init();
+	FinaleSupplies_Init();
+	ScavengeSupplies_Init();
 	HookEvent("round_start_pre_entity", RoundResetCb, EventHookMode_Pre);
 	HookEvent("round_start_post_nav", DirectorReadyCb, EventHookMode_PostNoCopy);
 }
@@ -113,6 +120,7 @@ public void OnMapStart()
 
 public void OnMapEnd()
 {
+	FinaleSupplies_MapEnd();
 	// Round restarts may retain equipped entities; only a map change discards
 	// their history. Stale references cannot match newly rebuilt supplies.
 	g_playerEquipment.Clear();
@@ -123,6 +131,7 @@ public void OnMapEnd()
 
 public void OnConfigsExecuted()
 {
+	FinaleSupplies_Latch();
 	LoadRules();
 	UpdateCampaign();
 	g_configsReady = true;
@@ -139,6 +148,8 @@ public void RoundResetCb(Event event, const char[] name, bool dontBroadcast)
 
 void ResetResourceRound()
 {
+	FinaleSupplies_Reset();
+	ScavengeSupplies_Reset();
 	g_resourceDecisions.Clear();
 	g_distributionWarnings.Clear();
 	g_replayedSupplies.Clear();
@@ -170,6 +181,7 @@ public void InitializeResources(int generation)
 	if (generation != g_roundGeneration) return;
 	g_roundReady = true;
 	g_replayingSupplies = LGO_ItemTrackingWillReplay();
+	FinaleSupplies_Begin();
 	if (g_policyFile) ScanResources();
 	else
 	{
@@ -191,9 +203,10 @@ public void InitializeResources(int generation)
 	g_initializationPending = false;
 }
 
-public void LGO_OnItemReplayed(int entity)
+public void LGO_OnItemReplayed(int entity, int previousRef)
 {
 	if (g_policyFile) g_replayedSupplies.Push(EntIndexToEntRef(entity));
+	if (g_policyFile) FinaleSupplies_Replayed(entity, previousRef);
 }
 
 bool IsReplayedSupply(int entity)
@@ -312,6 +325,7 @@ public void ProcessSpawnedResource(DataPack data)
 		char name[64];
 		GetResourceName(entity, name, sizeof(name));
 		if (!name[0]) return; // Decorative/glow props do not change the supply pool.
+		if (FinaleSupplies_Queue(entity, name)) return;
 		ProcessResource(entity);
 		QueueLimitPass();
 	}
@@ -320,8 +334,15 @@ public void ProcessSpawnedResource(DataPack data)
 void ScanResources()
 {
 	if (!g_policyFile) return;
+	FinaleSupplies_Scan();
 	// Edict slots can have holes; entity count is not the highest valid index.
 	for (int entity = MaxClients + 1; entity < GetMaxEntities(); entity++)
 		if (IsValidEntity(entity)) ProcessResource(entity);
 	QueueLimitPass();
+}
+
+public void OnEntityDestroyed(int entity)
+{
+	FinaleSupplies_Destroyed(entity);
+	ScavengeSupplies_Destroyed(entity);
 }

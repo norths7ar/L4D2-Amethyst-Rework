@@ -1,0 +1,46 @@
+"Games"
+{
+	"left4dead2"
+	{
+		"Functions"
+		{
+			"CGasCan::SetSpawner"
+			{
+				"signature" "CGasCan::SetSpawner"
+				"callconv" "thiscall"
+				"return" "void"
+				"this" "entity"
+				"arguments"
+				{
+					"spawner"
+					{
+						"type" "cbaseentity"
+					}
+				}
+			}
+		}
+		"Offsets"
+		{
+			"ScavengeGetSpawnerSupported"
+			{
+				"linux" "1"
+				"windows" "0"
+			}
+		}
+		"Signatures"
+		{
+			"CGasCan::SetSpawner"
+			{
+				"library" "server"
+				"linux" "@_ZN7CGasCan10SetSpawnerEP11CBaseEntity"
+			}
+			// Verified Linux server_srv.so: returns the serial-checked spawner
+			// CBaseEntity*, or null. Do not read a hardcoded object offset.
+			"CCarriedProp::GetSpawner"
+			{
+				"library" "server"
+				"linux" "@_ZN12CCarriedProp10GetSpawnerEv"
+			}
+		}
+	}
+}

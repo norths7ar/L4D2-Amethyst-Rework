@@ -5,16 +5,7 @@ void GetResourceName(int entity, char[] name, int maxlen)
 	GetEntityClassname(entity, classname, sizeof(classname));
 	// Scavenge spawners belong to the map objective, not the supply pool.
 	if (StrEqual(classname, "weapon_scavenge_item_spawn")) return;
-	// Their spawned cans share weapon_gascan with ordinary fuel cans. The
-	// standard objective skin is 1; physics-form cans use the same marker.
-	if (StrEqual(classname, "weapon_gascan") || StrEqual(classname, "weapon_gascan_spawn")
-		|| strncmp(classname, "prop_physics", 12) == 0)
-	{
-		char model[PLATFORM_MAX_PATH];
-		GetEntPropString(entity, Prop_Data, "m_ModelName", model, sizeof(model));
-		if (StrEqual(model, "models/props_junk/gascan001a.mdl", false)
-			&& GetEntProp(entity, Prop_Send, "m_nSkin") == 1) return;
-	}
+	if (StrEqual(classname, "weapon_gascan") && ScavengeSupplies_IsProtected(entity)) return;
 	// Ammo piles have no normal weapon ID, but participate in point limits.
 	if (StrEqual(classname, "weapon_ammo_spawn"))
 	{
@@ -51,6 +42,12 @@ void ProcessResource(int entity)
 	char name[64], target[256];
 	GetResourceName(entity, name, sizeof(name));
 	NormalizePickupFlags(entity);
+	if (FinaleSupplies_IsProtected(entity))
+	{
+		if (StrEqual(name, "first_aid_kit")) ReplaceResource(entity, "pain_pills");
+		return;
+	}
+	if (FinaleSupplies_IsPending(entity)) return;
 	if (StrEqual(name, "melee")) SetMeleeCount(entity);
 	if (!name[0] || IsAllowed(name) || !GetResourceRule(entity, name, target, sizeof(target))) return;
 	if (StrEqual(target, "none"))
@@ -134,7 +131,11 @@ bool CopyLiveOutputs(int source, int target, StringMap outputs)
 void ReplaceResource(int entity, const char[] target)
 {
 	int id = WeaponNameToId2(target);
-	if (!IsValidWeaponId(id) || id == WEPID_NONE) return;
+	if (!IsValidWeaponId(id) || id == WEPID_NONE)
+	{
+		LogError("Unknown resource replacement target '%s'; original item retained.", target);
+		return;
+	}
 	char classname[64];
 	GetEntityClassname(entity, classname, sizeof(classname));
 	bool spawner = StrEqual(classname, "weapon_spawn") || StrContains(classname, "_spawn") != -1;
@@ -225,6 +226,7 @@ void ReplaceResource(int entity, const char[] target)
 		AcceptEntityInput(created, "SetParent", parent);
 	}
 	if (id == WEPID_MELEE) SetMeleeCount(created);
+	FinaleSupplies_Transfer(entity, created);
 	// Never remove the source before the replacement has successfully spawned.
 	RemoveEntity(entity);
 }
