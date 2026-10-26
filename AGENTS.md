@@ -48,7 +48,7 @@ Keep each document in its own lane. AGENTS contains durable Agent maintenance ru
 * Compile changed SourcePawn plugins; check actual load and exec references when changing configuration.
 * Inspect focused diffs and search for stale references after moves, renames, or API changes.
 * Compilation and reference checks do not verify deployed binaries or runtime behavior. Report what was actually checked and what remains unverified.
-* For gameplay or lifecycle changes, prefer reproducing and testing locally in the maintainer's WSL2 server environment when practical.
+* 完成必要的编译和静态检查后，除非存在明确且关键的风险，不将 WSL 或玩家进服测试作为发布前提。需要运行验证时，只询问用户是否需要 AI 启动 WSL 测试服检查；玩家进服测试由用户主动提出，不催促，也不因未进行游戏内测试阻止用户决定发布。
 * Run deployment or remote diagnostics only when explicitly requested.
 
 ## Scope and Delivery
@@ -64,6 +64,7 @@ Keep each document in its own lane. AGENTS contains durable Agent maintenance ru
 
 * 使用 `vX.Y.Z` 附注标签标记整套配置版本，各插件保留独立版本号；发布前核对相关源码与编译产物并完成必要检查，试玩时机由维护者决定。
 * 日常变更积累在 `docs/CHANGELOG.md` 的“未发布”部分；发布时归入对应版本和日期，作为版本更新记录。
+* CHANGELOG 按当次更新的主题分组，分类无需跨版本完全一致；优先沿用合适的既有名称，避免分类过细或堆成长列表。简短修复保持简短。
 * 打标签须经维护者明确授权；分支与标签按既有远端规则同步。
 * 凭据、运行时数据、缓存、日志及备份保留在 Git 之外。
 
