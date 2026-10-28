@@ -3,16 +3,16 @@
 #endif
 #define _player_manager_included
 
-/** Shared Coop player/seat helpers. */
-native int Coop_GetHumanSurvivorCount();
-native int Coop_GetTotalSurvivorCount();
-native bool Coop_IsHumanSurvivor(int client);
-native bool Coop_IsRoundLive();
-native bool Coop_ShouldKeepSurvivorBots();
+/** Player manager queries for survivor counts, round state and reservations. */
+native int PlayerManager_GetHumanSurvivorCount();
+native int PlayerManager_GetSurvivorCount();
+native bool PlayerManager_IsHumanSurvivor(int client);
+native bool PlayerManager_IsRoundLive();
+native bool PlayerManager_ShouldKeepSurvivorBots();
 /** Whether survivor reservations have been restored, released or expired. Spectators never hold readiness. */
-native bool Coop_IsRosterStable();
+native bool PlayerManager_AreReservationsSettled();
 /** Read a pending survivor by zero-based ordinal for the loading panel. */
-native bool Coop_GetWaitingSurvivor(int index, char[] name, int maxlen, int &seconds);
+native bool PlayerManager_GetWaitingSurvivor(int index, char[] name, int maxlen, int &seconds);
 
 public SharedPlugin __pl_player_manager =
 {
@@ -24,12 +24,12 @@ public SharedPlugin __pl_player_manager =
 #if !defined REQUIRE_PLUGIN
 public void __pl_player_manager_SetNTVOptional()
 {
-	MarkNativeAsOptional("Coop_GetHumanSurvivorCount");
-	MarkNativeAsOptional("Coop_GetTotalSurvivorCount");
-	MarkNativeAsOptional("Coop_IsHumanSurvivor");
-	MarkNativeAsOptional("Coop_IsRoundLive");
-	MarkNativeAsOptional("Coop_ShouldKeepSurvivorBots");
-	MarkNativeAsOptional("Coop_IsRosterStable");
-	MarkNativeAsOptional("Coop_GetWaitingSurvivor");
+	MarkNativeAsOptional("PlayerManager_GetHumanSurvivorCount");
+	MarkNativeAsOptional("PlayerManager_GetSurvivorCount");
+	MarkNativeAsOptional("PlayerManager_IsHumanSurvivor");
+	MarkNativeAsOptional("PlayerManager_IsRoundLive");
+	MarkNativeAsOptional("PlayerManager_ShouldKeepSurvivorBots");
+	MarkNativeAsOptional("PlayerManager_AreReservationsSettled");
+	MarkNativeAsOptional("PlayerManager_GetWaitingSurvivor");
 }
 #endif

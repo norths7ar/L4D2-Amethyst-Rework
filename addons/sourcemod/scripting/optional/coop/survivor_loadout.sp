@@ -17,7 +17,7 @@ public Plugin myinfo =
 	name = "Coop survivor loadout",
 	author = "海洋空氣, norths7ar",
 	description = "Preserves AstMod survivor inventory lifecycle for Coop",
-	version = "1.1.0"
+	version = "1.1.1"
 };
 
 public void OnPluginStart()
@@ -83,7 +83,7 @@ void GiveStartingPills()
 	for (int client = 1; client <= MaxClients; client++)
 	{
 		if (!IsClientInGame(client) || GetClientTeam(client) != TEAM_SURVIVORS || !IsPlayerAlive(client)) continue;
-		if (!Coop_ShouldKeepSurvivorBots() && IsFakeClient(client)) continue;
+		if (!PlayerManager_ShouldKeepSurvivorBots() && IsFakeClient(client)) continue;
 		int pills = CreateEntityByName("weapon_pain_pills");
 		if (pills <= 0) continue;
 		float origin[3];

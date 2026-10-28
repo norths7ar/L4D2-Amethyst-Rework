@@ -1,5 +1,17 @@
 "Phrases"
 {
+	"RecoveryRestored"
+	{
+		"chi" "已恢复掉线前的状态。"
+	}
+	"RecoveryRetry"
+	{
+		"chi" "自动恢复失败，输入 !join 重试。"
+	}
+	"RecoveryDead"
+	{
+		"chi" "掉线前你已死亡，本轮将旁观。"
+	}
 	"SeatsReserved"
 	{
 		"chi" "生还者队伍已满（有玩家正在加载中）。"

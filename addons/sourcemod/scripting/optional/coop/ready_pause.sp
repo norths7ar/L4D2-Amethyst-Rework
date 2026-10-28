@@ -1205,8 +1205,8 @@ bool ReturningSurvivorsRestored()
 {
 	// Only the previous chapter's outstanding survivor reservations hold start.
 	return LibraryExists("player_manager")
-		&& GetFeatureStatus(FeatureType_Native, "Coop_IsRosterStable") == FeatureStatus_Available
-		&& Coop_IsRosterStable();
+		&& GetFeatureStatus(FeatureType_Native, "PlayerManager_AreReservationsSettled") == FeatureStatus_Available
+		&& PlayerManager_AreReservationsSettled();
 }
 
 void ResetPauseState(bool unpause)

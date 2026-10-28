@@ -3,6 +3,7 @@
 
 #include <sourcemod>
 #include <sdktools>
+#include <sdkhooks>
 #include <left4dhooks>
 #include <player_management>
 
@@ -39,12 +40,14 @@ bool g_initialAdmissionPending[MAXPLAYERS + 1];
 char g_loadedSteamId[MAXPLAYERS + 1][32];
 StringMap g_reservations;
 
+#include "player_manager/recovery.inc"
+
 public Plugin myinfo =
 {
 	name = "Coop player manager",
 	author = "海洋空氣, norths7ar",
 	description = "Coop join, spectator, bot-slot and player-team lifecycle",
-	version = "1.2.4"
+	version = "1.3.1"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -52,13 +55,13 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
 	g_lateLoad = late;
 	CreateNative("PlayerManagement_MoveToSpectator", Native_MoveToSpectator);
 	RegPluginLibrary("player_management");
-	CreateNative("Coop_GetHumanSurvivorCount", Native_GetHumanSurvivorCount);
-	CreateNative("Coop_GetTotalSurvivorCount", Native_GetTotalSurvivorCount);
-	CreateNative("Coop_IsHumanSurvivor", Native_IsHumanSurvivor);
-	CreateNative("Coop_IsRoundLive", Native_IsRoundLive);
-	CreateNative("Coop_ShouldKeepSurvivorBots", Native_ShouldKeepSurvivorBots);
-	CreateNative("Coop_IsRosterStable", Native_IsRosterStable);
-	CreateNative("Coop_GetWaitingSurvivor", Native_GetWaitingSurvivor);
+	CreateNative("PlayerManager_GetHumanSurvivorCount", Native_GetHumanSurvivorCount);
+	CreateNative("PlayerManager_GetSurvivorCount", Native_GetSurvivorCount);
+	CreateNative("PlayerManager_IsHumanSurvivor", Native_IsHumanSurvivor);
+	CreateNative("PlayerManager_IsRoundLive", Native_IsRoundLive);
+	CreateNative("PlayerManager_ShouldKeepSurvivorBots", Native_ShouldKeepSurvivorBots);
+	CreateNative("PlayerManager_AreReservationsSettled", Native_AreReservationsSettled);
+	CreateNative("PlayerManager_GetWaitingSurvivor", Native_GetWaitingSurvivor);
 	RegPluginLibrary("player_manager");
 	return APLRes_Success;
 }
@@ -67,10 +70,12 @@ public void OnPluginStart()
 {
 	LoadTranslations("player_manager.phrases");
 	g_reservations = new StringMap();
+	Recovery_Init();
 	CreateTimer(5.0, TimerReservationCleanup, _, TIMER_REPEAT);
 
 	g_maxSurvivors = CreateConVar("human_survivor_limit", "4", "Maximum human survivor slots.");
 	g_allowBotSurvivors = CreateConVar("keep_survivor_bots", "0", "Keep survivor bots after the round starts.");
+	g_allowBotSurvivors.AddChangeHook(Recovery_OnEnabledChanged);
 	g_slayBotTime = CreateConVar("survivor_bot_cleanup_delay", "10.0", "Seconds before bots are slain after the last survivor leaves.");
 
 	RegConsoleCmd("sm_join", CommandJoin, "Join the survivor team.");
@@ -133,6 +138,7 @@ public Action OnJoinTeamCommand(int client, const char[] command, int argc)
 	GetCmdArg(1, team, sizeof(team));
 	if (StringToInt(team) == TEAM_SPECTATORS || StrEqual(team, "spectator", false))
 	{
+		Recovery_ExplicitLeave(client);
 		g_initialAdmissionPending[client] = false;
 		g_wantsSpectator[client] = true;
 		g_requestToken[client]++;
@@ -141,6 +147,7 @@ public Action OnJoinTeamCommand(int client, const char[] command, int argc)
 	}
 	else if (StringToInt(team) == TEAM_SURVIVORS || StrEqual(team, "survivor", false))
 	{
+		g_recoverySuppressDrops[client] = false;
 		g_initialAdmissionPending[client] = false;
 		g_wantsSpectator[client] = false;
 		int reservation = FindReservation(client);
@@ -164,6 +171,11 @@ public Action TimerCheckHumanTeam(Handle timer, int userid)
 	// Arrival alone is insufficient: identify returning players before admitting
 	// them as newcomers or enforcing capacity against their reserved seats.
 	if (!g_loadedSteamId[client][0]) return Plugin_Stop;
+	if (Recovery_HasSave(client) && !g_wantsSpectator[client])
+	{
+		if (!g_recoveryAutoAttempted[client]) Recovery_TryRestore(client);
+		return Plugin_Stop;
+	}
 	int reservation = FindReservation(client);
 	int team = GetClientTeam(client);
 	bool initialAdmission = g_initialAdmissionPending[client];
@@ -207,6 +219,7 @@ public Action L4D_OnEnterGhostStatePre(int client)
 
 public void OnMapStart()
 {
+	Recovery_Reset();
 	g_generation++;
 	g_roundLive = g_lateLoad && L4D_HasAnySurvivorLeftSafeArea();
 	g_lateLoad = false;
@@ -227,12 +240,14 @@ public void OnMapStart()
 
 public void OnMapEnd()
 {
+	Recovery_Reset(false);
 	g_roundLive = false;
 	CancelBotCleanup();
 }
 
 public void OnClientPutInServer(int client)
 {
+	Recovery_ClientReset(client);
 	g_loadedSteamId[client][0] = '\0';
 	if (!IsFakeClient(client)) CancelBotCleanup();
 	g_pendingReservation[client] = -1;
@@ -258,6 +273,7 @@ public void EventPlayerDisconnect(Event event, const char[] name, bool dontBroad
 	if (client <= 0 || IsFakeClient(client)) return;
 	char reason[128];
 	event.GetString("reason", reason, sizeof(reason));
+	Recovery_OnDisconnect(client, reason);
 	if (!StrEqual(reason, "Disconnect by user.", false)) return;
 	// Explicit quit releases even a not-yet-restored next-map reservation.
 	char steamId[32];
@@ -269,6 +285,7 @@ public void EventPlayerDisconnect(Event event, const char[] name, bool dontBroad
 
 public void OnClientDisconnect(int client)
 {
+	Recovery_OnDisconnect(client, "");
 	// Reservations are created only by map_transition. Once loaded into the
 	// destination, any disconnect releases that seat, including Steam errors.
 	int value;
@@ -287,6 +304,13 @@ public void OnClientDisconnect(int client)
 public Action CommandJoin(int client, int args)
 {
 	if (!IsHumanClient(client)) return Plugin_Handled;
+	if (Recovery_HasSave(client))
+	{
+		g_wantsSpectator[client] = false;
+		Recovery_TryRestore(client);
+		return Plugin_Handled;
+	}
+	g_recoverySuppressDrops[client] = false;
 	g_initialAdmissionPending[client] = false;
 	int reservation = FindReservation(client);
 	// An explicit join overrides a saved spectator role, just as !spec gives up
@@ -331,6 +355,7 @@ int Native_MoveToSpectator(Handle plugin, int params)
 public Action CommandSpectate(int client, int args)
 {
 	if (!IsHumanClient(client)) return Plugin_Handled;
+	Recovery_ExplicitLeave(client);
 	g_initialAdmissionPending[client] = false;
 	g_requestToken[client]++;
 	g_wantsSpectator[client] = true;
@@ -369,6 +394,7 @@ public Action CommandKill(int client, int args)
 
 public Action EventRoundStart(Event event, const char[] name, bool dontBroadcast)
 {
+	Recovery_Reset();
 	g_roundLive = false;
 	CancelBotCleanup();
 	SetServerInt("director_no_survivor_bots", 0);
@@ -378,6 +404,7 @@ public Action EventRoundStart(Event event, const char[] name, bool dontBroadcast
 
 public Action EventMapTransition(Event event, const char[] name, bool dontBroadcast)
 {
+	Recovery_Reset(false);
 	CaptureReservations();
 	g_transitionCaptured = true;
 	g_roundLive = false;
@@ -402,6 +429,7 @@ public void OnRoundIsLive()
 
 public void L4D2_OnEndVersusModeRound_Post()
 {
+	Recovery_Reset(false);
 	if (!g_allowBotSurvivors.BoolValue)
 	{
 		SetServerInt("director_no_survivor_bots", 0);
@@ -833,6 +861,7 @@ public void EventCharacterTransfer(Event event, const char[] name, bool dontBroa
 {
 	int player = GetClientOfUserId(event.GetInt("player"));
 	int bot = GetClientOfUserId(event.GetInt("bot"));
+	Recovery_OnTransfer(player, bot, StrEqual(name, "bot_player_replace"));
 	if (player <= 0 || bot <= 0 || !IsClientInGame(player) || !IsClientInGame(bot)) return;
 	bool toPlayer = StrEqual(name, "bot_player_replace");
 	int source = toPlayer ? bot : player;
@@ -892,12 +921,12 @@ int GetTotalSurvivors()
 }
 
 int Native_GetHumanSurvivorCount(Handle plugin, int params) { return GetHumanSurvivors(); }
-int Native_GetTotalSurvivorCount(Handle plugin, int params) { return GetTotalSurvivors(); }
+int Native_GetSurvivorCount(Handle plugin, int params) { return GetTotalSurvivors(); }
 int Native_IsHumanSurvivor(Handle plugin, int params) { return IsHumanSurvivor(GetNativeCell(1)); }
 int Native_IsRoundLive(Handle plugin, int params) { return g_roundLive; }
 int Native_ShouldKeepSurvivorBots(Handle plugin, int params) { return g_allowBotSurvivors.BoolValue; }
 
-int Native_IsRosterStable(Handle plugin, int params)
+int Native_AreReservationsSettled(Handle plugin, int params)
 {
 	return CountValidReservations(RESERVATION_SURVIVOR) == 0;
 }

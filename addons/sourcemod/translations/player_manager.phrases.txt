@@ -1,5 +1,17 @@
 "Phrases"
 {
+	"RecoveryRestored"
+	{
+		"en" "Your state before disconnecting has been restored."
+	}
+	"RecoveryRetry"
+	{
+		"en" "Your reconnect save is still available. Use !join to retry restoring it."
+	}
+	"RecoveryDead"
+	{
+		"en" "You were dead before disconnecting and will remain a spectator this round."
+	}
 	"SeatsReserved"
 	{
 		"en" "Survivor slots are full or reserved for returning players. Please wait or spectate."
