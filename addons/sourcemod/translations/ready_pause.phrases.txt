@@ -1,5 +1,10 @@
 "Phrases"
 {
+	"ReadyNoclipDisabled"
+	{
+		"en" "Your noclip has been disabled."
+	}
+
 	"ReadyNeedsHuman"
 	{
 		"en" "A human survivor must join before the round can start."

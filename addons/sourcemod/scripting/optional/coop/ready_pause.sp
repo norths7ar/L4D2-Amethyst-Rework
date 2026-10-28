@@ -78,7 +78,7 @@ public Plugin myinfo =
 	name = "Coop ready and pause",
 	author = "CanadaRox, 海洋空氣, norths7ar",
 	description = "Per-player readiness, loading gate and start/resume countdowns",
-	version = "1.3.7"
+	version = "1.3.9"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -494,7 +494,11 @@ void SetSurvivorsFrozen(bool frozen)
 void SetReadyFrozen(int client, bool frozen)
 {
 	// Competitive Rework readyup/player.inc: release to the team's normal movement.
-	SetEntityMoveType(client, frozen ? MOVETYPE_NONE : (GetClientTeam(client) == TEAM_SPECTATORS ? MOVETYPE_NOCLIP : MOVETYPE_WALK));
+	MoveType movement = frozen ? MOVETYPE_NONE : (GetClientTeam(client) == TEAM_SPECTATORS ? MOVETYPE_NOCLIP : MOVETYPE_WALK);
+	bool disabledNoclip = GetClientTeam(client) == TEAM_SURVIVORS && IsPlayerAlive(client)
+		&& GetEntityMoveType(client) == MOVETYPE_NOCLIP && movement != MOVETYPE_NOCLIP;
+	SetEntityMoveType(client, movement);
+	if (disabledNoclip && !IsFakeClient(client)) PrintToChat(client, "[SM] %t", "ReadyNoclipDisabled");
 }
 
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon)
@@ -533,8 +537,8 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
 		else if (buttons || impulse) g_panelButtonTime[client] = GetEngineTime();
 	}
 	if (g_readyPhase && g_countdownTimer != null && IsReadySurvivor(client)
-		&& g_startReturn[client] == StartDone && (GetEntityFlags(client) & FL_ONGROUND)
-		&& GetEntProp(client, Prop_Send, "m_nWaterLevel") < 2)
+		&& g_startReturn[client] == StartDone && !StartArea_IntroControlled(client)
+		&& StartArea_PhysicallySafe(client) && StartArea_ClearBody(client))
 		SetReadyFrozen(client, true);
 }
 public Action EventPlayerTeam(Event event, const char[] name, bool dontBroadcast)

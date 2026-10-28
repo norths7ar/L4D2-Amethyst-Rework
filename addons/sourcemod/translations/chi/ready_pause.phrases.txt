@@ -1,5 +1,10 @@
 "Phrases"
 {
+	"ReadyNoclipDisabled"
+	{
+		"chi" "你的穿墙模式已关闭。"
+	}
+
 	"ReadyNeedsHuman"
 	{
 		"chi" "需要至少一名真人加入生还者队伍才能开局。"
