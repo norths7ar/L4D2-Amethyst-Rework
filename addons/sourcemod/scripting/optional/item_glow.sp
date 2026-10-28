@@ -33,7 +33,7 @@ public Plugin myinfo =
     name = "Coop item glow",
     author = "norths7ar",
     description = "Independent supply, hittable, stalled Tank and black-and-white survivor outlines.",
-    version = "1.4.0"
+    version = "1.4.1"
 };
 
 public void OnPluginStart()
