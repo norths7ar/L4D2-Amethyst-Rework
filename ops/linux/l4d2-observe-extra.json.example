@@ -1,0 +1,5 @@
+{
+  "targets": [
+    {"name": "public-resolver", "role": "external", "address": "1.1.1.1"}
+  ]
+}

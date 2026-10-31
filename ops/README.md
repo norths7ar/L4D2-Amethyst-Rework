@@ -25,6 +25,22 @@ sudo ./ops/linux/install.sh
 
 `SRCDS_DEBUG=1` 启用 `srcds_run -debug`，报告位置由 `SRCDS_DEBUG_LOG` 指定。完整回溯还要求可取得 core；仅有 debug 开关不保证系统未将 core 交给其他处理程序。
 
+## 低频性能观测
+
+`linux/install-observe-extra.sh` 独立安装主机补充监控，不启动或重启游戏，也不修改既有主机监控。先编辑 `/etc/l4d2-observe-extra.json`，为最多四个 IPv4 探测目标填写名称、角色和地址，再执行 `systemctl enable --now l4d2-observe-extra.service`。网关与外部目标应分别命名；选择会回应 ICMP 的目标，目标不回应不能直接判定游戏线路丢包。
+
+该服务每 10 秒向每个目标发一个 ICMP Echo，记录往返延迟、超时或错误；每 15 秒读取进程 CPU 和磁盘 I/O 计数，保留 CPU 与 I/O 各前五项。CPU 百分比以单核为 100%，进程按 PID 和启动时刻配对；首次采样及新进程建立基线，采样之间已经退出的短命进程不会进入摘要。仅记录进程名称，不采集命令行。服务以低 CPU／I/O 优先级运行，使用 Python 标准库，不调用游戏插件或扫描 journal。
+
+日志在 `/var/lib/l4d2-observe-extra/extra-*.jsonl`，保留七天，按 8 MiB 分片，并在轮转及每小时清理时按 128 MiB 总量淘汰旧分片。进程记录中的 `collection_ms` 可用于检查采集成本；网络记录的耗时包含等待回应，不能当作 CPU 耗时。停用使用 `systemctl disable --now l4d2-observe-extra.service`；修改配置后仅重启这个监控服务。
+
+Windows 的 `Watch-GameEndpoint.ps1` 从本机每 10 秒向公网游戏端口发送一次 A2S_INFO 查询，记录响应耗时与失败，用于和云服时间线对照。例如：
+
+```powershell
+pwsh -File ops/windows/Watch-GameEndpoint.ps1 -Address 203.0.113.10 -OutputDirectory E:/monitor-output -Hours 8
+```
+
+`-Once` 只探测一次。正常模式按 `-Hours` 限时结束；本机关机或睡眠期间没有样本，它不是常驻外部探测节点。A2S 查询与 ICMP 都不能代替玩家游戏 UDP 的逐包丢包记录。
+
 ## 仓库部署与数据保护
 
 `l4d2-update-and-restart` 以配置的仓库所有者身份运行 Git，要求指定分支、干净工作树和 fast-forward 更新。它只部署 Git 跟踪的 `addons/`、`cfg/`、`scripts/`，随后调用内容应用和重启。

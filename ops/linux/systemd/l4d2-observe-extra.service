@@ -1,0 +1,16 @@
+# Managed by L4D2-Amethyst-Rework ops/linux/install-observe-extra.sh
+[Unit]
+Description=Low-frequency L4D2 host process and network observations
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/libexec/l4d2/host-observe-extra.py
+Restart=on-failure
+RestartSec=10
+Nice=19
+IOSchedulingClass=idle
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target
