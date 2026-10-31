@@ -526,67 +526,81 @@ def reconcile_missioncycle(
     if not isinstance(campaigns, list):
         raise VpkError(f"{inventory_path}: invalid campaign inventory")
 
+    recent_section = "近期新增"
+    if section.casefold() == recent_section.casefold():
+        raise VpkError("managed section must differ from the recent section")
     existing_names: dict[str, str] = {}
     existing_order: dict[str, int] = {}
-    section_index: int | None = None
-    for index, (name, value) in enumerate(mission_cycle_value):
-        if name.casefold() == section.casefold() and isinstance(value, list):
-            section_index = index
-            for position, (first_map, details) in enumerate(value):
-                existing_order[first_map.casefold()] = position
-                if isinstance(details, list):
-                    existing_name = scalar(details, "name")
-                    if existing_name:
-                        existing_names[first_map.casefold()] = existing_name
-            break
+    recent_order: dict[str, int] = {}
+    for name, value in mission_cycle_value:
+        if name.casefold() not in (section.casefold(), recent_section.casefold()):
+            continue
+        if not isinstance(value, list):
+            raise VpkError(f"invalid campaign section: {name}")
+        order = (
+            recent_order
+            if name.casefold() == recent_section.casefold()
+            else existing_order
+        )
+        for first_map, details in value:
+            normalized = first_map.casefold()
+            order[normalized] = len(order)
+            if isinstance(details, list) and (title := scalar(details, "name")):
+                existing_names[normalized] = title
 
     policy_order: dict[str, int] = {}
     if policy_path:
-        # The repository owns fixed sections and curated names/order; the live
-        # file above supplies the history of campaigns not yet curated.
+        # Policy owns fixed sections and curated names. Live sections retain
+        # the latest batch and historical ordering across repeated applies.
         root = parse_keyvalues(policy_path.read_text(encoding="utf-8-sig"))
         mission_cycle_value = find_pair(root, "MissionCycle")
         if not isinstance(mission_cycle_value, list):
             raise VpkError(f"{policy_path}: missing MissionCycle root")
-        section_index = None
-        for index, (name, value) in enumerate(mission_cycle_value):
+        for name, value in mission_cycle_value:
             if name.casefold() == section.casefold() and isinstance(value, list):
-                section_index = index
-                for position, (first_map, details) in enumerate(value):
+                for first_map, details in value:
                     normalized = first_map.casefold()
-                    policy_order[normalized] = position
-                    if isinstance(details, list):
-                        policy_name = scalar(details, "name")
-                        if policy_name:
-                            existing_names[normalized] = policy_name
-                break
+                    policy_order[normalized] = len(policy_order)
+                    if isinstance(details, list) and (title := scalar(details, "name")):
+                        existing_names[normalized] = title
 
-    def campaign_order(campaign: dict[str, object]) -> tuple[int, int | str, str]:
-        first_map = str(campaign["first_map"])
-        normalized = first_map.casefold()
-        if normalized in policy_order:
-            return (0, policy_order[normalized], normalized)
-        if normalized in existing_order:
-            return (1, existing_order[normalized], normalized)
-        return (2, str(campaign["name"]).casefold(), normalized)
-
-    campaigns.sort(key=campaign_order)
-    managed_section: list[tuple[str, KVValue]] = []
-    seen_first_maps: set[str] = set()
+    by_map: dict[str, dict[str, object]] = {}
     for campaign in campaigns:
-        first_map = str(campaign["first_map"])
-        normalized = first_map.casefold()
-        if normalized in seen_first_maps:
-            raise VpkError(f"duplicate campaign first map: {first_map}")
-        seen_first_maps.add(normalized)
-        display_name = existing_names.get(normalized, str(campaign["name"]))
-        managed_section.append((first_map, [("name", display_name)]))
+        normalized = str(campaign["first_map"]).casefold()
+        if normalized in by_map:
+            raise VpkError(f"duplicate campaign first map: {campaign['first_map']}")
+        by_map[normalized] = campaign
+    known = set(existing_order) | set(recent_order)
+    new_maps = sorted(
+        by_map.keys() - known,
+        key=lambda item: (str(by_map[item]["name"]).casefold(), item),
+    )
+    # No new batch means the previous recent batch stays pinned, not demoted.
+    recent_maps = new_maps or [item for item in recent_order if item in by_map]
+    historical = dict.fromkeys([*recent_order, *existing_order, *policy_order])
+    old_maps = [
+        item for item in historical if item in by_map and item not in recent_maps
+    ]
 
-    replacement: tuple[str, KVValue] = (section, managed_section)
-    if section_index is None:
-        mission_cycle_value.append(replacement)
-    else:
-        mission_cycle_value[section_index] = replacement
+    def entries(maps: list[str]) -> list[tuple[str, KVValue]]:
+        return [
+            (
+                str(by_map[item]["first_map"]),
+                [("name", existing_names.get(item, str(by_map[item]["name"])))],
+            )
+            for item in maps
+        ]
+
+    fixed_sections = [
+        (name, value)
+        for name, value in mission_cycle_value
+        if name.casefold() not in (section.casefold(), recent_section.casefold())
+    ]
+    mission_cycle_value[:] = [
+        (recent_section, entries(recent_maps)),
+        *fixed_sections,
+        (section, entries(old_maps)),
+    ]
 
     output_path.write_text(
         render_keyvalues(root) + "\n", encoding="utf-8", newline="\n"
@@ -605,13 +619,13 @@ def parse_args() -> argparse.Namespace:
     inventory.add_argument("--cache", type=Path)
 
     reconcile = subparsers.add_parser(
-        "reconcile", help="replace only the managed mission-cycle section"
+        "reconcile", help="reconcile recent, fixed, and historical campaign sections"
     )
     reconcile.add_argument("--source", required=True, type=Path)
     reconcile.add_argument(
         "--policy",
         type=Path,
-        help="repository mission cycle with curated names and order",
+        help="repository mission cycle with fixed sections and curated names",
     )
     reconcile.add_argument("--inventory", required=True, type=Path)
     reconcile.add_argument("--output", required=True, type=Path)

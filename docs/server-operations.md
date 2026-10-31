@@ -36,6 +36,8 @@ Windows 通过本机 SSH 配置中的 `l4d2-coreyun` 连接服务器：
 
 整批 VPK 上传完成后，先运行 01 检查，再执行 `sudo l4d2-content-apply` 应用地图清单并重启；若同时需要部署仓库改动，则运行 02。VPK 使用简短 ASCII 文件名，例如 `blackmist_re_v13.vpk`。第三方战役需提供 AstRedux 所需的 Versus 章节定义；坏包或冲突战役会被跳过，应查看输出确认结果。
 
+地图菜单按新图、官图、旧图排列。没有新增地图时，最近一批新图保持在前；下一批加入后，上一批归入旧图。排序在内容应用时更新，单独运行 01 检查不会改变最近批次。
+
 `addons/sourcemod/configs/map_rules.cfg` 是上述覆盖规则的例外：部署时自动合并，保留游戏内修改；同字段冲突时保留云服值并提示。无需为了防止覆盖而提前同步回仓库，需纳入仓库的调整仍应手动同步。字段和命令见 [地图规则配置](configuration/map-rules.md)。
 
 空服自动换图依赖 `sv_hibernate_when_empty 0`，防止空服休眠暂停计时。游戏内地图选择与轮换行为见 [地图切换配置](astredux-design.md#地图切换)。
