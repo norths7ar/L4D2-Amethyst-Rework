@@ -34,7 +34,7 @@ Windows 通过本机 SSH 配置中的 `l4d2-coreyun` 连接服务器：
 
 修改管理员后，可在服务器控制台执行 `sm_reloadadmins`；其他配置是否即时生效取决于插件及执行时机。SQLite 数据库和 `addons/sourcemod/data/cannounce_messages.txt` 是运行数据，不在仓库维护。
 
-整批 VPK 上传完成后，先运行 01 检查，再执行 `sudo l4d2-content-apply` 应用地图清单并重启；若同时需要部署仓库改动，则运行 02。VPK 使用简短 ASCII 文件名，例如 `blackmist_re_v13.vpk`。第三方战役需提供 AstRedux 所需的 Versus 章节定义；坏包或冲突战役会被跳过，应查看输出确认结果。
+上传前可使用[本地地图准备工具](../tools/README.md)补齐缺失的 Versus 声明、处理误命名 ZIP 和明确的末尾括号问题。整批 VPK 上传完成后，先运行 01 检查，再执行 `sudo l4d2-content-apply` 应用地图清单并重启；若同时需要部署仓库改动，则运行 02。VPK 使用简短 ASCII 文件名，例如 `blackmist_re_v13.vpk`。第三方战役需提供 AstRedux 所需的 Versus 章节定义；坏包或冲突战役会被跳过，应查看输出确认结果。
 
 地图菜单按新图、官图、旧图排列。没有新增地图时，最近一批新图保持在前；下一批加入后，上一批归入旧图。排序在内容应用时更新，单独运行 01 检查不会改变最近批次。
 
