@@ -6,14 +6,16 @@
 
 服务器使用 `root` 维护与部署，`l4d2` 运行游戏。游戏安装在 `/home/l4d2/server`，仓库 checkout 位于 `/home/l4d2/integration`。主机需具备 Bash、Python 3、Git、rsync、flock、sudo，以及运行脚本使用的 systemd 和常规 Linux 工具；启用 `SRCDS_DEBUG` 时还需 gdb。
 
-首次安装或更新运维工具时，先将 checkout 更新到已确认的版本，再执行：
+首次安装、从旧版脚本副本迁移，或修改命令入口、systemd 单元时，先将 checkout 更新到已确认的版本，再执行：
 
 ```bash
 cd /home/l4d2/integration
-sudo ./ops/linux/install.sh
+sudo bash ops/linux/install.sh
 ```
 
-安装脚本更新 `/usr/local/sbin/`、`/usr/local/libexec/l4d2/` 下的工具和 `l4d2.service`，启用服务但不启动或重启游戏。现有 `/etc/l4d2-restart.conf` 不会被覆盖；首次安装使用 [配置示例](linux/l4d2-restart.conf.example)，以后新增配置需自行核对。
+安装脚本在 `/usr/local/sbin/`、`/usr/local/libexec/l4d2/` 保留同名薄入口，直接调用 `CHECKOUT_ROOT` 内的 Bash/Python 实现，不再保存代码副本。日常更新仓库后，下次执行命令就会使用该版本；本次更新命令自身使用启动时已解析的代码完成本轮操作。修改 `CHECKOUT_ROOT` 后需重装入口。安装仍会更新 `l4d2.service` 并启用服务，但不启动或重启游戏。现有 `/etc/l4d2-restart.conf` 不会被覆盖；首次安装使用 [配置示例](linux/l4d2-restart.conf.example)，以后新增配置需自行核对。
+
+运维代码由 checkout 维护账户管理（默认 root，不能是游戏账户）；安装会收回游戏账户对 `/home/l4d2`、checkout 根目录、Git 元数据及 `ops` 的写权限，同时保留代码读取和目录进入权限。`ops` 目录继承服务组，Git 更新以只读组权限创建代码，避免后续更新破坏入口权限。游戏运行目录的写权限保持原有规则，运行数据、私有配置和地图规则合并仍按下述部署规则处理。
 
 配置包含运行账户、目录、绑定地址、端口、起始地图、启动健康检查超时，以及 `CHECKOUT_ROOT`、`CHECKOUT_BRANCH`、`CHECKOUT_REMOTE`。实际更新来源以该配置为准。Windows 入口只引用本机 SSH 别名 `l4d2-coreyun`，不保存地址或密钥。
 
@@ -51,7 +53,7 @@ pwsh -File ops/windows/Watch-GameEndpoint.ps1 -Address 203.0.113.10 -OutputDirec
 - 成功版本记录在 `/var/lib/l4d2/last-deployed-revision`；首次没有记录时以更新前 checkout 为基线。仅在部署、内容应用和重启全部成功后推进，失败时 checkout 可能已更新。
 - Git 获取失败会重试，最终失败则跳过仓库部署，仍尝试应用已经上传的内容并重启，不推进部署记录。应分别判断仓库更新与内容应用的结果。
 
-仓库内容部署不会安装 `ops/` 工具。涉及数据保护规则的工具更新应先安装，再执行内容部署。
+仓库内容部署不会复制 `ops/` 代码；系统命令直接调用 checkout。只有入口或 systemd 单元有变化时才需要重新安装，普通脚本修改无需同步另一份副本。
 
 ## 地图内容处理
 

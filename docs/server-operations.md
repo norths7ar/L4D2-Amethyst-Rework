@@ -12,7 +12,7 @@ Windows 通过本机 SSH 配置中的 `l4d2-coreyun` 连接服务器：
 | `ops/windows/02-apply-content-and-restart.cmd` | 更新仓库、部署内容、检查地图并重启 | `sudo l4d2-update-and-restart` |
 | `ops/windows/03-restart-server.cmd` | 仅重启 | `sudo l4d2-restart-now` |
 
-02 会部署仓库文件，但不会更新已经安装到系统中的运维脚本；脚本有改动时先按 [安装与配置](../ops/README.md#安装与配置) 更新工具。执行后检查输出和服务状态；提示 Git 获取失败时，不要把随后成功的内容应用与重启当作仓库更新成功。
+运维命令直接调用云服仓库中的脚本，仓库更新后无需另行复制脚本。旧版安装须先按 [安装与配置](../ops/README.md#安装与配置) 迁移一次；以后只有命令入口或 systemd 单元改变时才需重装。02 仍会部署游戏内容并重启，不能把它当作只更新运维代码的命令。执行后检查输出和服务状态；提示 Git 获取失败时，不要把随后成功的内容应用与重启当作仓库更新成功。
 
 游戏内拥有 `m`（RCON）标志的管理员也可执行 `!restart 原因` 或 `!restartserver 原因`，广播后立即退出游戏进程，由 systemd 重新启动。
 
@@ -37,6 +37,8 @@ Windows 通过本机 SSH 配置中的 `l4d2-coreyun` 连接服务器：
 上传前可使用[本地地图准备工具](../tools/README.md)补齐缺失的 Versus 声明、处理误命名 ZIP 和明确的末尾括号问题。整批 VPK 上传完成后，先运行 01 检查，再执行 `sudo l4d2-content-apply` 应用地图清单并重启；若同时需要部署仓库改动，则运行 02。VPK 使用简短 ASCII 文件名，例如 `blackmist_re_v13.vpk`。第三方战役需提供 AstRedux 所需的 Versus 章节定义；坏包或冲突战役会被跳过，应查看输出确认结果。
 
 地图菜单按新图、官图、旧图排列。没有新增地图时，最近一批新图保持在前；下一批加入后，上一批归入旧图。排序在内容应用时更新，单独运行 01 检查不会改变最近批次。
+
+仅调整 `missioncycle.txt` 中已加载战役的顺序后，可在服务器控制台执行 `sm_campaign_reload` 热重载菜单，无需重启或换图；这不代替新增 VPK 的内容加载。
 
 `addons/sourcemod/configs/map_rules.cfg` 是上述覆盖规则的例外：部署时自动合并，保留游戏内修改；同字段冲突时保留云服值并提示。无需为了防止覆盖而提前同步回仓库，需纳入仓库的调整仍应手动同步。字段和命令见 [地图规则配置](configuration/map-rules.md)。
 

@@ -30,21 +30,6 @@ assert_owned_unit() {
 
 assert_owned_unit /etc/systemd/system/l4d2.service
 
-install -d -o root -g root -m 0755 "$LIBEXEC_DIR"
-install -o root -g root -m 0755 "$SCRIPT_DIR/l4d2-restart-now" \
-    /usr/local/sbin/l4d2-restart-now
-install -o root -g root -m 0755 "$SCRIPT_DIR/l4d2-content-apply" \
-    /usr/local/sbin/l4d2-content-apply
-install -o root -g root -m 0755 "$SCRIPT_DIR/l4d2-update-and-restart" \
-    /usr/local/sbin/l4d2-update-and-restart
-install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/l4d2-console" \
-    "$LIBEXEC_DIR/l4d2-console"
-install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/l4d2-run" \
-    "$LIBEXEC_DIR/l4d2-run"
-install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/vpk_campaigns.py" \
-    "$LIBEXEC_DIR/vpk_campaigns.py"
-install -o root -g root -m 0755 "$SCRIPT_DIR/libexec/map_rules_merge.py" \
-    "$LIBEXEC_DIR/map_rules_merge.py"
 if [[ ! -e "$CONFIG_PATH" ]]; then
     install -o root -g l4d2 -m 0640 "$SCRIPT_DIR/l4d2-restart.conf.example" \
         "$CONFIG_PATH"
@@ -52,6 +37,41 @@ fi
 
 # shellcheck source=/dev/null
 source "$CONFIG_PATH"
+CHECKOUT_ROOT=${CHECKOUT_ROOT:-/home/l4d2/integration}
+CODE_OWNER=${CHECKOUT_OWNER:-$OWNER_USER}
+[[ "$CODE_OWNER" != "$SERVICE_USER" ]] && id "$CODE_OWNER" >/dev/null 2>&1 || {
+    printf "Checkout must be maintained by an account other than the game service.\n" >&2
+    exit 1
+}
+[[ "$(realpath -- "$SCRIPT_DIR/../..")" == "$(realpath -- "$CHECKOUT_ROOT")" ]] || {
+    printf 'install.sh: run from the configured CHECKOUT_ROOT: %s\n' "$CHECKOUT_ROOT" >&2
+    exit 1
+}
+# Root entry points must not execute game-user-writable code.
+chown root:"$SERVICE_GROUP" /home/l4d2
+chown "$CODE_OWNER:$SERVICE_GROUP" "$CHECKOUT_ROOT"
+chmod go-w /home/l4d2 "$CHECKOUT_ROOT"
+chown -R "$CODE_OWNER" "$CHECKOUT_ROOT/.git"
+chmod -R go-w "$CHECKOUT_ROOT/.git"
+chown -R "$CODE_OWNER:$SERVICE_GROUP" "$CHECKOUT_ROOT/ops"
+chmod -R u+rwX,g+rX,go-w "$CHECKOUT_ROOT/ops"
+find "$CHECKOUT_ROOT/ops" -type d -exec chmod g+s {} +
+install -d -o root -g root -m 0755 "$LIBEXEC_DIR"
+install_entry() {
+    local target=$1 relative=$2 interpreter=$3
+    printf '#!/usr/bin/env bash\nexec %q %q "$@"\n' "$interpreter" "$CHECKOUT_ROOT/ops/linux/$relative" > "$target"
+    chown root:root "$target"
+    chmod 0755 "$target"
+}
+for command in l4d2-restart-now l4d2-content-apply l4d2-update-and-restart; do
+    install_entry "/usr/local/sbin/$command" "$command" /bin/bash
+done
+for command in l4d2-console l4d2-run; do
+    install_entry "$LIBEXEC_DIR/$command" "libexec/$command" /bin/bash
+done
+for command in vpk_campaigns.py map_rules_merge.py; do
+    install_entry "$LIBEXEC_DIR/$command" "libexec/$command" /usr/bin/python3
+done
 id "$OWNER_USER" >/dev/null 2>&1 || {
     printf 'install.sh: owner account %s does not exist\n' "$OWNER_USER" >&2
     exit 1

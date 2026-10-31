@@ -2,6 +2,9 @@
 set -Eeuo pipefail
 umask 0007
 
+# Parse the running version before Git may replace this file.
+main() {
+
 CONFIG_PATH=${L4D2_RESTART_CONFIG:-/etc/l4d2-restart.conf}
 APPLY_TOOL=${L4D2_CONTENT_APPLY_TOOL:-/usr/local/sbin/l4d2-content-apply}
 LIBEXEC_DIR=${L4D2_LIBEXEC_DIR:-/usr/local/libexec/l4d2}
@@ -58,7 +61,9 @@ done
 exec 9>/run/lock/l4d2-update-and-restart.lock
 flock -n 9 || { printf 'l4d2-update-and-restart: another update is already running\n' >&2; exit 1; }
 
-git_owner() { sudo -H -u "$CHECKOUT_OWNER" -- git -C "$CHECKOUT_ROOT" "$@"; }
+# Git may replace scripts read by the game service. Inherit the ops directory
+# group, but never grant that group write access to code executed as root.
+git_owner() ( umask 0027; sudo -H -u "$CHECKOUT_OWNER" -- git -C "$CHECKOUT_ROOT" "$@"; )
 git_owner remote get-url "$CHECKOUT_REMOTE" >/dev/null || { printf 'l4d2-update-and-restart: unknown Git remote: %s\n' "$CHECKOUT_REMOTE" >&2; exit 1; }
 git_owner check-ref-format --branch "$CHECKOUT_BRANCH" >/dev/null || { printf 'l4d2-update-and-restart: invalid checkout branch\n' >&2; exit 1; }
 branch=$(git_owner symbolic-ref --quiet --short HEAD) || { printf 'l4d2-update-and-restart: detached HEAD\n' >&2; exit 1; }
@@ -190,3 +195,6 @@ printf '%s\n' "$new_rev" >"$MARKER_PATH"
 chown root:"${SERVICE_GROUP:-l4d2}" "$MARKER_PATH"
 chmod 0660 "$MARKER_PATH"
 printf 'Updated %s and applied content successfully.\n' "$new_rev"
+
+}
+main "$@"
