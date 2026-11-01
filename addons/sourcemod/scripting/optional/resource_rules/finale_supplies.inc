@@ -1,14 +1,11 @@
 // Automatic finale supplies supplement explicit end regions; they do not
 // redefine start/end areas for other consumers of saferoom detection.
-ConVar g_finaleClusters;
-bool g_finaleLatched, g_finaleEnabled, g_finaleActive, g_finaleStartCaptured;
+bool g_finaleActive, g_finaleStartCaptured;
 ArrayList g_finaleProtected, g_finalePending, g_finaleStarts, g_finaleReplayRefs;
 Handle g_finaleBatch;
 
 void FinaleSupplies_Init()
 {
-	g_finaleClusters = CreateConVar("resource_finale_supply_clusters", "0",
-		"Convert compact groups of four or more non-start finale medkit points to uncapped pills; takes effect next map.", _, true, 0.0, true, 1.0);
 	g_finaleProtected = new ArrayList();
 	g_finalePending = new ArrayList();
 	g_finaleStarts = new ArrayList(3);
@@ -17,15 +14,7 @@ void FinaleSupplies_Init()
 
 void FinaleSupplies_NewMap()
 {
-	g_finaleLatched = false;
 	g_finaleReplayRefs.Clear();
-}
-
-void FinaleSupplies_Latch()
-{
-	if (g_finaleLatched) return;
-	g_finaleEnabled = g_finaleClusters.BoolValue;
-	g_finaleLatched = true;
 }
 
 void FinaleSupplies_Reset()
@@ -44,12 +33,12 @@ void FinaleSupplies_MapEnd()
 	g_finaleBatch = null;
 }
 
-void FinaleSupplies_Begin()
+bool FinaleSupplies_Begin()
 {
-	g_finaleActive = g_policyFile && g_finaleEnabled && L4D_IsMissionFinalMap();
+	g_finaleActive = g_policyFile && g_finaleSupplies && L4D_IsMissionFinalMap();
 	if (!g_replayingSupplies) g_finaleReplayRefs.Clear();
-	if (!g_finaleActive || g_finaleStartCaptured) return;
-	g_finaleStartCaptured = true;
+	if (!g_finaleActive) return true;
+	if (g_finaleStartCaptured) return true;
 	for (int client = 1; client <= MaxClients; client++)
 	{
 		if (!IsClientInGame(client) || GetClientTeam(client) != 2 || !IsPlayerAlive(client)) continue;
@@ -57,6 +46,15 @@ void FinaleSupplies_Begin()
 		GetClientAbsOrigin(client, origin);
 		g_finaleStarts.PushArray(origin);
 	}
+	// An unavailable start query is not evidence that a medkit is outside.
+	// Without opening survivors, retain the original resources and retry from
+	// their spawn/team events. A configured start region needs no live client.
+	float point[3];
+	if (!g_finaleStarts.Length
+		&& SAFEDETECT_QueryPoint(point, SafeDetect_Start, SafeDetect_MapInfoFirst) == SafeDetect_Unavailable)
+		return false;
+	g_finaleStartCaptured = true;
+	return true;
 }
 
 bool FinaleSupplies_OutsideStart(const float point[3])
@@ -81,6 +79,16 @@ bool FinaleSupplies_OutsideStart(const float point[3])
 bool FinaleSupplies_IsProtected(int entity)
 {
 	return g_finaleProtected.FindValue(EntIndexToEntRef(entity)) != -1;
+}
+
+void FinaleSupplies_Protect(int entity)
+{
+	int reference = EntIndexToEntRef(entity);
+	if (g_finaleProtected.FindValue(reference) == -1) g_finaleProtected.Push(reference);
+	// Cabinet pills may already have the desired class and need no replacement.
+	// Save those identities too, so ItemTracking retains the exemption on replay.
+	if (g_initializationPending && !g_replayingSupplies && g_finaleReplayRefs.FindValue(reference) == -1)
+		g_finaleReplayRefs.Push(reference);
 }
 
 bool FinaleSupplies_IsPending(int entity)
@@ -135,13 +143,13 @@ void FinaleSupplies_Classify(ArrayList candidates)
 				GetEntPropVector(EntRefToEntIndex(group.Get(j)), Prop_Data, "m_vecAbsOrigin", other);
 				float distance = GetVectorDistance(point, other);
 				// Coincident entities are one refresh point, not multiple supplies.
-				if (distance < 1.0 || distance > 128.0) { fits = false; break; }
+				if (distance < 1.0 || distance > 256.0) { fits = false; break; }
 			}
 			if (fits) group.Push(candidates.Get(i));
 		}
 		if (group.Length < 4) continue;
 		for (int i = 0; i < group.Length; i++)
-			if (g_finaleProtected.FindValue(group.Get(i)) == -1) g_finaleProtected.Push(group.Get(i));
+			FinaleSupplies_Protect(EntRefToEntIndex(group.Get(i)));
 	}
 	delete group;
 }
@@ -175,12 +183,7 @@ public Action FinaleSupplies_ProcessBatch(Handle timer)
 void FinaleSupplies_Transfer(int source, int target)
 {
 	if (!FinaleSupplies_IsProtected(source)) return;
-	int reference = EntIndexToEntRef(target);
-	g_finaleProtected.Push(reference);
-	// Preserve snapshot identity, not location: co-located ordinary pills must
-	// never inherit this exception when ItemTracking restores a later round.
-	if (g_initializationPending && !g_replayingSupplies)
-		g_finaleReplayRefs.Push(reference);
+	FinaleSupplies_Protect(target);
 }
 
 void FinaleSupplies_Replayed(int entity, int previousRef)

@@ -18,7 +18,7 @@
 public Plugin myinfo = {
 	name = "Boss Spawn Rules",
 	author = "CanadaRox, Sir, devilesk, Derpduck, Forgetest",
-	version = "2.6.0",
+	version = "2.6.1",
 	description = "Sets a tank spawn and has the option to remove the witch spawn point on every map",
 	url = "https://github.com/devilesk/rl4d2l-plugins"
 };

@@ -2,16 +2,8 @@
 {
 	"MapMenuTitle"
 	{
-		"#format" "{1:s},{2:s}"
-		"en" "Map Rules: {1}\n{2}"
-	}
-	"MapMenuReady"
-	{
-		"en" "Changes apply this round and are saved"
-	}
-	"MapMenuLive"
-	{
-		"en" "Round in progress; changes apply next round"
+		"#format" "{1:s}"
+		"en" "Map Rules: {1}"
 	}
 	"MapMenuTank"
 	{
@@ -122,6 +114,22 @@
 	"AdminGunsDisabled"
 	{
 		"en" "T1 weapon spawning is disabled."
+	}
+	"MapMenuFuelBarrels"
+	{
+		"en" "Explosive Barrels"
+	}
+	"MapMenuEntitiesMissing"
+	{
+		"en" "Map Entities: Plugin not loaded"
+	}
+	"AdminMeleeReadyOnly"
+	{
+		"en" "Melee weapons can only be spawned during ready-up."
+	}
+	"AdminMeleeSpawned"
+	{
+		"en" "Spawned melee weapons."
 	}
 	"AdminPlayerAssistance"
 	{

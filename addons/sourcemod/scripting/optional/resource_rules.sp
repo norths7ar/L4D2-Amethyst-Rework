@@ -58,6 +58,7 @@ bool g_limitPassPending;
 
 #include "resource_rules/config.inc"
 #include "resource_rules/finale_supplies.inc"
+#include "resource_rules/cabinet_supplies.inc"
 #include "resource_rules/scavenge_supplies.inc"
 #include "resource_rules/spawns.inc"
 #include "resource_rules/replacement.inc"
@@ -73,7 +74,7 @@ public Plugin myinfo =
 	name = "Map Resource Rules",
 	author = "ProdigySim, norths7ar",
 	description = "Owns map supplies, weapon replacements and campaign resource exceptions.",
-	version = "2.3.0"
+	version = "2.4.0"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -97,9 +98,12 @@ public void OnPluginStart()
 	SafeItems_Init();
 	StartKits_Init();
 	FinaleSupplies_Init();
+	CabinetSupplies_Init();
 	ScavengeSupplies_Init();
 	HookEvent("round_start_pre_entity", RoundResetCb, EventHookMode_Pre);
 	HookEvent("round_start_post_nav", DirectorReadyCb, EventHookMode_PostNoCopy);
+	HookEvent("player_spawn", ResourceSurvivorReadyCb, EventHookMode_PostNoCopy);
+	HookEvent("player_team", ResourceSurvivorReadyCb, EventHookMode_PostNoCopy);
 }
 
 public void OnMapStart()
@@ -131,7 +135,6 @@ public void OnMapEnd()
 
 public void OnConfigsExecuted()
 {
-	FinaleSupplies_Latch();
 	LoadRules();
 	UpdateCampaign();
 	g_configsReady = true;
@@ -149,6 +152,7 @@ public void RoundResetCb(Event event, const char[] name, bool dontBroadcast)
 void ResetResourceRound()
 {
 	FinaleSupplies_Reset();
+	CabinetSupplies_Reset();
 	ScavengeSupplies_Reset();
 	g_resourceDecisions.Clear();
 	g_distributionWarnings.Clear();
@@ -168,6 +172,13 @@ public void DirectorReadyCb(Event event, const char[] name, bool dontBroadcast)
 	QueueResourceInitialization();
 }
 
+public void ResourceSurvivorReadyCb(Event event, const char[] name, bool dontBroadcast)
+{
+	// Finale classification may still be waiting for the opening survivors.
+	// Queueing leaves spawn/team dispatch before reading their positions.
+	QueueResourceInitialization();
+}
+
 void QueueResourceInitialization()
 {
 	if (!g_configsReady || !g_directorReady || g_roundReady || g_initializationPending) return;
@@ -179,9 +190,16 @@ void QueueResourceInitialization()
 public void InitializeResources(int generation)
 {
 	if (generation != g_roundGeneration) return;
-	g_roundReady = true;
 	g_replayingSupplies = LGO_ItemTrackingWillReplay();
-	FinaleSupplies_Begin();
+	if (!FinaleSupplies_Begin())
+	{
+		// Do not delete unclassified kits or record an incomplete item snapshot.
+		// Spawn/team events retry once opening positions become available.
+		g_replayingSupplies = false;
+		g_initializationPending = false;
+		return;
+	}
+	g_roundReady = true;
 	if (g_policyFile) ScanResources();
 	else
 	{
@@ -291,10 +309,10 @@ bool IsPlayerEquipment(int entity)
 public void OnEntityCreated(int entity, const char[] classname)
 {
 	if (!g_policyFile || g_creating || entity <= MaxClients) return;
+	CabinetSupplies_Created(entity, classname);
 	if (strncmp(classname, "weapon_", 7) == 0 || strncmp(classname, "upgrade_", 8) == 0
 		|| strncmp(classname, "prop_", 5) == 0)
 	{
-		SDKHook(entity, SDKHook_Spawn, BeforeResourceSpawn);
 		SDKHook(entity, SDKHook_SpawnPost, ResourceSpawned);
 	}
 }
@@ -344,5 +362,6 @@ void ScanResources()
 public void OnEntityDestroyed(int entity)
 {
 	FinaleSupplies_Destroyed(entity);
+	CabinetSupplies_Destroyed(entity);
 	ScavengeSupplies_Destroyed(entity);
 }

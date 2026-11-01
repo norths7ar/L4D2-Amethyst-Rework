@@ -4,6 +4,13 @@
 	{
 		"Functions"
 		{
+			"CPropHealthCabinet::SpawnItems"
+			{
+				"signature" "CPropHealthCabinet::SpawnItems"
+				"callconv" "thiscall"
+				"return" "void"
+				"this" "entity"
+			}
 			"CGasCan::SetSpawner"
 			{
 				"signature" "CGasCan::SetSpawner"
@@ -21,6 +28,11 @@
 		}
 		"Offsets"
 		{
+			"CabinetSpawnItemsSupported"
+			{
+				"linux" "1"
+				"windows" "0"
+			}
 			"ScavengeGetSpawnerSupported"
 			{
 				"linux" "1"
@@ -29,6 +41,12 @@
 		}
 		"Signatures"
 		{
+			// Native synchronous creation scope; no object offsets or radius guesses.
+			"CPropHealthCabinet::SpawnItems"
+			{
+				"library" "server"
+				"linux" "@_ZN18CPropHealthCabinet10SpawnItemsEv"
+			}
 			"CGasCan::SetSpawner"
 			{
 				"library" "server"

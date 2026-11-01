@@ -1,4 +1,4 @@
-// Resource policy overlay: global defaults < maps/<map>.
+// Resource policy overlay: global < finale_defaults < maps/<map>.
 enum struct ResourcePolicy
 {
 	char name[64];
@@ -29,6 +29,8 @@ StringMap g_regionRules[4]; // start, end, along, finale replacement override
 ArrayList g_itemPolicies, g_categoryPolicies;
 StringMap g_resourceDecisions, g_distributionWarnings;
 ConVar g_visualize;
+bool g_finaleSupplies;
+int g_cabinetLimit;
 
 void InitPolicy()
 {
@@ -183,6 +185,10 @@ void ReadPolicyLayer(KeyValues kv)
 	ReadRuleSection(kv, "rules", g_rules);
 	g_meleePickups = kv.GetNum("melee_pickups", g_meleePickups);
 	if (g_meleePickups < 1) SetFailState("melee_pickups must be positive");
+	g_cabinetLimit = ParseLimit(kv, "health_cabinet_limit", g_cabinetLimit);
+	int finaleSupplies = kv.GetNum("finale_supplies", g_finaleSupplies ? 1 : 0);
+	if (finaleSupplies != 0 && finaleSupplies != 1) SetFailState("finale_supplies must be 0 or 1");
+	g_finaleSupplies = finaleSupplies != 0;
 	if (kv.JumpToKey("regions"))
 	{
 		static const char names[][] = {"start", "end", "along", "finale"};
@@ -264,6 +270,8 @@ void LoadRules(const char[] incomingMap = "")
 	g_itemPolicies.Clear();
 	g_categoryPolicies.Clear();
 	g_meleePickups = 1;
+	g_cabinetLimit = -1;
+	g_finaleSupplies = false;
 
 	char file[PLATFORM_MAX_PATH], path[PLATFORM_MAX_PATH], map[128];
 	g_rulesFile.GetString(file, sizeof(file));
@@ -275,6 +283,13 @@ void LoadRules(const char[] incomingMap = "")
 	if (!rules.JumpToKey("global")) SetFailState("Resource policy %s needs a global section", path);
 	ReadPolicyLayer(rules);
 	rules.GoBack();
+	// OnMapInit still describes the outgoing mission. No resource settlement
+	// runs until OnConfigsExecuted reloads with the incoming Director ready.
+	if (!incomingMap[0] && L4D_IsMissionFinalMap() && rules.JumpToKey("finale_defaults"))
+	{
+		ReadPolicyLayer(rules);
+		rules.GoBack();
+	}
 	if (incomingMap[0]) strcopy(map, sizeof(map), incomingMap);
 	else GetCurrentMap(map, sizeof(map));
 	if (rules.JumpToKey("maps") && rules.JumpToKey(map)) ReadPolicyLayer(rules);
@@ -312,6 +327,7 @@ int GetRegionAtPoint(const float point[3])
 
 bool GetResourceRule(int entity, const char[] name, char[] target, int maxlen)
 {
+	if (FinaleSupplies_IsProtected(entity)) return GetRuleInRegion(1, name, target, maxlen);
 	return GetRuleInRegion(GetResourceRegion(entity), name, target, maxlen);
 }
 

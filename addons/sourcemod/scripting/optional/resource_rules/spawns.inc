@@ -40,14 +40,10 @@ void ChooseTarget(const char[] target, char[] choice, int maxlen)
 	TrimString(choice);
 }
 
-public Action BeforeResourceSpawn(int entity)
-{
-	NormalizePickupFlags(entity);
-	return Plugin_Continue;
-}
-
 void NormalizePickupFlags(int entity)
 {
+	// Called only by settled resource processing: OnMapInit has not applied
+	// the incoming mission's finale layer yet, so Spawn must not clamp counts.
 	char classname[64];
 	GetEntityClassname(entity, classname, sizeof(classname));
 	// Bit 8 means Infinite Items only on weapon resource spawners. It is not

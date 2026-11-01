@@ -2,15 +2,7 @@
 {
 	"MapMenuTitle"
 	{
-		"chi" "地图规则：{1}\n{2}"
-	}
-	"MapMenuReady"
-	{
-		"chi" "修改本轮生效并保存"
-	}
-	"MapMenuLive"
-	{
-		"chi" "已开局，修改下轮生效"
+		"chi" "地图规则：{1}"
 	}
 	"MapMenuTank"
 	{
@@ -119,6 +111,22 @@
 	"AdminGunsDisabled"
 	{
 		"chi" "当前未启用 T1 武器补给。"
+	}
+	"MapMenuFuelBarrels"
+	{
+		"chi" "地图爆炸桶"
+	}
+	"MapMenuEntitiesMissing"
+	{
+		"chi" "地图实体：插件未加载"
+	}
+	"AdminMeleeReadyOnly"
+	{
+		"chi" "只能在准备阶段生成近战武器。"
+	}
+	"AdminMeleeSpawned"
+	{
+		"chi" "已生成近战武器。"
 	}
 	"AdminPlayerAssistance"
 	{

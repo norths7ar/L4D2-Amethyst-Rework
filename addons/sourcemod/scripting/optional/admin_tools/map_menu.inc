@@ -41,9 +41,7 @@ void ShowMapMenu(int client)
 	}
 	MapRules_CurrentMap(g_mapMenuMap[client], sizeof(g_mapMenuMap[]));
 	Menu menu = new Menu(MapMenu_Handler);
-	char status[128];
-	FormatEx(status, sizeof(status), "%T", MapRules_IsLive() ? "MapMenuLive" : "MapMenuReady", client);
-	menu.SetTitle("%T", "MapMenuTitle", client, g_mapMenuMap[client], status);
+	menu.SetTitle("%T", "MapMenuTitle", client, g_mapMenuMap[client]);
 	if (MapMenu_Native("BossRules_GetStatic") && MapMenu_Native("BossRules_SetStatic"))
 	{
 		MapMenu_AddToggle(menu, client, "tank", "MapMenuTank", !BossRules_GetStatic(false), !BossRules_GetStatic(false, true));
@@ -63,6 +61,9 @@ void ShowMapMenu(int client)
 		else MapMenu_AddToggle(menu, client, "intro", "MapMenuIntro", SkipIntro_GetAlways(), SkipIntro_GetAlways(true), true);
 	}
 	else MapMenu_AddDisabled(menu, client, "MapMenuIntroMissing");
+	if (MapMenu_Native("EntityRules_GetFuelBarrels") && MapMenu_Native("EntityRules_SetFuelBarrels"))
+		MapMenu_AddToggle(menu, client, "barrels", "MapMenuFuelBarrels", EntityRules_GetFuelBarrels(), EntityRules_GetFuelBarrels(true));
+	else MapMenu_AddDisabled(menu, client, "MapMenuEntitiesMissing");
 	menu.Display(client, MENU_TIME_FOREVER);
 }
 
@@ -89,7 +90,9 @@ public int MapMenu_Handler(Menu menu, MenuAction action, int client, int item)
 		}
 		else if (StrEqual(key, "intro") && MapMenu_Native("SkipIntro_IsOfficialForced") && MapMenu_Native("SkipIntro_GetAlways") && MapMenu_Native("SkipIntro_SetAlways") && !SkipIntro_IsOfficialForced())
 			saved = SkipIntro_SetAlways(!SkipIntro_GetAlways(true));
-		if (saved) PrintToChat(client, "%t", MapRules_IsLive() ? "MapMenuSavedNext" : "MapMenuSavedNow");
+		else if (StrEqual(key, "barrels") && MapMenu_Native("EntityRules_GetFuelBarrels") && MapMenu_Native("EntityRules_SetFuelBarrels"))
+			saved = EntityRules_SetFuelBarrels(!EntityRules_GetFuelBarrels(true));
+		if (saved) PrintToChat(client, "%t", (StrEqual(key, "barrels") || MapRules_IsLive()) ? "MapMenuSavedNext" : "MapMenuSavedNow");
 		else PrintToChat(client, "%t", "MapMenuSaveFailed");
 		ShowMapMenu(client);
 	}

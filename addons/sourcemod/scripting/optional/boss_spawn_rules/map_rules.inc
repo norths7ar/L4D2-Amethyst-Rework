@@ -17,17 +17,31 @@ bool LoadBossMapRules()
 	KeyValues rules = MapRules_Load();
 	if (rules == null) return false;
 	MapRules_CurrentMap(g_sCurrentMap, sizeof(g_sCurrentMap));
-	g_staticRules[0] = MapRules_ReadInt(rules, g_sCurrentMap, "static_tank") != 0;
-	g_staticRules[1] = MapRules_ReadInt(rules, g_sCurrentMap, "static_witch") != 0;
+	g_staticRules[0] = ReadBossStaticValue(rules, g_sCurrentMap, false);
+	g_staticRules[1] = ReadBossStaticValue(rules, g_sCurrentMap, true);
 	delete rules;
 	return true;
+}
+
+bool ReadBossStaticValue(KeyValues rules, const char[] map, bool witch)
+{
+	if (witch || !StrEqual(map, g_sCurrentMap, false) || !L4D_IsMissionFinalMap())
+		return MapRules_ReadInt(rules, map, witch ? "static_witch" : "static_tank") != 0;
+
+	// Finale maps default to no flow Tank, not no scripted/finale Tank.
+	// Explicit map settings (including !mset saves) still take precedence.
+	int value = 1;
+	rules.Rewind();
+	if (rules.JumpToKey("maps") && rules.JumpToKey(map)) value = rules.GetNum("static_tank", value);
+	rules.Rewind();
+	return value != 0;
 }
 
 bool ReadStaticRule(const char[] map, bool witch, bool &value)
 {
 	KeyValues rules = MapRules_Load();
 	if (rules == null) return false;
-	value = MapRules_ReadInt(rules, map, witch ? "static_witch" : "static_tank") != 0;
+	value = ReadBossStaticValue(rules, map, witch);
 	delete rules;
 	return true;
 }

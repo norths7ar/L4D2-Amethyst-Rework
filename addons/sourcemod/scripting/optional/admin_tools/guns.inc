@@ -41,20 +41,26 @@ Action CommandGuns(int client, int args)
 	return Plugin_Handled;
 }
 
-void SpawnBasicGuns(int client)
+bool AdminWeapons_CanSpawn(int client, const char[] command, const char[] readyPhrase)
 {
 	if (client == 0 || !IsClientInGame(client))
 	{
 		ReplyToCommand(client, "[SM] %t", "AdminGunsInGame");
-		return;
+		return false;
 	}
-	if (!CheckCommandAccess(client, "sm_guns", ADMFLAG_CHEATS)) return;
+	if (!CheckCommandAccess(client, command, ADMFLAG_CHEATS)) return false;
 	if (GetFeatureStatus(FeatureType_Native, "IsInReady") != FeatureStatus_Available
 		|| !IsInReady() || MapRules_IsLive())
 	{
-		PrintToChat(client, "[SM] %t", "AdminGunsReadyOnly");
-		return;
+		PrintToChat(client, "[SM] %t", readyPhrase);
+		return false;
 	}
+	return true;
+}
+
+void SpawnBasicGuns(int client)
+{
+	if (!AdminWeapons_CanSpawn(client, "sm_guns", "AdminGunsReadyOnly")) return;
 	int selected[5];
 	int requested = ReadBasicGuns(selected);
 	if (requested <= 0)
@@ -64,11 +70,12 @@ void SpawnBasicGuns(int client)
 		return;
 	}
 	float positions[5][3], angles[3];
-	if (!FindBasicGunPositions(client, requested, positions, angles))
+	if (!FindAdminWeaponPositions(client, requested, positions, angles))
 	{
 		PrintToChat(client, "[SM] %t", "AdminGunsNoGround");
 		return;
 	}
+	angles[2] = 90.0; // Guns lie on their side; melee uses the normal orientation.
 	int spawned[5], count;
 	for (int i = 0; i < requested; i++)
 	{
@@ -97,7 +104,7 @@ void SpawnBasicGuns(int client)
 	PrintToChat(client, "[SM] %t", "AdminGunsSpawned");
 }
 
-bool FindBasicGunPositions(int client, int count, float positions[5][3], float angles[3])
+bool FindAdminWeaponPositions(int client, int count, float positions[5][3], float angles[3])
 {
 	float eye[3], aim[3], center[3], normal[3];
 	GetClientEyePosition(client, eye);
@@ -113,7 +120,7 @@ bool FindBasicGunPositions(int client, int count, float positions[5][3], float a
 	if (!hit || normal[2] < 0.7) return false;
 	angles[0] = 0.0;
 	angles[1] = aim[1];
-	angles[2] = 90.0;
+	angles[2] = 0.0;
 	float yaw[3], ahead[3], right[3];
 	yaw[1] = aim[1];
 	GetAngleVectors(yaw, ahead, right, NULL_VECTOR);

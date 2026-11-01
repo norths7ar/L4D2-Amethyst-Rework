@@ -13,6 +13,8 @@ native bool FinaleRules_SetRound(int slot, bool allowed);
 native bool SkipIntro_GetAlways(bool saved = false);
 native bool SkipIntro_SetAlways(bool enabled);
 native bool SkipIntro_IsOfficialForced();
+native bool EntityRules_GetFuelBarrels(bool saved = false);
+native bool EntityRules_SetFuelBarrels(bool allowed);
 
 stock void MapRules_MarkAPIsOptional()
 {
@@ -24,4 +26,6 @@ stock void MapRules_MarkAPIsOptional()
 	MarkNativeAsOptional("SkipIntro_GetAlways");
 	MarkNativeAsOptional("SkipIntro_SetAlways");
 	MarkNativeAsOptional("SkipIntro_IsOfficialForced");
+	MarkNativeAsOptional("EntityRules_GetFuelBarrels");
+	MarkNativeAsOptional("EntityRules_SetFuelBarrels");
 }

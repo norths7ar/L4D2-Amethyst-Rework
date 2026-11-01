@@ -39,14 +39,10 @@ void ProcessResource(int entity)
 {
 	if (!IsValidEntity(entity)) return;
 	if (IsPlayerEquipment(entity)) return;
+	if (!CabinetSupplies_Process(entity)) return;
 	char name[64], target[256];
 	GetResourceName(entity, name, sizeof(name));
 	NormalizePickupFlags(entity);
-	if (FinaleSupplies_IsProtected(entity))
-	{
-		if (StrEqual(name, "first_aid_kit")) ReplaceResource(entity, "pain_pills");
-		return;
-	}
 	if (FinaleSupplies_IsPending(entity)) return;
 	if (StrEqual(name, "melee")) SetMeleeCount(entity);
 	if (!name[0] || IsAllowed(name) || !GetResourceRule(entity, name, target, sizeof(target))) return;
@@ -226,6 +222,7 @@ void ReplaceResource(int entity, const char[] target)
 		AcceptEntityInput(created, "SetParent", parent);
 	}
 	if (id == WEPID_MELEE) SetMeleeCount(created);
+	CabinetSupplies_Transfer(entity, created);
 	FinaleSupplies_Transfer(entity, created);
 	// Never remove the source before the replacement has successfully spawned.
 	RemoveEntity(entity);
