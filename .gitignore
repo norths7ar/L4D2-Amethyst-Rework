@@ -1,29 +1,11 @@
-# Windows thumbnail cache files
+# Windows folder metadata
 Thumbs.db
-ehthumbs.db
-ehthumbs_vista.db
-
-# Folder config file
 Desktop.ini
 
-# Recycle Bin used on file shares
-$RECYCLE.BIN/
+# Local editor settings and temporary files
+/.vscode/
+/.tmp/
 
-# Windows Installer files
-*.cab
-*.msi
-*.msm
-*.msp
-
-# Windows shortcuts
-*.lnk
-
-# =========================
-# Operating System Files
-# =========================
-
-# Visual Studio Code files
-/.vscode
 # Local databases and SQLite sidecars
 *.sq3
 *.db
@@ -35,5 +17,5 @@ $RECYCLE.BIN/
 *-journal
 /addons/sourcemod/data/sqlite/
 
-# Player-owned custom join messages, permissions, and sounds
+# Player-owned custom join messages
 /addons/sourcemod/data/cannounce_messages.txt
