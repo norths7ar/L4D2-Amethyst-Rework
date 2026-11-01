@@ -6,11 +6,10 @@ AstRedux 的替换、区域例外和数量／分布统一写在 [`resource_rules
 
 - `resource_rules_file`：相对 SourceMod `configs` 的路径；AstRedux 使用 `resource_rules.cfg`，空字符串使用框架设置。须在地图生成前选定，修改配置或重载插件后换图生效。
 - `resource_rules_visualize`：`0` 正常执行，`1` 预览数量／分布裁剪，`2` 执行并高亮保留点；预览时替换照常执行。
-- `resource_finale_supply_clusters`：默认 `0`，AstRedux 开启；换图生效。救援终章自动识别起点外的紧凑医疗包组，转换为不受数量／分布裁剪的止痛药，不要求预录终点区域。
 
 ## 结构与覆盖
 
-根节点为 `ResourceRules`，通用设置放 `global`，地图特例放 `maps/<地图名>`。地图按字段覆盖全局，省略即继承；分类的 `members` 列表整体替换。MapInfo 提供区域信息，资源限额由本文件配置。
+根节点为 `ResourceRules`。`global` 设置全局默认值，`finale_defaults` 调整救援关默认值，`maps/<地图名>` 设置本图特例，优先级依次提高。三处使用相同字段，未填写的字段沿用前一级设置；分类的 `members` 列表整体替换。MapInfo 提供区域信息，资源限额由本文件配置。
 
 | 配置块／字段 | 含义 |
 | --- | --- |
@@ -19,6 +18,8 @@ AstRedux 的替换、区域例外和数量／分布统一写在 [`resource_rules
 | `regions/start,end,along,finale` | 按资源名设置区域替换例外，未指定的资源回退到通用 `rules`；救援例外见下文。 |
 | `distribution/<资源名>` | 单资源的数量、路线与统计区域策略。 |
 | `categories/<分类名>` | `members` 为逗号分隔的资源名，成员共用数量与分布策略。 |
+| `health_cabinet_limit` | 每个医疗柜的物资保留上限，`-1` 保留原数量，`0` 清空。AstRedux 普通关设为 `2`，救援关设为 `-1`。 |
+| `finale_supplies` | `1` 自动识别救援关起点外的医疗包组和医疗柜补给，按救援规则替换，不受沿途物资数量与分布限制。AstRedux 在 `finale_defaults` 中开启。 |
 
 最小覆盖示例（数值仅作演示）：
 
@@ -28,7 +29,6 @@ AstRedux 的替换、区域例外和数量／分布统一写在 [`resource_rules
     "global"
     {
         "rules" { "first_aid_kit" "none" }
-        "regions" { "finale" { "first_aid_kit" "pain_pills" } }
         "distribution"
         {
             "pain_pills"
@@ -46,6 +46,12 @@ AstRedux 的替换、区域例外和数量／分布统一写在 [`resource_rules
                 "limit" "10"
             }
         }
+    }
+    "finale_defaults"
+    {
+        "finale_supplies" "1"
+        "health_cabinet_limit" "-1"
+        "regions" { "finale" { "first_aid_kit" "pain_pills" } }
     }
     "maps"
     {
@@ -91,21 +97,27 @@ AstRedux 的替换、区域例外和数量／分布统一写在 [`resource_rules
 
 区域识别优先使用 MapInfo，数据缺失时用精确盒子后备，起点识别优先；未知位置使用通用替换规则，按 `unknown` 参与数量限制。
 
-`regions/finale` 是**替换例外**，仅作用于救援终章已识别的 `end` 补给范围（MapInfo 的 `end_point/end_dist`），不是整张救援地图。按资源名依次回退：`finale → end → 通用 rules`；普通地图使用对应区域规则。
+`regions/finale` 设置救援补给的替换规则，用于已识别的 `end` 区域（MapInfo 的 `end_point/end_dist`），以及下文自动识别的补给。某种资源未在 `finale` 中指定时，依次查找 `end` 和通用 `rules`。救援关其余位置仍使用对应区域的规则。
 
-换出的资源仍属于 `end`。要把它计入数量／分布限制，策略的 `regions` 须包含 `end`；默认 `along,unknown` 将其豁免。`flow_finale` 则是**路线筛选开关**，控制救援关的密度和路线区间，与上述替换例外独立。
+原本位于 `end` 的资源替换后仍属于该区域。要把它计入数量／分布限制，策略的 `regions` 须包含 `end`；默认 `along,unknown` 将其豁免。`flow_finale` 则是**路线筛选开关**，控制救援关的密度和路线区间，与上述替换例外独立。
 
 ### 救援补给自动识别
 
-三方图不会提前录入终点数据，但救援时仍需要补给。因此，插件尝试将终章中起点外、集中摆放的四个及以上医疗包识别为补给，整组换成药，并跳过数量和分布裁剪。起点的包仍按原规则处理。
+许多三方图没有预先录入救援区域。开启 `finale_supplies` 后，插件把救援关起点外集中摆放的四个及以上医疗包识别为补给，也识别起点外医疗柜中的物资。它们使用上述救援替换规则，并跳过数量和分布限制；AstRedux 默认包换药，地图配置可以调整。
 
-这不保证准确识别救援场地：路途中符合条件的四包组也会保留，零散或不足四包的补给可能漏掉。这是为了让未经专门配置的地图也能获得一些救援补给，而接受的取舍。
+医疗包分组要求任意两点相距不超过 256 单位，重合点不重复计数；医疗柜不要求凑齐四包。该方法也会保留路途中符合条件的医疗包组，而零散或不足四包的补给可能漏掉。这是兼容未经专门配置的地图所接受的取舍。
 
-由 `resource_finale_supply_clusters` 控制，AstRedux 默认开启，换图生效。
+识别需要知道起点位置，以免把起点包当成救援补给。区域数据缺失时使用开局生还者位置；两者都未就绪时先保留物资，等生还者生成或队伍变化后重试，避免首轮误删。
+
+### 医疗柜
+
+医疗柜内物资在每轮初始化时由引擎生成，开门只是让玩家能够取用。插件按生成来源记录柜内物品，再按 `health_cabinet_limit` 保留数量，原有开门交互不变。
+
+数量由资源规则统一管理，原先全局 Stripper 的医疗柜 4→2 设置已移除，因此救援关可以保留原数量。本图配置仍可单独调整柜内数量；起点外的救援柜补给不受沿途药品限额影响。医疗柜识别目前支持 Linux 服务端。
 
 ## 当前玩法与保留范围
 
-资源先按地图候选池和枪械成组规则生成，再替换、删除和裁剪，空缺不补刷。T2 换 T1，狙击仅保留 Scout。默认删除医疗包、电击器，肾上腺素换止痛药，原生止痛药保留；救援终章的终点补给范围内医疗包换药，自动成组识别另保护起点外符合条件的补给。
+资源先按地图候选池和枪械成组规则生成，再替换、删除和限制数量，空缺不补刷。T2 换 T1，狙击仅保留 Scout。默认删除医疗包、电击器，肾上腺素换止痛药，原生止痛药保留；救援补给按上文规则处理。
 
 止痛药全局固定上限为 `-1`，路线区间 0.2–0.9、密度 `0.3`、最小间距 `500`，地图可覆盖；`recovery`、`throwables` 分类默认不限量。
 
@@ -113,4 +125,4 @@ AstRedux 的替换、区域例外和数量／分布统一写在 [`resource_rules
 
 灌油机关油桶按 `weapon_scavenge_item_spawn` 的真实生成关联保护；暂时不选择因本图有灌油机关而放行所有普通油桶。关联接口目前支持 Linux 服务端；油桶不再按皮肤单独豁免，接口不可用时会记录一次启动错误。
 
-同轮保留点固定，后续生成资源只能填补空位，重开重新选择。需要复用药丸、针及三种投掷物时，启用 `confogl_enable_itemtracking 1`：`confogl_itemtracking_savespawns 0` 每轮重新选择，设为 `1` 复用已保存结果。Zone 系列的 ItemTracking 继续使用其 MapInfo 覆盖、数量／路线筛选和人数限额。
+同轮保留点固定，后续生成资源只能填补空位，重开重新选择。AstRedux 设置 `confogl_itemtracking_savespawns 0`，不复用上轮物资布置。设为 `1` 时，ItemTracking 会尝试保存并重建药丸、针及三种投掷物；与本资源规则联用时仍有保存失败问题，尚未通过运行验证。Zone 系列的 ItemTracking 继续使用其 MapInfo 配置、数量／路线筛选和人数限额。

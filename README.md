@@ -10,7 +10,7 @@ AstRedux 基于海洋空气开发的 AstMod（Amethyst）继续开发，支持 1
 
 - `!match` / `!chmatch` / `!rmatch`：进入、切换或重置模式。
 - `!ast`：玩法调整菜单。
-- `!mset`：管理员地图规则菜单，保存本图路程 Boss、支持的救援轮次与开场动画设置。
+- `!mset`：管理员地图设置菜单。
 - `!si <时间> <数量>`：调整当前地图的特感波次。
 - `!mapvote` / `!nextmap` / `!chaptervote`：地图与章节投票。
 
