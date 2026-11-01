@@ -1,6 +1,7 @@
 // Ready placement owns records and bounded requests, never the ready gate.
 #define START_NAV_POINTS 8
-#define START_CANDIDATES 24
+#define START_CACHED_POINTS 8
+#define START_CANDIDATES 25 // One cached attempt plus the existing 24 fallback candidates.
 #define START_CONFIRM_TIMEOUT 1.5
 #define START_REQUEST_TIMEOUT 3.0
 #define START_SETTLE_TIME 0.1
@@ -51,6 +52,31 @@ bool g_startExplicit;
 float g_startHint[3];
 float g_startHintRadius;
 bool g_startPlacement;
+// Successful map-local landings survive round restarts, not map changes.
+float g_startCachedPoints[START_CACHED_POINTS][3];
+bool g_startCachedNative[START_CACHED_POINTS];
+bool g_startCachedValid[START_CACHED_POINTS];
+int g_startCachedCount;
+int g_startCachedNext;
+int g_startCachedAttempt[MAXPLAYERS + 1];
+
+void StartArea_ResetMap()
+{
+    g_startCachedCount = 0;
+    g_startCachedNext = 0;
+}
+
+void StartArea_CacheLanding(const float point[3], bool nativePoint)
+{
+    for (int i = 0; i < g_startCachedCount; i++)
+        if (g_startCachedValid[i] && GetVectorDistance(point, g_startCachedPoints[i], true) < 256.0) return;
+    int slot = g_startCachedNext;
+    g_startCachedPoints[slot] = point;
+    g_startCachedNative[slot] = nativePoint;
+    g_startCachedValid[slot] = true;
+    g_startCachedNext = (slot + 1) % START_CACHED_POINTS;
+    if (g_startCachedCount < START_CACHED_POINTS) g_startCachedCount++;
+}
 
 bool IsReadySurvivor(int client)
 {
@@ -63,6 +89,7 @@ void StartArea_ClearRequest(int client)
     g_startReturn[client] = StartIdle;
     g_startCandidateCount[client] = 0;
     g_startCandidateIndex[client] = 0;
+    g_startCachedAttempt[client] = -1;
     g_startNotify[client] = false;
     g_startBoundary[client] = false;
     g_startCounted[client] = false;
@@ -439,6 +466,21 @@ void StartArea_BuildCandidates(int client)
 {
     g_startCandidateCount[client] = 0;
     g_startCandidateIndex[client] = 0;
+    // Doors and other geometry can reset between rounds. Recheck support and
+    // clearance before reusing a landing; normal live confirmation still follows.
+    // Spend at most one confirmation window on cache so current-round sources
+    // still get a turn inside the unchanged request deadline.
+    for (int i = 0; i < g_startCachedCount; i++)
+    {
+        if (!g_startCachedValid[i]) continue;
+        StartArea_AddCandidate(client, g_startCachedPoints[i], true, g_startCachedNative[i]);
+        if (g_startCandidateCount[client] > 0)
+        {
+            g_startCachedAttempt[client] = i;
+            break;
+        }
+        g_startCachedValid[i] = false;
+    }
     if (g_startHasLanding[client]) StartArea_AddCandidate(client, g_startLanding[client], false, true);
     for (int other = 1; other <= MaxClients; other++)
     {
@@ -514,6 +556,12 @@ void StartArea_Fallback(int client)
     StartArea_Finish(client);
 }
 
+void StartArea_InvalidateCachedAttempt(int client)
+{
+    if (g_startCandidateIndex[client] == 1 && g_startCachedAttempt[client] != -1)
+        g_startCachedValid[g_startCachedAttempt[client]] = false;
+}
+
 void StartArea_TryCandidate(int client)
 {
     if (g_startCandidateIndex[client] >= g_startCandidateCount[client])
@@ -583,6 +631,7 @@ void StartArea_Tick()
         if (g_startReturn[client] != StartRequested && g_startReturn[client] != StartConfirming) continue;
         if (GetEngineTime() >= g_startRequestDeadline[client])
         {
+            StartArea_InvalidateCachedAttempt(client);
             StartArea_Fallback(client);
             continue;
         }
@@ -609,6 +658,7 @@ void StartArea_Tick()
             }
             else if (GetEngineTime() - g_startSettleSince[client] >= START_SETTLE_TIME)
             {
+                StartArea_CacheLanding(actual, g_startCandidateNative[client][g_startCandidateIndex[client] - 1]);
                 if (StartArea_ActualSafe(client))
                 {
                     g_startLimited[client] = false;
@@ -616,7 +666,10 @@ void StartArea_Tick()
                 StartArea_Finish(client);
             }
             if (g_startReturn[client] == StartConfirming && GetEngineTime() >= g_startDeadline[client])
+            {
+                StartArea_InvalidateCachedAttempt(client);
                 g_startReturn[client] = StartRequested;
+            }
         }
         if (g_startReturn[client] == StartRequested) StartArea_TryCandidate(client);
     }

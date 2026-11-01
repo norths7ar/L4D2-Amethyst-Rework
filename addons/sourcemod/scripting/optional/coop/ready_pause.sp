@@ -218,6 +218,7 @@ public void OnMapEnd()
 	ResetPauseState(true);
 	g_readyPhase = false;
 	StartArea_ResetRound();
+	StartArea_ResetMap();
 }
 
 public void OnPluginEnd()
@@ -493,6 +494,9 @@ void SetSurvivorsFrozen(bool frozen)
 
 void SetReadyFrozen(int client, bool frozen)
 {
+	// Dead survivors and spectators own an observer movement mode. Round-end
+	// cleanup must not turn their camera into a walking, gravity-driven player.
+	if (!IsPlayerAlive(client)) return;
 	// Competitive Rework readyup/player.inc: release to the team's normal movement.
 	MoveType movement = frozen ? MOVETYPE_NONE : (GetClientTeam(client) == TEAM_SPECTATORS ? MOVETYPE_NOCLIP : MOVETYPE_WALK);
 	bool disabledNoclip = GetClientTeam(client) == TEAM_SURVIVORS && IsPlayerAlive(client)
