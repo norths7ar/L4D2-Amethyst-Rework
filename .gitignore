@@ -6,6 +6,9 @@ Desktop.ini
 /.vscode/
 /.tmp/
 
+# Local maintenance references
+/docs/maintenance-history.local.md
+
 # Local databases and SQLite sidecars
 *.sq3
 *.db
