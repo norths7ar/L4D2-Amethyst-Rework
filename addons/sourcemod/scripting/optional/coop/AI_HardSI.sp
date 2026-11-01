@@ -34,7 +34,7 @@ public Plugin myinfo =
 	name = "AI: Hard SI",
 	author = "Breezy",
 	description = "Improves the AI behaviour of special infected",
-	version = "1.4.4",
+	version = "1.5.0",
 	url = "github.com/breezyplease"
 };
 
@@ -183,6 +183,7 @@ public Action Timer_ForceInfectedAssault(Handle timer) {
 
 // Modify SI movement
 public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3], float angles[3], int& weapon) {
+	g_boomerLaunchMultiplier[client] = 1.0;
 	if (!g_bHardSIActive) return Plugin_Continue;
 	if( IsBotInfected(client) && IsPlayerAlive(client) ) { // bots continue to trigger this callback for a few seconds after death
 		int botInfected = client;
