@@ -1,5 +1,13 @@
 "Phrases"
 {
+    "KillHealthAutoWipeEnabled"
+    {
+        "chi" "已开启击杀回血，AutoWipe 解控惩罚额外增加 20。"
+    }
+    "KillHealthAutoWipeDisabled"
+    {
+        "chi" "已关闭击杀回血，取消 AutoWipe 额外增加的 20 点解控惩罚。"
+    }
     "AutoWipeMenu"
     {
         "chi" "AutoWipe 团队救场"

@@ -17,7 +17,7 @@ public Plugin myinfo =
     name = "AutoWipe",
     author = "Breezy, 海洋空氣, norths7ar",
     description = "Automatically rescues survivors when every living teammate is pinned.",
-    version = "1.6.1"
+    version = "1.6.2"
 };
 
 ConVar g_cvEnabled;
@@ -215,6 +215,12 @@ public Action Timer_AutoWipe(Handle timer)
 
 void WipeSurvivors()
 {
+    // kill_rewards owns this switch; challenge.sp announces the linked +20 on player changes.
+    // Keep the configured base cost unchanged; only settlement includes the healing surcharge.
+    ConVar killHealth = FindConVar("kill_rewards_health_enable");
+    int wipeDamage = g_cvWipeDamage.IntValue;
+    if (killHealth != null && killHealth.BoolValue) wipeDamage += 20;
+
     // Capture settlement before releasing attackers: release callbacks can change health/state.
     bool wasIncapped[MAXPLAYERS + 1];
     int health[MAXPLAYERS + 1], reviveCounts[MAXPLAYERS + 1], penalties[MAXPLAYERS + 1];
@@ -227,7 +233,7 @@ void WipeSurvivors()
         tempHealth[client] = L4D_GetTempHealth(client);
         int lostHealth = g_iPinHealth[client] - health[client] - RoundToFloor(tempHealth[client]);
         if (lostHealth < 0 || g_iPinHealth[client] == 0) lostHealth = 0;
-        penalties[client] = g_cvWipeDamage.IntValue - lostHealth;
+        penalties[client] = wipeDamage - lostHealth;
         if (penalties[client] < 0) penalties[client] = 0;
         reviveCounts[client] = GetEntProp(client, Prop_Send, "m_currentReviveCount");
     }

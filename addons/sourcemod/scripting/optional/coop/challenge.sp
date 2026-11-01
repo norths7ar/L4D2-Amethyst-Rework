@@ -56,7 +56,7 @@ public Plugin myinfo =
 	name = "Coop Challenge",
 	author = "海洋空氣, norths7ar",
 	description = "Difficulty Controller for Coop.",
-	version = "2.10.2",
+	version = "2.10.3",
 	url = "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
 };
 
@@ -375,7 +375,7 @@ public void RequestGameplaySetting(int client, int target, int value)
 	}
 }
 
-void ApplyGameplaySetting(int target, int value, bool announce, int slot)
+void ApplyGameplaySetting(int target, int value, bool announce, int slot, bool announceHealth = false)
 {
 	if (IsResourceSetting(target))
 	{
@@ -396,10 +396,13 @@ void ApplyGameplaySetting(int target, int value, bool announce, int slot)
 	g_iSlotOverride[slot][target] = value;
 	g_iSlotOverrideMask[slot] |= (1 << target);
 	if (slot != GetCurrentProfile()) return;
+	bool healthChanged = target == Setting_KillHealth && setting.BoolValue != (value != 0);
 	if (target == Setting_SIDamage) setting.FloatValue = float(value);
 	else setting.IntValue = value;
 
-	if (announce) {
+	if (healthChanged && (announce || announceHealth)) {
+		PrintToChatAll("\x04[Ast] \x01%t", setting.BoolValue ? "KillHealthAutoWipeEnabled" : "KillHealthAutoWipeDisabled");
+	} else if (announce) {
 		PrintToChatAll("\x04[Ast] \x01%t", "SoloOverrideApplied");
 	}
 }
@@ -440,7 +443,7 @@ public void GameplayVoteResultHandler(Handle vote, int num_votes, int num_client
 		case Setting_AutoWipeDamage: DisplayVotePassPhrase(vote, "VotePassAutoWipeDamage");
 	}
 	if (IsResourceSetting(target)) DisplayVotePassPhrase(vote, "ResourceSettingApplied");
-	ApplyGameplaySetting(target, value, false, slot);
+	ApplyGameplaySetting(target, value, false, slot, true);
 }
 
 bool DidVotePass(int num_votes, int num_items, const int[][] item_info)

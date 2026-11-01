@@ -1,5 +1,13 @@
 "Phrases"
 {
+    "KillHealthAutoWipeEnabled"
+    {
+        "en" "Kill healing enabled. AutoWipe rescue cost gains an extra 20."
+    }
+    "KillHealthAutoWipeDisabled"
+    {
+        "en" "Kill healing disabled. AutoWipe's extra 20 rescue cost is removed."
+    }
     "AutoWipeMenu"
     {
         "en" "AutoWipe team rescue"
