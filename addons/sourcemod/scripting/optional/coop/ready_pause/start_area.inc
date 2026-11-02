@@ -59,6 +59,48 @@ bool g_startCachedValid[START_CACHED_POINTS];
 int g_startCachedCount;
 int g_startCachedNext;
 int g_startCachedAttempt[MAXPLAYERS + 1];
+// Diagnostic metadata does not participate in placement decisions.
+char g_startCandidateSource[MAXPLAYERS + 1][START_CANDIDATES][24];
+bool g_startLogRequest[MAXPLAYERS + 1];
+float g_startNextDiagnostic[MAXPLAYERS + 1];
+int g_startRejectedPhysical[MAXPLAYERS + 1], g_startRejectedRegion[MAXPLAYERS + 1];
+
+void StartArea_Log(int client, const char[] event, const char[] reason)
+{
+    if (!g_startLogRequest[client]) return;
+    char map[PLATFORM_MAX_PATH], source[24] = "none";
+    GetCurrentMap(map, sizeof(map));
+    int index = g_startCandidateIndex[client] - 1;
+    float target[3], actual[3];
+    if (index >= 0)
+    {
+        strcopy(source, sizeof(source), g_startCandidateSource[client][index]);
+        target = g_startCandidates[client][index];
+    }
+    GetClientAbsOrigin(client, actual);
+    LogMessage("[Ready start] map=%s client=%N event=%s reason=%s source=%s attempt=%d/%d target=(%.1f %.1f %.1f) actual=(%.1f %.1f %.1f) rejected_geometry=%d rejected_region_or_water=%d",
+        map, client, event, reason, source, index + 1, g_startCandidateCount[client],
+        target[0], target[1], target[2], actual[0], actual[1], actual[2],
+        g_startRejectedPhysical[client], g_startRejectedRegion[client]);
+}
+
+void StartArea_LogUnconfirmed(int client)
+{
+    if (!g_startLogRequest[client]) return;
+    float actual[3];
+    GetClientAbsOrigin(client, actual);
+    char reason[48];
+    if (StartArea_IntroControlled(client)) reason = "map_intro_control";
+    else if (GetVectorDistance(actual, g_startTarget[client], true) > 576.0) reason = "displaced_from_target";
+    else if (!(GetEntityFlags(client) & FL_ONGROUND)) reason = "not_grounded";
+    else if (GetEntProp(client, Prop_Send, "m_nWaterLevel") >= 2) reason = "deep_water";
+    else if (GetEntProp(client, Prop_Send, "m_isIncapacitated")) reason = "incapacitated";
+    else if (GetEntProp(client, Prop_Send, "m_isHangingFromLedge")) reason = "hanging";
+    else if (!StartArea_ClearBody(client)) reason = "blocked_hull";
+    else if (!g_startCandidateNative[client][g_startCandidateIndex[client] - 1] && !StartArea_Classify(actual)) reason = "outside_start_region";
+    else reason = "landing_not_settled";
+    StartArea_Log(client, "candidate_failed", reason);
+}
 
 void StartArea_ResetMap()
 {
@@ -113,6 +155,8 @@ void StartArea_ResetClient(int client)
     g_startAwaitLanding[client] = false;
     g_startSettleSince[client] = 0.0;
     g_startNextNotice[client] = 0.0;
+    g_startNextDiagnostic[client] = 0.0;
+    g_startLogRequest[client] = false;
 }
 
 void StartArea_CancelRequests()
@@ -310,6 +354,10 @@ void StartArea_LoadSources()
         distances[slot] = distance;
     }
     delete areas;
+    char map[PLATFORM_MAX_PATH];
+    GetCurrentMap(map, sizeof(map));
+    LogMessage("[Ready start] map=%s event=sources hint=%d explicit=%d point=(%.1f %.1f %.1f) radius=%.1f nav_points=%d cached_points=%d",
+        map, g_startHasHint, g_startExplicit, g_startHint[0], g_startHint[1], g_startHint[2], g_startHintRadius, g_startNavCount, g_startCachedCount);
 }
 
 float FloatMin(float a, float b) { return a < b ? a : b; }
@@ -430,13 +478,13 @@ void StartArea_ObserveLanding(int client)
     g_startHasLanding[client] = true;
 }
 
-void StartArea_AddCandidate(int client, const float seed[3], bool generated = false, bool nativePoint = false)
+void StartArea_AddCandidate(int client, const float seed[3], const char[] source, bool generated = false, bool nativePoint = false)
 {
     if (g_startCandidateCount[client] >= START_CANDIDATES) return;
     float point[3];
     point = seed;
-    if (generated && !StartArea_PhysicalPoint(seed, point)) return;
-    if (!StartArea_RecordSuitable(point, nativePoint)) return;
+    if (generated && !StartArea_PhysicalPoint(seed, point)) { g_startRejectedPhysical[client]++; return; }
+    if (!StartArea_RecordSuitable(point, nativePoint)) { g_startRejectedRegion[client]++; return; }
     // A late-load snapshot must not deduplicate a later native record.
     for (int i = 0; i < g_startCandidateCount[client]; i++)
         if (GetVectorDistance(point, g_startCandidates[client][i], true) < 256.0
@@ -444,12 +492,13 @@ void StartArea_AddCandidate(int client, const float seed[3], bool generated = fa
     int slot = g_startCandidateCount[client]++;
     g_startCandidates[client][slot] = point;
     g_startCandidateNative[client][slot] = nativePoint;
+    strcopy(g_startCandidateSource[client][slot], 24, source);
 }
 
 void StartArea_AddNearby(int client, const float center[3], int limit)
 {
     int stop = g_startCandidateCount[client] + limit;
-    StartArea_AddCandidate(client, center, true);
+    StartArea_AddCandidate(client, center, "mapinfo", true);
     for (int ring = 1; ring <= 2 && g_startCandidateCount[client] < stop; ring++)
         for (int direction = 0; direction < 8 && g_startCandidateCount[client] < stop; direction++)
         {
@@ -458,12 +507,14 @@ void StartArea_AddNearby(int client, const float center[3], int limit)
             float angle = float(direction) * FLOAT_PI / 4.0;
             seed[0] += Cosine(angle) * float(ring) * 64.0;
             seed[1] += Sine(angle) * float(ring) * 64.0;
-            StartArea_AddCandidate(client, seed, true);
+            StartArea_AddCandidate(client, seed, "mapinfo_nearby", true);
         }
 }
 
 void StartArea_BuildCandidates(int client)
 {
+    g_startRejectedPhysical[client] = 0;
+    g_startRejectedRegion[client] = 0;
     g_startCandidateCount[client] = 0;
     g_startCandidateIndex[client] = 0;
     // Doors and other geometry can reset between rounds. Recheck support and
@@ -473,7 +524,7 @@ void StartArea_BuildCandidates(int client)
     for (int i = 0; i < g_startCachedCount; i++)
     {
         if (!g_startCachedValid[i]) continue;
-        StartArea_AddCandidate(client, g_startCachedPoints[i], true, g_startCachedNative[i]);
+        StartArea_AddCandidate(client, g_startCachedPoints[i], "cached_landing", true, g_startCachedNative[i]);
         if (g_startCandidateCount[client] > 0)
         {
             g_startCachedAttempt[client] = i;
@@ -481,20 +532,20 @@ void StartArea_BuildCandidates(int client)
         }
         g_startCachedValid[i] = false;
     }
-    if (g_startHasLanding[client]) StartArea_AddCandidate(client, g_startLanding[client], false, true);
+    if (g_startHasLanding[client]) StartArea_AddCandidate(client, g_startLanding[client], "own_landing", false, true);
     for (int other = 1; other <= MaxClients; other++)
     {
         if (other == client || !IsReadySurvivor(other)) continue;
-        if (g_startHasLanding[other]) StartArea_AddCandidate(client, g_startLanding[other], false, true);
+        if (g_startHasLanding[other]) StartArea_AddCandidate(client, g_startLanding[other], "peer_landing", false, true);
     }
     if (g_startHasHint) StartArea_AddNearby(client, g_startHint, 5);
-    for (int i = 0; i < g_startNavCount; i++) StartArea_AddCandidate(client, g_startNav[i], true);
+    for (int i = 0; i < g_startNavCount; i++) StartArea_AddCandidate(client, g_startNav[i], "checkpoint_nav", true);
     // Raw spawn snapshots are not observed landings. Validate their geometry
     // like a generated point; a native origin still does not need NAV's approval.
-    if (g_startHasBirth[client]) StartArea_AddCandidate(client, g_startBirth[client], true, g_startNativeBirth[client]);
+    if (g_startHasBirth[client]) StartArea_AddCandidate(client, g_startBirth[client], "own_spawn", true, g_startNativeBirth[client]);
     for (int other = 1; other <= MaxClients; other++)
         if (other != client && IsReadySurvivor(other) && g_startHasBirth[other])
-            StartArea_AddCandidate(client, g_startBirth[other], true, g_startNativeBirth[other]);
+            StartArea_AddCandidate(client, g_startBirth[other], "peer_spawn", true, g_startNativeBirth[other]);
 }
 
 void StartArea_RequestReturn(int client, bool notify = false, bool boundary = false)
@@ -510,7 +561,10 @@ void StartArea_RequestReturn(int client, bool notify = false, bool boundary = fa
     g_startRequestDeadline[client] = GetEngineTime() + START_REQUEST_TIMEOUT;
     GetClientAbsOrigin(client, g_startReturnOrigin[client]);
     g_startAwaitLanding[client] = false;
+    g_startLogRequest[client] = !boundary || GetEngineTime() >= g_startNextDiagnostic[client];
+    if (g_startLogRequest[client]) g_startNextDiagnostic[client] = GetEngineTime() + 30.0;
     StartArea_BuildCandidates(client);
+    StartArea_Log(client, "request", boundary ? "boundary" : (notify ? "manual_return" : "countdown"));
 }
 
 void StartArea_CountBoundaryTeleport(int client)
@@ -548,10 +602,11 @@ void StartArea_Finish(int client)
     g_startNotify[client] = false;
 }
 
-void StartArea_Fallback(int client)
+void StartArea_Fallback(int client, const char[] reason)
 {
     // Undo this request rather than reusing a raw/failed spawn candidate.
     if (g_startCandidateIndex[client] > 0) StartArea_Teleport(client, g_startReturnOrigin[client]);
+    StartArea_Log(client, "fallback", reason);
     StartArea_Notice(client, false);
     StartArea_Finish(client);
 }
@@ -566,7 +621,7 @@ void StartArea_TryCandidate(int client)
 {
     if (g_startCandidateIndex[client] >= g_startCandidateCount[client])
     {
-        StartArea_Fallback(client);
+        StartArea_Fallback(client, "candidates_exhausted");
         return;
     }
     int candidate = g_startCandidateIndex[client]++;
@@ -576,6 +631,7 @@ void StartArea_TryCandidate(int client)
     g_startSettleSince[client] = 0.0;
     g_startDeadline[client] = GetEngineTime() + START_CONFIRM_TIMEOUT;
     StartArea_Teleport(client, g_startTarget[client]);
+    StartArea_Log(client, "selected", "awaiting_confirmation");
 }
 
 bool StartArea_AllFinished()
@@ -632,7 +688,8 @@ void StartArea_Tick()
         if (GetEngineTime() >= g_startRequestDeadline[client])
         {
             StartArea_InvalidateCachedAttempt(client);
-            StartArea_Fallback(client);
+            if (g_startReturn[client] == StartConfirming) StartArea_LogUnconfirmed(client);
+            StartArea_Fallback(client, StartArea_IntroControlled(client) ? "intro_request_timeout" : "request_timeout");
             continue;
         }
         // Natural intros and skip-intro both release through the Director.
@@ -663,10 +720,12 @@ void StartArea_Tick()
                 {
                     g_startLimited[client] = false;
                 }
+                StartArea_Log(client, "confirmed", "stable_landing");
                 StartArea_Finish(client);
             }
             if (g_startReturn[client] == StartConfirming && GetEngineTime() >= g_startDeadline[client])
             {
+                StartArea_LogUnconfirmed(client);
                 StartArea_InvalidateCachedAttempt(client);
                 g_startReturn[client] = StartRequested;
             }

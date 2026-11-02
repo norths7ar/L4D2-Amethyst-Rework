@@ -78,7 +78,7 @@ public Plugin myinfo =
 	name = "Coop ready and pause",
 	author = "CanadaRox, 海洋空氣, norths7ar",
 	description = "Per-player readiness, loading gate and start/resume countdowns",
-	version = "1.3.9"
+	version = "1.3.10"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
