@@ -74,7 +74,7 @@ public Plugin myinfo =
 	name = "Map Resource Rules",
 	author = "ProdigySim, norths7ar",
 	description = "Owns map supplies, weapon replacements and campaign resource exceptions.",
-	version = "2.4.0"
+	version = "2.4.1"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)

@@ -120,6 +120,20 @@ void FinaleSupplies_Scan()
 
 void FinaleSupplies_Classify(ArrayList candidates)
 {
+	// FINALE covers scattered supplies as well as compact groups. Candidates
+	// already exclude the start area, which can also carry the FINALE flag.
+	for (int i = 0; i < candidates.Length; i++)
+	{
+		int entity = EntRefToEntIndex(candidates.Get(i));
+		if (entity == INVALID_ENT_REFERENCE || !FinaleSupplies_Candidate(entity)) continue;
+		float point[3];
+		GetEntPropVector(entity, Prop_Data, "m_vecAbsOrigin", point);
+		Address area = L4D_GetNearestNavArea(point, 120.0, true, false, false, 2);
+		if (area != Address_Null && (L4D_GetNavArea_SpawnAttributes(area) & NAV_SPAWN_FINALE))
+			FinaleSupplies_Protect(entity);
+	}
+	// Maps without useful FINALE markings can still supply a compact group
+	// of three, including maps that place the fourth medkit separately.
 	// Seed every candidate; pairwise distances bound each group, so nearby
 	// chains cannot turn scattered route supplies into one giant cluster.
 	ArrayList group = new ArrayList();
@@ -147,7 +161,7 @@ void FinaleSupplies_Classify(ArrayList candidates)
 			}
 			if (fits) group.Push(candidates.Get(i));
 		}
-		if (group.Length < 4) continue;
+		if (group.Length < 3) continue;
 		for (int i = 0; i < group.Length; i++)
 			FinaleSupplies_Protect(EntRefToEntIndex(group.Get(i)));
 	}
