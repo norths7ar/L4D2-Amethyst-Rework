@@ -9,6 +9,8 @@
 #include <map_rules>
 #include <map_rules_api>
 
+bool g_gunsUsed, g_meleeUsed;
+
 #include "admin_tools/player_actions.inc"
 #include "admin_tools/map_menu.inc"
 #include "admin_tools/guns.inc"
@@ -21,7 +23,7 @@ public Plugin myinfo =
 	name = "Coop admin tools",
 	author = "海洋空氣, norths7ar",
 	description = "Administrator player operations and emergency controls for Coop",
-	version = "1.6.0"
+	version = "1.6.1"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
@@ -36,6 +38,7 @@ public void OnPluginStart()
 	InitPlayerActions();
 	MapRules_Init();
 	InitBasicGuns();
+	HookEvent("round_start", AdminWeapons_RoundStart, EventHookMode_PostNoCopy);
 	RegAdminCmd("sm_mset", CommandMapMenu, ADMFLAG_GENERIC, "本图路程 Boss、救援轮次、开场动画和爆炸桶设置。");
 	RegAdminCmd("sm_guns", CommandGuns, ADMFLAG_CHEATS, "准备阶段按配置在瞄准的地面生成 T1 武器各一把。");
 	RegAdminCmd("sm_melee", CommandMelee, ADMFLAG_CHEATS, "准备阶段在瞄准的地面生成一把草叉、一把铁锹和一把撬棍。");
@@ -43,6 +46,18 @@ public void OnPluginStart()
 }
 
 public void OnRoundIsLive() { MapRules_Lock(); }
+
+public void OnMapStart()
+{
+	g_gunsUsed = false;
+	g_meleeUsed = false;
+}
+
+public void AdminWeapons_RoundStart(Event event, const char[] name, bool dontBroadcast)
+{
+	g_gunsUsed = false;
+	g_meleeUsed = false;
+}
 
 public Action CommandCleanup(int client, int args)
 {

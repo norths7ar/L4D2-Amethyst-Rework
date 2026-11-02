@@ -115,6 +115,14 @@
 	{
 		"en" "T1 weapon spawning is disabled."
 	}
+	"AdminGunsUsed"
+	{
+		"en" "!guns can only be used once per round."
+	}
+	"AdminMeleeUsed"
+	{
+		"en" "!melee can only be used once per round."
+	}
 	"MapMenuFuelBarrels"
 	{
 		"en" "Explosive Barrels"

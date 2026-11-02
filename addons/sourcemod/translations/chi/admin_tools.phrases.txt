@@ -112,6 +112,14 @@
 	{
 		"chi" "当前未启用 T1 武器补给。"
 	}
+	"AdminGunsUsed"
+	{
+		"chi" "!guns 每轮只能使用1次。"
+	}
+	"AdminMeleeUsed"
+	{
+		"chi" "!melee 每轮只能使用1次。"
+	}
 	"MapMenuFuelBarrels"
 	{
 		"chi" "地图爆炸桶"

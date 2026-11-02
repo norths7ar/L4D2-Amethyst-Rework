@@ -1,6 +1,11 @@
 Action CommandMelee(int client, int args)
 {
 	if (!AdminWeapons_CanSpawn(client, "sm_melee", "AdminMeleeReadyOnly")) return Plugin_Handled;
+	if (g_meleeUsed)
+	{
+		PrintToChat(client, "[SM] %t", "AdminMeleeUsed");
+		return Plugin_Handled;
+	}
 	int table = FindStringTable("MeleeWeapons");
 	if (table == INVALID_STRING_TABLE) return Plugin_Handled;
 	static const char weapons[][] = { "pitchfork", "shovel", "crowbar" };
@@ -24,6 +29,7 @@ Action CommandMelee(int client, int args)
 	}
 	if (count > 0)
 	{
+		g_meleeUsed = true;
 		LogAction(client, -1, "\"%L\" spawned %d melee weapons", client, count);
 		PrintToChat(client, "[SM] %t", "AdminMeleeSpawned");
 	}

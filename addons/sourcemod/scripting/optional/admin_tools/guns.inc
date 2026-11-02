@@ -61,6 +61,11 @@ bool AdminWeapons_CanSpawn(int client, const char[] command, const char[] readyP
 void SpawnBasicGuns(int client)
 {
 	if (!AdminWeapons_CanSpawn(client, "sm_guns", "AdminGunsReadyOnly")) return;
+	if (g_gunsUsed)
+	{
+		PrintToChat(client, "[SM] %t", "AdminGunsUsed");
+		return;
+	}
 	int selected[5];
 	int requested = ReadBasicGuns(selected);
 	if (requested <= 0)
@@ -100,6 +105,7 @@ void SpawnBasicGuns(int client)
 		PrintToChat(client, "[SM] %t", "AdminGunsFailed");
 		return;
 	}
+	g_gunsUsed = true;
 	LogAction(client, -1, "\"%L\" spawned %d configured T1 weapons", client, count);
 	PrintToChat(client, "[SM] %t", "AdminGunsSpawned");
 }
