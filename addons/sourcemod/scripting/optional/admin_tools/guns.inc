@@ -7,7 +7,7 @@ ConVar g_basicGuns;
 
 void InitBasicGuns()
 {
-	g_basicGuns = CreateConVar("admin_guns_weapons", "smg,smg_silenced,smg_mp5,pumpshotgun,shotgun_chrome",
+	g_basicGuns = CreateConVar("admin_guns_weapons", "shotgun_chrome,pumpshotgun,smg,smg_silenced,smg_mp5",
 		"Comma-separated T1 weapons for !guns; empty disables spawning.");
 }
 
@@ -41,26 +41,19 @@ Action CommandGuns(int client, int args)
 	return Plugin_Handled;
 }
 
-bool AdminWeapons_CanSpawn(int client, const char[] command, const char[] readyPhrase)
+bool AdminWeapons_CanSpawn(int client, const char[] command)
 {
 	if (client == 0 || !IsClientInGame(client))
 	{
 		ReplyToCommand(client, "[SM] %t", "AdminGunsInGame");
 		return false;
 	}
-	if (!CheckCommandAccess(client, command, ADMFLAG_CHEATS)) return false;
-	if (GetFeatureStatus(FeatureType_Native, "IsInReady") != FeatureStatus_Available
-		|| !IsInReady() || MapRules_IsLive())
-	{
-		PrintToChat(client, "[SM] %t", readyPhrase);
-		return false;
-	}
-	return true;
+	return CheckCommandAccess(client, command, ADMFLAG_CHEATS);
 }
 
 void SpawnBasicGuns(int client)
 {
-	if (!AdminWeapons_CanSpawn(client, "sm_guns", "AdminGunsReadyOnly")) return;
+	if (!AdminWeapons_CanSpawn(client, "sm_guns")) return;
 	if (g_gunsUsed)
 	{
 		PrintToChat(client, "[SM] %t", "AdminGunsUsed");
@@ -80,7 +73,7 @@ void SpawnBasicGuns(int client)
 		PrintToChat(client, "[SM] %t", "AdminGunsNoGround");
 		return;
 	}
-	angles[2] = 90.0; // Guns lie on their side; melee uses the normal orientation.
+	angles[2] = 90.0; // Guns lie on their side.
 	int spawned[5], count;
 	for (int i = 0; i < requested; i++)
 	{
@@ -125,17 +118,16 @@ bool FindAdminWeaponPositions(int client, int count, float positions[5][3], floa
 	delete trace;
 	if (!hit || normal[2] < 0.7) return false;
 	angles[0] = 0.0;
-	angles[1] = aim[1];
+	angles[1] = aim[1] + 90.0; // Gun barrels lie across the row, relative to the caller.
 	angles[2] = 0.0;
-	float yaw[3], ahead[3], right[3];
+	float yaw[3], ahead[3];
 	yaw[1] = aim[1];
-	GetAngleVectors(yaw, ahead, right, NULL_VECTOR);
+	GetAngleVectors(yaw, ahead, NULL_VECTOR, NULL_VECTOR);
 	for (int i = 0; i < count; i++)
 	{
 		float start[3], end[3];
 		for (int axis = 0; axis < 3; axis++)
-			start[axis] = center[axis] + ahead[axis] * ((i / 3) * 48.0)
-				+ right[axis] * ((i % 3) - (count < 3 ? (count - 1) / 2.0 : 1.0)) * 48.0;
+			start[axis] = center[axis] + ahead[axis] * (i - (count - 1) / 2.0) * 24.0;
 		start[2] += 24.0;
 		end = start;
 		end[2] -= 64.0;

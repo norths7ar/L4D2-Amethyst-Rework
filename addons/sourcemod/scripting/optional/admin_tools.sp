@@ -23,7 +23,7 @@ public Plugin myinfo =
 	name = "Coop admin tools",
 	author = "海洋空氣, norths7ar",
 	description = "Administrator player operations and emergency controls for Coop",
-	version = "1.6.1"
+	version = "1.6.4"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
@@ -40,8 +40,8 @@ public void OnPluginStart()
 	InitBasicGuns();
 	HookEvent("round_start", AdminWeapons_RoundStart, EventHookMode_PostNoCopy);
 	RegAdminCmd("sm_mset", CommandMapMenu, ADMFLAG_GENERIC, "本图路程 Boss、救援轮次、开场动画和爆炸桶设置。");
-	RegAdminCmd("sm_guns", CommandGuns, ADMFLAG_CHEATS, "准备阶段按配置在瞄准的地面生成 T1 武器各一把。");
-	RegAdminCmd("sm_melee", CommandMelee, ADMFLAG_CHEATS, "准备阶段在瞄准的地面生成一把草叉、一把铁锹和一把撬棍。");
+	RegAdminCmd("sm_guns", CommandGuns, ADMFLAG_CHEATS, "在瞄准的地面生成配置的 T1 武器各一把，全队每回合限一次。");
+	RegAdminCmd("sm_melee", CommandMelee, ADMFLAG_CHEATS, "从自身位置掉落一把草叉、一把铁锹和一把撬棍，全队每回合限一次。");
 	RegAdminCmd("sm_fuck", CommandCleanup, ADMFLAG_BAN, "清理匹配名称的 AI 特感。");
 }
 

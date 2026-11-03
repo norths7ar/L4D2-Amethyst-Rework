@@ -46,7 +46,7 @@
 	{
 		"astredux"
 		{
-			"name" "AstRedux - 实验药役"
+			"name" "AstRedux"
 		}
 	}
 }

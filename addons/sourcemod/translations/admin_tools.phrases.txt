@@ -95,10 +95,6 @@
 	{
 		"en" "Use this command in game."
 	}
-	"AdminGunsReadyOnly"
-	{
-		"en" "Basic guns can only be spawned during ready-up."
-	}
 	"AdminGunsNoGround"
 	{
 		"en" "Aim at open ground with room for the selected weapons."
@@ -130,10 +126,6 @@
 	"MapMenuEntitiesMissing"
 	{
 		"en" "Map Entities: Plugin not loaded"
-	}
-	"AdminMeleeReadyOnly"
-	{
-		"en" "Melee weapons can only be spawned during ready-up."
 	}
 	"AdminMeleeSpawned"
 	{

@@ -1,6 +1,6 @@
 Action CommandMelee(int client, int args)
 {
-	if (!AdminWeapons_CanSpawn(client, "sm_melee", "AdminMeleeReadyOnly")) return Plugin_Handled;
+	if (!AdminWeapons_CanSpawn(client, "sm_melee")) return Plugin_Handled;
 	if (g_meleeUsed)
 	{
 		PrintToChat(client, "[SM] %t", "AdminMeleeUsed");
@@ -9,12 +9,8 @@ Action CommandMelee(int client, int args)
 	int table = FindStringTable("MeleeWeapons");
 	if (table == INVALID_STRING_TABLE) return Plugin_Handled;
 	static const char weapons[][] = { "pitchfork", "shovel", "crowbar" };
-	float positions[5][3], angles[3];
-	if (!FindAdminWeaponPositions(client, sizeof(weapons), positions, angles))
-	{
-		PrintToChat(client, "[SM] %t", "AdminGunsNoGround");
-		return Plugin_Handled;
-	}
+	float position[3];
+	GetClientEyePosition(client, position);
 	int count;
 	for (int i = 0; i < sizeof(weapons); i++)
 	{
@@ -22,9 +18,9 @@ Action CommandMelee(int client, int args)
 		int entity = CreateEntityByName("weapon_melee");
 		if (entity == -1) break;
 		DispatchKeyValue(entity, "melee_script_name", weapons[i]);
-		DispatchKeyValueInt(entity, "spawnflags", 1);
-		TeleportEntity(entity, positions[i], angles, NULL_VECTOR);
 		if (!DispatchSpawn(entity)) { RemoveEntity(entity); continue; }
+		// Match dropped secondary weapons: spawn unconstrained and let physics settle them.
+		TeleportEntity(entity, position, NULL_VECTOR, NULL_VECTOR);
 		count++;
 	}
 	if (count > 0)

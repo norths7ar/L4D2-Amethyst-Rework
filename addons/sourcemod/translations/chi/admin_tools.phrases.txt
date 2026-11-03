@@ -92,10 +92,6 @@
 	{
 		"chi" "请在游戏内使用此指令。"
 	}
-	"AdminGunsReadyOnly"
-	{
-		"chi" "只能在准备阶段生成基础枪。"
-	}
 	"AdminGunsNoGround"
 	{
 		"chi" "请瞄准能摆下所选武器的空地。"
@@ -127,10 +123,6 @@
 	"MapMenuEntitiesMissing"
 	{
 		"chi" "地图实体：插件未加载"
-	}
-	"AdminMeleeReadyOnly"
-	{
-		"chi" "只能在准备阶段生成近战武器。"
 	}
 	"AdminMeleeSpawned"
 	{
