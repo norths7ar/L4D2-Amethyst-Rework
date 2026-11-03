@@ -22,6 +22,9 @@ native bool SI_AntiRetreat_YieldMovement(int client, float seconds);
 #define FIRST_NORMAL_SI 1
 #define LAST_NORMAL_SI 6
 #define PROGRESS_SAMPLES 64
+#define SURVIVOR_TRAIL_SAMPLES 256
+#define TANK_REAR_MAX_DISTANCE 1500.0
+#define TANK_REAR_MAX_PATH 2500.0
 
 ConVar g_cvEnable;
 ConVar g_cvStuckTime;
@@ -67,13 +70,17 @@ int g_tankStallEpisode[MAXPLAYERS + 1];
 float g_tankStallStarted[MAXPLAYERS + 1];
 int g_tankStallSequence;
 bool g_tankStallRoundEnded;
+float g_survivorTrail[SURVIVOR_TRAIL_SAMPLES][3];
+int g_survivorTrailCount, g_survivorTrailHead;
+float g_lastTrailOrigin[MAXPLAYERS + 1][3];
+bool g_hasTrailOrigin[MAXPLAYERS + 1];
 
 public Plugin myinfo =
 {
 	name = "SI Unstuck",
 	author = "OpenAI",
 	description = "Moves a stuck live AI special infected to a safe hidden nav position",
-	version = "1.4.0",
+	version = "1.5.0",
 	url = ""
 };
 
@@ -118,6 +125,7 @@ public void OnPluginStart()
 
 public void OnMapStart()
 {
+	ClearSurvivorTrail();
 	g_tankStallRoundEnded = false;
 	g_paused = false;
 	g_centerNoticeUntil = 0.0;
@@ -130,6 +138,7 @@ public void OnMapStart()
 
 public void OnClientDisconnect(int client)
 {
+	g_hasTrailOrigin[client] = false;
 	g_centerShown[client] = false;
 	ResetTracking(client);
 	ResetObservation(client);
@@ -174,6 +183,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 public Action Timer_Monitor(Handle timer)
 {
 	if (IsWatchdogPaused()) return Plugin_Continue;
+	RecordSurvivorTrail();
 	float now = GetGameTime();
 	int countdown;
 	for (int client = 1; client <= MaxClients; client++)
@@ -418,6 +428,7 @@ void RefreshTankStallEligibility(int userid)
 void Event_StallRoundReset(Event event, const char[] name, bool dontBroadcast)
 {
 	g_tankStallRoundEnded = StrEqual(name, "round_end");
+	if (!g_tankStallRoundEnded) ClearSurvivorTrail();
 	EndAllTankStalls();
 }
 
@@ -463,16 +474,17 @@ bool TryRelocate(int client, const float oldOrigin[3])
 	bool tank = zombieClass == 8;
 	float maxs[3];
 	GetClientMaxs(client, maxs);
-	for (int attempt = 0; attempt < g_cvAttempts.IntValue; attempt++)
+	int attempts = tank ? g_survivorTrailCount : g_cvAttempts.IntValue;
+	for (int attempt = 0; attempt < attempts; attempt++)
 	{
 		float destination[3];
-		int anchor = GetRandomLivingSurvivor();
-		if (anchor < 1 || !L4D_GetRandomPZSpawnPosition(anchor, zombieClass, 5, destination)
+		int anchor = tank ? -1 : GetRandomLivingSurvivor();
+		if ((tank ? !GetRearTrailPosition(attempt, destination) : (anchor < 1 || !L4D_GetRandomPZSpawnPosition(anchor, zombieClass, 5, destination)))
 			|| GetVectorDistance(oldOrigin, destination) < 128.0
 			|| !IsPositionHidden(destination, tank ? maxs[2] : 74.0)
 			|| (tank && !IsTankDestinationFarEnough(destination))
 			|| !IsSafeHull(client, destination)
-			|| !HasPathToSurvivors(destination))
+			|| !HasPathToSurvivors(destination, tank ? TANK_REAR_MAX_PATH : 10000.0))
 		{
 			continue;
 		}
@@ -493,7 +505,51 @@ bool TryRelocate(int client, const float oldOrigin[3])
 	return false;
 }
 
-bool HasPathToSurvivors(const float destination[3])
+void ClearSurvivorTrail()
+{
+	g_survivorTrailCount = 0;
+	g_survivorTrailHead = 0;
+	for (int client = 1; client <= MaxClients; client++) g_hasTrailOrigin[client] = false;
+}
+
+void RecordSurvivorTrail()
+{
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (!IsLivingSurvivor(client)) { g_hasTrailOrigin[client] = false; continue; }
+		float origin[3];
+		GetClientAbsOrigin(client, origin);
+		if (g_hasTrailOrigin[client] && GetVectorDistance(origin, g_lastTrailOrigin[client]) < 128.0) continue;
+		CopyVector(origin, g_lastTrailOrigin[client]);
+		g_hasTrailOrigin[client] = true;
+		CopyVector(origin, g_survivorTrail[g_survivorTrailHead]);
+		g_survivorTrailHead = (g_survivorTrailHead + 1) % SURVIVOR_TRAIL_SAMPLES;
+		if (g_survivorTrailCount < SURVIVOR_TRAIL_SAMPLES) g_survivorTrailCount++;
+	}
+}
+
+bool GetRearTrailPosition(int offset, float destination[3])
+{
+	int sample = (g_survivorTrailHead + SURVIVOR_TRAIL_SAMPLES - 1 - offset) % SURVIVOR_TRAIL_SAMPLES;
+	CopyVector(g_survivorTrail[sample], destination);
+	Address area = L4D_GetNearestNavArea(destination, 200.0, true, true, true, TEAM_INFECTED);
+	if (area == Address_Null) return false;
+	float flow = L4D2Direct_GetTerrorNavAreaFlow(area);
+	if (flow <= 0.0) return false;
+	bool nearby;
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (!IsLivingSurvivor(client)) continue;
+		float survivorFlow = L4D2Direct_GetFlowDistance(client);
+		if (survivorFlow <= 0.0 || flow >= survivorFlow) return false;
+		float origin[3];
+		GetClientAbsOrigin(client, origin);
+		if (GetVectorDistance(destination, origin) <= TANK_REAR_MAX_DISTANCE) nearby = true;
+	}
+	return nearby;
+}
+
+bool HasPathToSurvivors(const float destination[3], float maxLength = 10000.0)
 {
 	Address startArea = L4D_GetNearestNavArea(destination, 200.0, true, true, true, TEAM_INFECTED);
 	if (startArea == Address_Null)
@@ -510,7 +566,7 @@ bool HasPathToSurvivors(const float destination[3])
 		float survivorOrigin[3];
 		GetClientAbsOrigin(survivor, survivorOrigin);
 		Address endArea = L4D_GetNearestNavArea(survivorOrigin, 200.0, true, false, true, TEAM_INFECTED);
-		if (endArea != Address_Null && L4D2_NavAreaBuildPath(startArea, endArea, 10000.0, TEAM_INFECTED, false))
+		if (endArea != Address_Null && L4D2_NavAreaBuildPath(startArea, endArea, maxLength, TEAM_INFECTED, false))
 		{
 			return true;
 		}

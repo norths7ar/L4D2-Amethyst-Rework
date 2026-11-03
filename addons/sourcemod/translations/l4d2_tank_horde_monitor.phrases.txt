@@ -1,5 +1,15 @@
 "Phrases"
 {
+	"NoTank"
+	{
+		"en"		"This command requires a living Tank."
+		"chi"		"本命令只在 Tank 存活时可用。"
+	}
+	"HordeStopped"
+	{
+		"en"		"Hordes are blocked."
+		"chi"		"尸潮生成已暂停。"
+	}
 	"Tag"
 	{
 		"en"		"<{olive}Horde{default}>"
