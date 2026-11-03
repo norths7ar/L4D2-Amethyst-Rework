@@ -6,7 +6,6 @@
 #include <builtinvotes>
 #include <vote_policy>
 #include <left4dhooks>
-#include <script_reloader>
 #undef REQUIRE_PLUGIN
 #include <profile_controller>
 #include <admin_spawn>
@@ -21,7 +20,7 @@ public Plugin myinfo =
     name = "Coop Wave Spawner",
     author = "海洋空氣, norths7ar",
     description = "Runs the single wave-based Special Infected spawn model for Coop.",
-    version = "1.1.1",
+    version = "1.1.2",
     url = "https://github.com/Sglight/L4D2-AstMod-Scriptings/"
 };
 
@@ -43,6 +42,11 @@ int g_iSpawnedSICount;
 int g_iAliveSICount;
 bool g_bHasFirstDeath;
 bool g_bWaveSettingsPending;
+int g_iPreparedLimits[6];
+int g_iPreparedDirection;
+int g_iComposition[6];
+bool g_bCompositionBuilt;
+bool g_bCompositionReady;
 bool g_bMapReady;
 bool g_bRoundEnded;
 float g_fFirstDeathTime;
@@ -74,7 +78,7 @@ int g_iRotationLimits[ZC_WITCH];
 public void OnPluginStart()
 {
     LoadTranslations("wave_spawner.phrases");
-    CreateConVar("wave_spawner_version", "1.1.1", "Coop Wave Spawner version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
+    CreateConVar("wave_spawner_version", "1.1.2", "Coop Wave Spawner version.", FCVAR_NOTIFY | FCVAR_DONTRECORD);
     g_RotationQueue = new ArrayList();
     g_cvInterval = CreateConVar("wave_interval", "8.0", "Interval selected for the next SI wave; running timers keep their snapshot.", FCVAR_NOTIFY, true, 0.0, true, 10000.0);
     g_cvSize = CreateConVar("wave_size", "3", "Size selected for the next SI wave; a spawning wave keeps its snapshot.", FCVAR_NOTIFY, true, 1.0, true, 32.0);
@@ -167,18 +171,59 @@ public void OnEffectiveWaveChanged(ConVar convar, const char[] oldValue, const c
 void MarkWaveSettingsPending()
 {
     g_bWaveSettingsPending = true;
-    PrepareWaveSettings();
+    PrepareWave();
 }
 
-void PrepareWaveSettings()
+void ApplyPendingSettings()
 {
-    // Settings writes never reopen a running wave or alter its timer/counters.
-    if (!g_bMapReady || g_bRoundEnded || g_bWaveStarted || !g_bWaveSettingsPending) return;
-    if (!ApplyDirectorSettings()) return;
+    // Only configuration changes read CVars and reconcile the rotation pool.
     g_fPreparedInterval = g_cvInterval.FloatValue;
     g_iPreparedSize = g_cvSize.IntValue;
+    for (int i = 0; i < sizeof(g_iPreparedLimits); i++)
+        g_iPreparedLimits[i] = g_cvWaveFields[i + 2].IntValue;
+    g_iPreparedDirection = g_cvWaveFields[8].IntValue;
     PrepareRotation();
     g_bWaveSettingsPending = false;
+    g_bCompositionBuilt = false;
+    g_bCompositionReady = false;
+}
+
+void BuildWaveComposition()
+{
+    int total, eligible[6], eligibleCount;
+    for (int i = 0; i < sizeof(g_iComposition); i++)
+    {
+        g_iComposition[i] = g_iPreparedLimits[i];
+        total += g_iPreparedLimits[i];
+        if (g_iPreparedLimits[i] > 0) eligible[eligibleCount++] = i;
+    }
+    int extra = g_iPreparedSize - total;
+    if (extra > 0 && eligibleCount > 0)
+    {
+        int fullSets = extra / eligibleCount;
+        int remainder = extra % eligibleCount;
+        for (int i = 0; i < eligibleCount; i++)
+            g_iComposition[eligible[i]] += fullSets;
+        // Draw the remainder without replacement from one default set.
+        for (int i = 0; i < remainder; i++)
+        {
+            int other = GetRandomInt(i, eligibleCount - 1);
+            int selected = eligible[other];
+            eligible[other] = eligible[i];
+            eligible[i] = selected;
+            g_iComposition[selected]++;
+        }
+    }
+    g_bCompositionBuilt = true;
+}
+
+void PrepareWave()
+{
+    if (!g_bMapReady || g_bRoundEnded || g_bWaveStarted) return;
+    if (g_bWaveSettingsPending) ApplyPendingSettings();
+    if (!g_bCompositionBuilt) BuildWaveComposition();
+    // A failed publication retries the same draw, not a new composition.
+    if (!g_bCompositionReady) g_bCompositionReady = PublishWaveComposition();
 }
 
 void CountRotationAlive(int counts[ZC_WITCH], int skipClient = 0)
@@ -200,7 +245,7 @@ void PrepareRotation()
     int total;
     for (int i = 0; i < sizeof(classes); i++)
     {
-        g_iRotationLimits[classes[i]] = g_cvWaveFields[i + 2].IntValue;
+        g_iRotationLimits[classes[i]] = g_iPreparedLimits[i];
         total += g_iRotationLimits[classes[i]];
     }
     g_bRotation = g_iPreparedSize < total;
@@ -285,7 +330,7 @@ public Action L4D_OnSpawnSpecial(int &zombieClass, const float vecPos[3], const 
     if (zombieClass < ZC_WITCH)
     {
         if (!g_bMapReady || g_bRoundEnded) return Plugin_Handled;
-        if (!g_bWaveStarted && g_bWaveSettingsPending)
+        if (!g_bWaveStarted && (g_bWaveSettingsPending || !g_bCompositionReady))
         {
             // The Director has already selected a class at this hook. If its
             // settings were not ready, prepare outside the spawn call and let
@@ -312,7 +357,7 @@ public Action L4D_OnSpawnSpecial(int &zombieClass, const float vecPos[3], const 
 
 void PrepareWaveNextFrame(any data)
 {
-    PrepareWaveSettings();
+    PrepareWave();
 }
 
 public void L4D_OnSpawnSpecial_Post(int client, int zombieClass, const float vecPos[3], const float vecAng[3])
@@ -393,7 +438,7 @@ public void Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast
 void EnsureWaveProgress(int deadClient)
 {
     if (!g_bMapReady || g_bRoundEnded || g_hWaveTimer != null) return;
-    if (!g_bWaveStarted && g_bWaveSettingsPending) return;
+    if (!g_bWaveStarted && (g_bWaveSettingsPending || !g_bCompositionReady)) return;
     int size = g_bWaveStarted ? g_iWaveSize : g_iPreparedSize;
     if (g_iSpawnedSICount < size) return; // The Director can still fill this wave.
 
@@ -435,13 +480,15 @@ void ResetWaveNow()
     g_iSpawnedSICount = g_iAliveSICount;
     g_bHasFirstDeath = false;
     g_bWaveStarted = false;
+    g_bCompositionBuilt = false;
+    g_bCompositionReady = false;
 
     if (!g_bMapReady)
     {
         return;
     }
 
-    PrepareWaveSettings();
+    PrepareWave();
 
     int entity = CreateEntityByName("logic_script");
     if (entity != -1)
@@ -660,33 +707,15 @@ public int Native_GetCurrentOverrideMask(Handle plugin, int numParams)
     return (slot >= 1 && slot <= 4) ? g_iSlotOverrideMask[slot] : 0;
 }
 
-bool ApplyDirectorSettings()
+bool PublishWaveComposition()
 {
-    // A late load can receive OnConfigsExecuted before Confogl assigns the
-    // mode's script filename. Keep this request pending until it is configured.
-    char filename[PLATFORM_MAX_PATH];
-    FindConVar("sm_vscript_filename").GetString(filename, sizeof(filename));
-    if (!filename[0]) return false;
-    // Publish a separate script snapshot: reloading astredux.nut must not read
-    // next-wave CVars into a wave which has already started spawning.
-    int entity = CreateEntityByName("logic_script");
-    if (entity == -1) return false;
-    DispatchSpawn(entity);
+    // The mode script only applies this snapshot. Full script reloads reuse it.
     char code[512];
-    FormatEx(code, sizeof(code), "::WaveSpawnSettings <- { size = %d, limits = [%d,%d,%d,%d,%d,%d], direction = %d, resolved = false };",
-        g_cvSize.IntValue, g_cvWaveFields[2].IntValue, g_cvWaveFields[3].IntValue,
-        g_cvWaveFields[4].IntValue, g_cvWaveFields[5].IntValue, g_cvWaveFields[6].IntValue,
-        g_cvWaveFields[7].IntValue, g_cvWaveFields[8].IntValue);
-    SetVariantString(code);
-    bool published = AcceptEntityInput(entity, "RunScriptCode");
-    RemoveEdict(entity);
-    if (!published) return false;
-    if (!VScript_Reload())
-    {
-        LogError("[Wave] Could not apply Director settings through script_reloader.");
-        return false;
-    }
-    return true;
+    FormatEx(code, sizeof(code), "local applied = 0; if (\"g_ModeScript\" in getroottable() && \"ApplyDirectorOptions\" in g_ModeScript) { ::WaveSpawnSettings <- { size = %d, limits = [%d,%d,%d,%d,%d,%d], direction = %d }; g_ModeScript.ApplyDirectorOptions(); applied = 1; }; <RETURN>applied</RETURN>",
+        g_iPreparedSize, g_iComposition[0], g_iComposition[1], g_iComposition[2],
+        g_iComposition[3], g_iComposition[4], g_iComposition[5], g_iPreparedDirection);
+    char result[8];
+    return L4D2_GetVScriptOutput(code, result, sizeof(result)) && StringToInt(result) == 1;
 }
 
 void ResetWaveState()

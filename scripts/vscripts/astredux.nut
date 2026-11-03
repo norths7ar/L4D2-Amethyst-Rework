@@ -31,7 +31,7 @@ DirectorOptions <-
 	SmokerLimit 			= 0
 }
 
-// 插件修改特感刷新参数时会重新读取/执行整个脚本文件。
+// 手动重载脚本时也要保留已有计数。
 // 如果这里每次都用 <- 重新创建 HUDInfo，会把正在游戏中靠事件累积的
 // si_count 直接清零，导致后续 player_death 里的 si_count[name]--
 // 从 0 减到 -1，数量计算就错乱了。所以只在 HUDInfo 尚不存在时才初始化，
@@ -62,43 +62,12 @@ function update_diff()
 //-----------------------------------------------------------------------------------------------------------------------------
 function ApplyDirectorOptions()
 {
-	// Wave Spawner publishes this only while preparing a wave. A script reload
-	// during a running wave must retain that wave's settings and composition.
+	// Wave Spawner owns settings and per-wave composition. Reloading this script
+	// only reapplies the published snapshot; it never draws extra slots.
 	if (!("WaveSpawnSettings" in getroottable())) return;
 	local settings = ::WaveSpawnSettings;
-	local limits = clone settings.limits;
+	local limits = settings.limits;
 	local waveSize = settings.size;
-	local baseTotal = 0;
-	foreach (limit in limits) {
-		baseTotal += limit;
-	}
-
-	// 在wave size大于基础阵容的总和之后，额外名额只分配给原始上限大于 0 的特感类型。
-	// 额外名额小于允许特感类型时，从中抽取不重复项；
-	// 额外名额等于特感类型时，完整刷一套；
-	// 额外名额大于特感类型时，先刷一整套，然后将差值作为新的额外名额，继续刷新。
-	local eligible = [];
-	foreach (index, limit in limits) {
-		if (limit > 0) eligible.append(index);
-	}
-	local extraCount = waveSize - baseTotal;
-	while (!settings.resolved && extraCount > 0 && eligible.len() > 0) {
-		local order = [];
-		foreach (index in eligible) order.append(index);
-		for (local i = order.len() - 1; i > 0; i--) {
-			local j = RandomInt(0, i);
-			local swap = order[i];
-			order[i] = order[j];
-			order[j] = swap;
-		}
-		foreach (index in order) {
-			if (extraCount <= 0) break;
-			limits[index]++;
-			extraCount--;
-		}
-	}
-	settings.limits = limits;
-	settings.resolved = true;
 
 	DirectorOptions.HunterLimit = limits[0];
 	DirectorOptions.SmokerLimit = limits[1];
