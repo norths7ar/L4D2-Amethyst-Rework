@@ -14,11 +14,6 @@
 	{
 		"chi" "检测到未移动时反复传回，已暂时限制移动；回到起点或开局后解除。"
 	}
-
-	"ReadyStartAreaUnavailable"
-	{
-		"chi" "未能确认归位落点，已尝试返回原始出生位置。"
-	}
 	"ReadyPanelHeader"
 	{
 		"#format" "{1:s},{2:d},{3:d},{4:s}"

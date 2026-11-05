@@ -78,7 +78,7 @@ public Plugin myinfo =
 	name = "Coop ready and pause",
 	author = "CanadaRox, 海洋空氣, norths7ar",
 	description = "Per-player readiness, loading gate and start/resume countdowns",
-	version = "1.3.10"
+	version = "1.3.11"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int maxlen)
@@ -150,6 +150,7 @@ public void OnPluginStart()
 	RegAdminCmd("sm_forcepause", CommandForcePause, ADMFLAG_BAN, "Pause until an admin unpauses.");
 	RegAdminCmd("sm_forceunpause", CommandForceUnpause, ADMFLAG_BAN, "Unpause regardless of ready status.");
 	RegAdminCmd("sm_forcestart", CommandForceStart, ADMFLAG_BAN, "Start the Coop round regardless of the loading gate.");
+	RegAdminCmd("sm_readywarp", CommandReadyWarp, ADMFLAG_BAN, "Toggle ready-phase return teleports.");
 	RegAdminCmd("sm_fs", CommandForceStart, ADMFLAG_BAN, "Start the Coop round regardless of the loading gate.");
 
 	AddCommandListener(BlockEngineUnpause, "unpause");
@@ -160,15 +161,13 @@ public void OnPluginStart()
 	HookEvent("round_start", EventRoundBoundary, EventHookMode_Pre);
 	HookEvent("round_end", EventRoundBoundary, EventHookMode_PostNoCopy);
 	HookEvent("player_team", EventPlayerTeam, EventHookMode_Post);
-	HookEvent("player_spawn", StartArea_PlayerSpawn, EventHookMode_Post);
 	HookEvent("bot_player_replace", StartArea_PlayerReplace, EventHookMode_Post);
 	HookEvent("player_bot_replace", StartArea_PlayerReplace, EventHookMode_Post);
 }
 
 public void OnMapStart()
 {
-	// Spawn and round_start can precede OnMapStart. End callbacks clear the
-	// previous round's records; setup must retain this round's early spawns.
+	// round_start can precede OnMapStart; retain that initialization signal.
 	bool roundInitialized = g_roundInitialized || g_lateLoad;
 	g_configsExecuted = false;
 	g_roundInitialized = false;
@@ -195,8 +194,6 @@ public void OnMapStart()
 	// A plugin loaded into a running map missed round_start. Ordinary map loads
 	// must observe the real round boundary before allowing a start countdown.
 	BeginReadyPhase(roundInitialized);
-	if (g_lateLoad)
-		for (int client = 1; client <= MaxClients; client++) StartArea_CaptureBirth(client, false);
 	g_lateLoad = false;
 }
 
@@ -313,7 +310,6 @@ void StartRound()
 	if (!g_readyPhase || !IsStartInitialized() || !RequireStartHuman()) return;
 	InvokeForward(g_forwardLivePre);
 	g_readyPhase = false;
-	g_startCaptureBirth = false;
 	StartArea_CancelRequests();
 	ToggleVoteCommandListener(false);
 	SetReadyProtection(false);
@@ -507,7 +503,7 @@ void SetReadyFrozen(int client, bool frozen)
 
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon)
 {
-	if (g_startCaptureBirth) StartArea_ObserveInput(client, buttons, vel);
+	if (g_readyPhase) StartArea_ObserveInput(client, buttons, vel);
 	if (StartArea_FreeNoclip(client))
 	{
 		g_startLimited[client] = false;
@@ -526,7 +522,6 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 
 public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float vel[3], const float angles[3], int weapon, int subtype, int cmdnum, int tickcount, int seed, const int mouse[2])
 {
-	if (g_startCaptureBirth) StartArea_ObserveLanding(client);
 	// readyup.sp: activity only controls the panel's [AFK] marker.
 	if (g_readyPhase && IsClientInGame(client) && !IsFakeClient(client))
 	{
@@ -542,7 +537,7 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
 	}
 	if (g_readyPhase && g_countdownTimer != null && IsReadySurvivor(client)
 		&& g_startReturn[client] == StartDone && !StartArea_IntroControlled(client)
-		&& StartArea_PhysicallySafe(client) && StartArea_ClearBody(client))
+		&& StartArea_PhysicallySafe(client))
 		SetReadyFrozen(client, true);
 }
 public Action EventPlayerTeam(Event event, const char[] name, bool dontBroadcast)

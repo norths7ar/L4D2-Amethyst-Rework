@@ -1,5 +1,17 @@
 "Phrases"
 {
+	"ReadyWarpOn"
+	{
+		"en" "Ready teleport enabled."
+		"chi" "自动归位已开启。"
+	}
+
+	"ReadyWarpOff"
+	{
+		"en" "Ready teleport disabled."
+		"chi" "自动归位已关闭。"
+	}
+
 	"ReadyNoclipDisabled"
 	{
 		"en" "Your noclip has been disabled."
@@ -13,11 +25,6 @@
 	"ReadyStartLoop"
 	{
 		"en" "Repeated automatic returns detected without movement input. Movement is temporarily restricted until the round starts or you reach the start area."
-	}
-
-	"ReadyStartAreaUnavailable"
-	{
-		"en" "Could not confirm a return location. Attempted to return to the original spawn."
 	}
 	"ReadyPanelHeader"
 	{

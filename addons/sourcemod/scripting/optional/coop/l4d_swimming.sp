@@ -18,19 +18,22 @@
 
 
 
-#define PLUGIN_VERSION 		"1.9.1"
+#define PLUGIN_VERSION 		"1.9.2"
 
 /*======================================================================================
 	Plugin Info:
 
 *	Name	:	[L4D & L4D2] Swimming
-*	Author	:	SilverShot
+*	Author	:	SilverShot, northstar
 *	Descrp	:	Lets players Swim and Dive in water.
 *	Link	:	https://forums.alliedmods.net/showthread.php?t=187565
 *	Plugins	:	https://sourcemod.net/plugins.php?exact=exact&sortby=title&search=1&author=Silvers
 
 ========================================================================================
 	Change Log:
+
+1.9.2 (05-Nov-2026)
+	- Remove oxygen health replacement and forced drowning during ready-up.
 
 1.9.1 (29-Sep-2026)
 	- Limit swimming to ready-up and release swimming state before the round goes live.
@@ -81,9 +84,9 @@
 #define CHAT_TAG			"\x04[\x05Swimming] \x01"
 
 
-ConVar g_hCvarAllow, g_hCvarDecayRate, g_hCvarDive, g_hCvarDrown, g_hCvarIncap, g_hCvarMPGameMode, g_hCvarModes, g_hCvarModesOff, g_hCvarModesTog, g_hCvarRate, g_hCvarSpeedDown, g_hCvarSpeedIdle, g_hCvarSpeedJmp, g_hCvarSpeedUp;
-int g_iCvarDive, g_iCvarDrown, g_iCvarIncap, g_iHealth[MAXPLAYERS+1], g_iPlayerEnum[MAXPLAYERS+1], g_iSwimming[MAXPLAYERS+1], g_iWater[MAXPLAYERS+1];
-float g_fCvarDecayRate, g_fCvarRate, g_fCvarSpeedDown, g_fCvarSpeedIdle, g_fCvarSpeedJmp, g_fCvarSpeedUp, g_fHealth[MAXPLAYERS+1];
+ConVar g_hCvarAllow, g_hCvarDive, g_hCvarDrown, g_hCvarIncap, g_hCvarMPGameMode, g_hCvarModes, g_hCvarModesOff, g_hCvarModesTog, g_hCvarSpeedDown, g_hCvarSpeedIdle, g_hCvarSpeedJmp, g_hCvarSpeedUp;
+int g_iCvarDive, g_iCvarDrown, g_iCvarIncap, g_iPlayerEnum[MAXPLAYERS+1], g_iSwimming[MAXPLAYERS+1], g_iWater[MAXPLAYERS+1];
+float g_fCvarSpeedDown, g_fCvarSpeedIdle, g_fCvarSpeedJmp, g_fCvarSpeedUp;
 bool g_bCvarAllow, g_bMapStarted, g_bLeft4Dead2;
 bool g_bRoundLive, g_bLedgeHangDisabled[MAXPLAYERS+1];
 
@@ -129,7 +132,6 @@ public void OnPluginStart()
 	g_hCvarDive =		CreateConVar(	"l4d_swim_dive",		"1",			"0=Only bobbin on the surface, 1=Allows players to dive.", CVAR_FLAGS);
 	g_hCvarDrown =		CreateConVar(	"l4d_swim_drown",		"1",			"0=Stay on surface when caught by infected, 1=Sink when caught.", CVAR_FLAGS);
 	g_hCvarIncap =		CreateConVar(	"l4d_swim_incap",		"1",			"0=Allow being incapacitated when swimming (they float). 1=Stops the player swimming letting them drown.", CVAR_FLAGS);
-	g_hCvarRate =		CreateConVar(	"l4d_swim_rate",		"0.1",			"0.0=Off. How much air is lost per second when diving. Players die when they have 0 air.", CVAR_FLAGS);
 	g_hCvarSpeedDown =	CreateConVar(	"l4d_swim_speed_down",	"-30.0",		"How fast to teleport downwards when they hold DUCK.", CVAR_FLAGS);
 	g_hCvarSpeedIdle =	CreateConVar(	"l4d_swim_speed_idle",	"15.0",			"How fast to teleport players when they are not pressing any keys.", CVAR_FLAGS);
 	g_hCvarSpeedJmp =	CreateConVar(	"l4d_swim_speed_jump",	"400.0",		"How fast to teleport players when jumping out of the water.", CVAR_FLAGS);
@@ -137,7 +139,6 @@ public void OnPluginStart()
 	CreateConVar(						"l4d_swim_version",		PLUGIN_VERSION, "Swimming plugin version.", FCVAR_NOTIFY|FCVAR_DONTRECORD);
 	AutoExecConfig(true,				"l4d_swim");
 
-	g_hCvarDecayRate = FindConVar("pain_pills_decay_rate");
 	g_hCvarMPGameMode = FindConVar("mp_gamemode");
 	g_hCvarMPGameMode.AddChangeHook(ConVarChanged_Allow);
 	g_hCvarAllow.AddChangeHook(ConVarChanged_Allow);
@@ -147,7 +148,6 @@ public void OnPluginStart()
 	g_hCvarDive.AddChangeHook(ConVarChanged_Cvars);
 	g_hCvarDrown.AddChangeHook(ConVarChanged_Cvars);
 	g_hCvarIncap.AddChangeHook(ConVarChanged_Cvars);
-	g_hCvarRate.AddChangeHook(ConVarChanged_Cvars);
 	g_hCvarSpeedDown.AddChangeHook(ConVarChanged_Cvars);
 	g_hCvarSpeedIdle.AddChangeHook(ConVarChanged_Cvars);
 	g_hCvarSpeedJmp.AddChangeHook(ConVarChanged_Cvars);
@@ -181,32 +181,23 @@ void ResetPlugin()
 	}
 }
 
-void StopSwimming(int client, bool restoreHealth = true)
+void StopSwimming(int client)
 {
 	if( IsClientInGame(client) )
 	{
 		SDKUnhook(client, SDKHook_OnTakeDamage, OnTakeDamage);
 		if( g_bLedgeHangDisabled[client] )
 			AcceptEntityInput(client, "EnableLedgeHang");
-		// Underwater air temporarily occupies the health buffer. Restore it before
-		// ready-up's live callbacks grant starting health and equipment.
-		if( restoreHealth && g_iHealth[client] != 0 && IsPlayerAlive(client) && GetClientTeam(client) == 2 )
-		{
-			SetEntityHealth(client, g_iHealth[client]);
-			SetTempHealth(client, g_fHealth[client]);
-		}
 	}
 	g_bLedgeHangDisabled[client] = false;
 	g_iPlayerEnum[client] = 0;
 	g_iSwimming[client] = 0;
 	g_iWater[client] = 0;
-	g_iHealth[client] = 0;
-	g_fHealth[client] = 0.0;
 }
 
 public void OnClientDisconnect(int client)
 {
-	StopSwimming(client, false);
+	StopSwimming(client);
 }
 
 public void OnReadyUpInitiate()
@@ -247,8 +238,6 @@ void GetCvars()
 	g_iCvarDive = g_hCvarDive.IntValue;
 	g_iCvarIncap = g_hCvarIncap.IntValue;
 	g_iCvarDrown = g_hCvarDrown.IntValue;
-	g_fCvarRate = g_hCvarRate.FloatValue;
-	g_fCvarDecayRate = g_hCvarDecayRate.FloatValue;
 	g_fCvarSpeedDown = g_hCvarSpeedDown.FloatValue;
 	g_fCvarSpeedIdle = g_hCvarSpeedIdle.FloatValue;
 	g_fCvarSpeedJmp = g_hCvarSpeedJmp.FloatValue;
@@ -352,7 +341,6 @@ void OnGamemode(const char[] output, int caller, int activator, float delay)
 // ====================================================================================================
 void HookEvents()
 {
-	HookEvent("heal_success",			Event_HealSuccess);
 	HookEvent("revive_success",			Event_ReviveSuccess);
 	HookEvent("player_death",			Event_Unblock);
 	HookEvent("player_spawn",			Event_Unblock);
@@ -372,7 +360,6 @@ void HookEvents()
 
 void UnhookEvents()
 {
-	UnhookEvent("heal_success",				Event_HealSuccess);
 	UnhookEvent("revive_success",			Event_ReviveSuccess);
 	UnhookEvent("player_death",				Event_Unblock);
 	UnhookEvent("player_spawn",				Event_Unblock);
@@ -433,16 +420,6 @@ void Event_BlockEndHunt(Event event, const char[] name, bool dontBroadcast)
 		SDKUnhook(client, SDKHook_OnTakeDamage, OnTakeDamage);
 }
 
-void Event_HealSuccess(Event event, const char[] name, bool dontBroadcast)
-{
-	int client = GetClientOfUserId(event.GetInt("userid"));
-	if( client > 0 && g_iSwimming[client] == 1 )
-	{
-		SetEntityHealth(client, 1);
-		SetTempHealth(client, 100.0);
-	}
-}
-
 void Event_ReviveSuccess(Event event, const char[] name, bool dontBroadcast)
 {
 	int client = GetClientOfUserId(event.GetInt("subject"));
@@ -453,7 +430,7 @@ void Event_ReviveSuccess(Event event, const char[] name, bool dontBroadcast)
 void Event_Unblock(Event event, const char[] name, bool dontBroadcast)
 {
 	int client = GetClientOfUserId(event.GetInt("userid"));
-	if( client > 0 ) StopSwimming(client, false);
+	if( client > 0 ) StopSwimming(client);
 }
 
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon)
@@ -462,7 +439,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 	if( g_bCvarAllow && !IsInReady() ) IsAllowed();
 	if( g_bCvarAllow && IsClientInGame(client) && GetClientTeam(client) == 2 && IsPlayerAlive(client) )
 	{
-		// Ready-up owns frozen movement; do not apply buoyancy or consume air.
+		// Ready-up owns frozen movement; do not apply buoyancy.
 		if( GetEntityMoveType(client) == MOVETYPE_NONE )
 		{
 			StopSwimming(client);
@@ -475,17 +452,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 
 		if( water >= 1 && (!g_iCvarIncap || GetEntProp(client, Prop_Send, "m_isIncapacitated", 1) == 0) )
 		{
-			if( water == 1 )
-			{
-				if( swimming == 1 && g_fCvarRate && g_iHealth[client] != 0 )
-				{
-					SetEntityHealth(client, g_iHealth[client]);
-					SetTempHealth(client, g_fHealth[client]);
-					g_iHealth[client] = 0;
-					g_fHealth[client] = 0.0;
-				}
-			}
-			else
+			if( water >= 2 )
 			{
 				if( swimming == 0 )
 				{
@@ -520,28 +487,6 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 				}
 
 				TeleportEntity(client, NULL_VECTOR, NULL_VECTOR, vVel);
-
-				if( g_fCvarRate && water > 2 )
-				{
-					if( g_iHealth[client] == 0 )
-					{
-						g_iHealth[client] = GetClientHealth(client);
-						g_fHealth[client] = GetTempHealth(client);
-
-						SetEntityHealth(client, 1);
-						SetTempHealth(client, 100.0);
-					}
-
-					float fHealth = GetTempHealth(client) - g_fCvarRate;
-					if( fHealth <= 0 )
-					{
-						ForcePlayerSuicide(client);
-					}
-					else
-					{
-						SetTempHealth(client, fHealth);
-					}
-				}
 			}
 		}
 		else if( swimming == 1 )
@@ -569,23 +514,4 @@ Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, in
 		return Plugin_Changed;
 	}
 	return Plugin_Continue;
-}
-
-float GetTempHealth(int client)
-{
-	float fGameTime = GetGameTime();
-	float fHealthTime = GetEntPropFloat(client, Prop_Send, "m_healthBufferTime");
-	float fHealth = GetEntPropFloat(client, Prop_Send, "m_healthBuffer");
-
-	fHealth -= (fGameTime - fHealthTime) * g_fCvarDecayRate;
-	if( fHealth < 0.0 )
-		fHealth = 0.0;
-
-	return fHealth;
-}
-
-void SetTempHealth(int client, float fHealth)
-{
-	SetEntPropFloat(client, Prop_Send, "m_healthBuffer", fHealth);
-	SetEntPropFloat(client, Prop_Send, "m_healthBufferTime", GetGameTime());
 }
