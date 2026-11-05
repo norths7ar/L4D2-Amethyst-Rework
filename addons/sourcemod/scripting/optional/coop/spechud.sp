@@ -24,7 +24,7 @@ public Plugin myinfo =
     name = "Spectator HUD",
     author = "Visor, Forgetest, AstRedux maintainers",
     description = "PVE subtraction of Hyper-V 3.9.1 spectator HUD.",
-    version = "1.0.1"
+    version = "1.0.2"
 };
 
 public void OnPluginStart()
@@ -139,13 +139,13 @@ void GetWeaponInfo(int client, char[] info, int length)
         else GetLongWeaponName(activeId, buffer, sizeof(buffer));
         FormatEx(info, length, "%s %d", buffer, GetWeaponClipAmmo(active));
     }
-    else { GetLongWeaponName(primaryId, buffer, sizeof(buffer)); FormatEx(info, length, "%s %d/%d", buffer, GetWeaponClipAmmo(primary), GetWeaponExtraAmmo(client, primaryId)); }
+    else { GetLongWeaponName(primaryId, buffer, sizeof(buffer)); FormatEx(info, length, "%s %d/%d", buffer, GetWeaponClipAmmo(primary), GetWeaponExtraAmmo(client, primary)); }
     if (primary == -1 && (activeId == WEPID_MELEE || activeId == WEPID_CHAINSAW)) GetLongMeleeWeaponName(IdentifyMeleeWeapon(active), info, length);
     else if (primary != -1)
     {
         if (GetSlotFromWeaponId(activeId) != L4D2WeaponSlot_Secondary || activeId == WEPID_MELEE || activeId == WEPID_CHAINSAW)
         { GetMeleePrefix(client, buffer, sizeof(buffer)); Format(info, length, "%s | %s", info, buffer); }
-        else { GetLongWeaponName(primaryId, buffer, sizeof(buffer)); Format(info, length, "%s | %s %d", info, buffer, GetWeaponClipAmmo(primary) + GetWeaponExtraAmmo(client, primaryId)); }
+        else { GetLongWeaponName(primaryId, buffer, sizeof(buffer)); Format(info, length, "%s | %s %d", info, buffer, GetWeaponClipAmmo(primary) + GetWeaponExtraAmmo(client, primary)); }
     }
 }
 int SortSurvivors(int first, int second, const int[] array, Handle hndl) { return IdentifySurvivor(first) - IdentifySurvivor(second); }
@@ -197,31 +197,13 @@ void FillTankInfo(Panel panel, int tank, bool tankOnly, int viewer)
     }
 }
 
-// Hyper-V 3.9.1 helper stocks retained by the survivor information path.
-#define ASSAULT_RIFLE_OFFSET_IAMMO 12
-#define SMG_OFFSET_IAMMO 20
-#define PUMPSHOTGUN_OFFSET_IAMMO 28
-#define AUTO_SHOTGUN_OFFSET_IAMMO 32
-#define HUNTING_RIFLE_OFFSET_IAMMO 36
-#define MILITARY_SNIPER_OFFSET_IAMMO 40
-#define GRENADE_LAUNCHER_OFFSET_IAMMO 68
-stock int GetWeaponExtraAmmo(int client, int wepid)
+// Resolve reserve ammo through the weapon's own ammo type, including MP5 and M60.
+stock int GetWeaponExtraAmmo(int client, int weapon)
 {
-    static int ammoOffset;
-    if (!ammoOffset) ammoOffset = FindSendPropInfo("CCSPlayer", "m_iAmmo");
-    int offset;
-    switch (wepid)
-    {
-        case WEPID_RIFLE, WEPID_RIFLE_AK47, WEPID_RIFLE_DESERT, WEPID_RIFLE_SG552: offset = ASSAULT_RIFLE_OFFSET_IAMMO;
-        case WEPID_SMG, WEPID_SMG_SILENCED: offset = SMG_OFFSET_IAMMO;
-        case WEPID_PUMPSHOTGUN, WEPID_SHOTGUN_CHROME: offset = PUMPSHOTGUN_OFFSET_IAMMO;
-        case WEPID_AUTOSHOTGUN, WEPID_SHOTGUN_SPAS: offset = AUTO_SHOTGUN_OFFSET_IAMMO;
-        case WEPID_HUNTING_RIFLE: offset = HUNTING_RIFLE_OFFSET_IAMMO;
-        case WEPID_SNIPER_MILITARY, WEPID_SNIPER_AWP, WEPID_SNIPER_SCOUT: offset = MILITARY_SNIPER_OFFSET_IAMMO;
-        case WEPID_GRENADE_LAUNCHER: offset = GRENADE_LAUNCHER_OFFSET_IAMMO;
-        default: return -1;
-    }
-    return GetEntData(client, ammoOffset + offset);
+    if (weapon <= 0) return -1;
+    int ammoType = GetEntProp(weapon, Prop_Send, "m_iPrimaryAmmoType");
+    if (ammoType < 0) return -1;
+    return GetEntProp(client, Prop_Send, "m_iAmmo", _, ammoType);
 }
 stock int GetWeaponClipAmmo(int weapon) { return weapon > 0 ? GetEntProp(weapon, Prop_Send, "m_iClip1") : -1; }
 stock void GetClientFixedName(int client, char[] name, int length)

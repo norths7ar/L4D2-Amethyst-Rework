@@ -35,7 +35,7 @@ public Plugin myinfo =
     name = "Pause plugin",
     author = "CanadaRox, Sir, Forgetest, A1m`",
     description = "Adds pause functionality without breaking pauses, also prevents SI from spawning because of the Pause.",
-    version = "6.9.0",
+    version = "6.9.1",
     url = "https://github.com/SirPlease/L4D2-Competitive-Rework"
 };
 
@@ -178,6 +178,16 @@ void FindServerNamer()
 // ======================================
 // Forwards
 // ======================================
+public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon, int &subtype, int &cmdnum, int &tickcount, int &seed, int mouse[2])
+{
+    if (isPaused && (buttons & IN_ATTACK) && GetClientTeam(client) == L4D2Team_Infected && IsInfectedGhost(client))
+    {
+        buttons &= ~IN_ATTACK;
+        return Plugin_Changed;
+    }
+    return Plugin_Continue;
+}
+
 public void OnClientPutInServer(int client)
 {
     if (isPaused)
@@ -518,7 +528,6 @@ Action Pause_Timer(Handle timer)
 			
             if (team == L4D2Team_Infected && IsInfectedGhost(client))
             {
-                SetEntProp(client, Prop_Send, "m_hasVisibleThreats", 1);
                 int buttons = GetClientButtons(client);
                 if (buttons & IN_ATTACK)
                 {
