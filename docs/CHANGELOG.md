@@ -3,7 +3,7 @@
 ## 未发布
 
 - 新增动态服务器名称插件。
-- 跟随 Competitive Rework 同步至 `59c1b56f`。
+- 跟随 Competitive Rework 同步至 `a3f246ae`，补齐和修正翻译，保留现有中文措辞。
 
 ## v2.0.7 - 2026-11-05
 

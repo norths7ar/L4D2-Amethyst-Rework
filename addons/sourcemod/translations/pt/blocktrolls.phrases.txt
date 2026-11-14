@@ -1,0 +1,15 @@
+"Phrases"
+{
+	"Tag"
+	{
+		"pt"    "{default}[{green}!{default}]"
+	}
+	"NotConsoleVote"
+	{
+		"pt"	"[!] Você precisa estar no jogo para votar."
+	}
+	"NotSpectatorVote"
+	{
+		"pt"	"{olive}Espectadores{default} não podem votar."
+	}
+}
